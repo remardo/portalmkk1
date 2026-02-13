@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node scripts/start.mjs"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   },
   "dependencies": {
     "clsx": "2.1.1",
