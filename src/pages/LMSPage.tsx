@@ -56,13 +56,14 @@ export function LMSPage() {
     return map;
   }, [data]);
 
+  const courseId = courseIdParam ? Number(courseIdParam) : undefined;
+  const courseQuestionsQuery = useCourseQuestionsQuery(Number.isNaN(courseId ?? NaN) ? undefined : courseId);
+
   if (!data) {
     return null;
   }
 
   const canManage = user ? canManageLMS(user.role) : false;
-  const courseId = courseIdParam ? Number(courseIdParam) : undefined;
-  const courseQuestionsQuery = useCourseQuestionsQuery(Number.isNaN(courseId ?? NaN) ? undefined : courseId);
 
   if (courseId !== undefined && !Number.isNaN(courseId)) {
     const course = data.courses.find((item) => item.id === courseId);
