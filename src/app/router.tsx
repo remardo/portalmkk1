@@ -30,6 +30,7 @@ export const router = createBrowserRouter([
           { path: "kb", element: <KBPage /> },
           { path: "kb/:articleId", element: <KBPage /> },
           { path: "lms", element: <LMSPage /> },
+          { path: "lms/courses/:courseId", element: <LMSPage /> },
           { path: "lms/users/:userId", element: <LMSPage /> },
           { path: "docs", element: <DocsPage /> },
           { path: "tasks", element: <TasksPage /> },

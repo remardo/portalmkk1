@@ -167,6 +167,20 @@ export interface CreateCourseAttemptInput {
   userId?: string;
 }
 
+export interface SubmitCourseAnswersInput {
+  courseId: number;
+  answers: Array<{ questionId: number; selectedOption: number }>;
+  userId?: string;
+}
+
+export interface CourseQuestion {
+  id: number;
+  courseId: number;
+  sortOrder: number;
+  question: string;
+  options: string[];
+}
+
 export interface AdminCreateUserInput {
   email: string;
   password: string;
@@ -425,6 +439,39 @@ export const portalRepository = {
 
   async createCourseAttempt(input: CreateCourseAttemptInput): Promise<void> {
     await backendApi.createCourseAttempt(input.courseId, { score: input.score, userId: input.userId });
+  },
+
+  async submitCourseAnswers(input: SubmitCourseAnswersInput): Promise<{
+    attemptId: number;
+    score: number;
+    passed: boolean;
+    attemptNo: number;
+    correct: number;
+    total: number;
+  }> {
+    return backendApi.submitCourseAnswers(input.courseId, {
+      answers: input.answers,
+      userId: input.userId,
+    });
+  },
+
+  async getCourseQuestions(courseId: number): Promise<{
+    course: { id: number; title: string; status: "draft" | "published" | "archived" };
+    questionsCount: number;
+    items: CourseQuestion[];
+  }> {
+    const response = await backendApi.getCourseQuestions(courseId);
+    return {
+      course: response.course,
+      questionsCount: response.questionsCount,
+      items: response.items.map((item) => ({
+        id: Number(item.id),
+        courseId: Number(item.courseId),
+        sortOrder: Number(item.sortOrder),
+        question: item.question,
+        options: item.options,
+      })),
+    };
   },
 
   async adminCreateUser(input: AdminCreateUserInput): Promise<void> {

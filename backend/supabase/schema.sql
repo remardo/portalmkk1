@@ -1,17 +1,43 @@
 -- Run in Supabase SQL Editor
 create extension if not exists pgcrypto;
 
-create type public.user_role as enum ('operator', 'office_head', 'director', 'admin');
-create type public.task_status as enum ('new', 'in_progress', 'done', 'overdue');
-create type public.task_type as enum ('order', 'checklist', 'auto');
-create type public.task_priority as enum ('low', 'medium', 'high');
-create type public.document_type as enum ('incoming', 'outgoing', 'internal');
-create type public.document_status as enum ('draft', 'review', 'approved', 'rejected');
-create type public.news_status as enum ('draft', 'published', 'archived');
-create type public.kb_status as enum ('draft', 'review', 'published', 'archived');
-create type public.course_status as enum ('draft', 'published', 'archived');
-create type public.document_decision as enum ('submitted', 'approved', 'rejected');
-create type public.notification_level as enum ('info', 'warning', 'critical');
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'user_role' and typnamespace = 'public'::regnamespace) then
+    create type public.user_role as enum ('operator', 'office_head', 'director', 'admin');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'task_status' and typnamespace = 'public'::regnamespace) then
+    create type public.task_status as enum ('new', 'in_progress', 'done', 'overdue');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'task_type' and typnamespace = 'public'::regnamespace) then
+    create type public.task_type as enum ('order', 'checklist', 'auto');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'task_priority' and typnamespace = 'public'::regnamespace) then
+    create type public.task_priority as enum ('low', 'medium', 'high');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'document_type' and typnamespace = 'public'::regnamespace) then
+    create type public.document_type as enum ('incoming', 'outgoing', 'internal');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'document_status' and typnamespace = 'public'::regnamespace) then
+    create type public.document_status as enum ('draft', 'review', 'approved', 'rejected');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'news_status' and typnamespace = 'public'::regnamespace) then
+    create type public.news_status as enum ('draft', 'published', 'archived');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'kb_status' and typnamespace = 'public'::regnamespace) then
+    create type public.kb_status as enum ('draft', 'review', 'published', 'archived');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'course_status' and typnamespace = 'public'::regnamespace) then
+    create type public.course_status as enum ('draft', 'published', 'archived');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'document_decision' and typnamespace = 'public'::regnamespace) then
+    create type public.document_decision as enum ('submitted', 'approved', 'rejected');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'notification_level' and typnamespace = 'public'::regnamespace) then
+    create type public.notification_level as enum ('info', 'warning', 'critical');
+  end if;
+end
+$$;
 
 create table if not exists public.offices (
   id bigint generated always as identity primary key,
@@ -178,6 +204,21 @@ create table if not exists public.course_attempts (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.course_questions (
+  id bigint generated always as identity primary key,
+  course_id bigint not null references public.courses(id) on delete cascade,
+  sort_order int not null,
+  question text not null,
+  options jsonb not null,
+  correct_option int not null,
+  explanation text null,
+  created_at timestamptz not null default now(),
+  unique (course_id, sort_order),
+  check (jsonb_typeof(options) = 'array'),
+  check (jsonb_array_length(options) >= 2),
+  check (correct_option >= 0)
+);
+
 create table if not exists public.document_approvals (
   id bigint generated always as identity primary key,
   document_id bigint not null references public.documents(id) on delete cascade,
@@ -215,6 +256,7 @@ alter table public.audit_log enable row level security;
 alter table public.kb_article_versions enable row level security;
 alter table public.course_assignments enable row level security;
 alter table public.course_attempts enable row level security;
+alter table public.course_questions enable row level security;
 alter table public.document_approvals enable row level security;
 alter table public.notifications enable row level security;
 
@@ -285,6 +327,7 @@ drop policy if exists "read audit" on public.audit_log;
 drop policy if exists "read kb versions" on public.kb_article_versions;
 drop policy if exists "read course assignments" on public.course_assignments;
 drop policy if exists "read course attempts" on public.course_attempts;
+drop policy if exists "read course questions" on public.course_questions;
 drop policy if exists "read document approvals" on public.document_approvals;
 drop policy if exists "read notifications" on public.notifications;
 drop policy if exists "read own profile" on public.profiles;
@@ -313,6 +356,8 @@ drop policy if exists "read admin course assignments" on public.course_assignmen
 drop policy if exists "read own course attempts" on public.course_attempts;
 drop policy if exists "read office course attempts" on public.course_attempts;
 drop policy if exists "read admin course attempts" on public.course_attempts;
+drop policy if exists "read published course questions" on public.course_questions;
+drop policy if exists "read admin course questions" on public.course_questions;
 drop policy if exists "read own document approvals" on public.document_approvals;
 drop policy if exists "read office document approvals" on public.document_approvals;
 drop policy if exists "read admin document approvals" on public.document_approvals;
@@ -464,6 +509,21 @@ using (
 );
 
 create policy "read admin course attempts" on public.course_attempts
+for select to authenticated
+using (public.is_admin_or_director());
+
+create policy "read published course questions" on public.course_questions
+for select to authenticated
+using (
+  exists (
+    select 1
+    from public.courses c
+    where c.id = public.course_questions.course_id
+      and c.status = 'published'
+  )
+);
+
+create policy "read admin course questions" on public.course_questions
 for select to authenticated
 using (public.is_admin_or_director());
 

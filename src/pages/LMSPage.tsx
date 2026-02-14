@@ -4,9 +4,11 @@ import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import {
   useAssignCourseMutation,
+  useCourseQuestionsQuery,
   useCreateCourseAttemptMutation,
   useCreateCourseMutation,
   usePortalData,
+  useSubmitCourseAnswersMutation,
   useUpdateCourseMutation,
 } from "../hooks/usePortalData";
 import { useAuth } from "../contexts/useAuth";
@@ -15,13 +17,14 @@ import { useMemo, useState } from "react";
 
 export function LMSPage() {
   const { data } = usePortalData();
-  const [userId] = [useParams().userId];
+  const { userId, courseId: courseIdParam } = useParams();
   const { user } = useAuth();
 
   const createCourse = useCreateCourseMutation();
   const updateCourse = useUpdateCourseMutation();
   const assignCourse = useAssignCourseMutation();
   const createCourseAttempt = useCreateCourseAttemptMutation();
+  const submitCourseAnswers = useSubmitCourseAnswersMutation();
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("Базовый");
@@ -36,6 +39,9 @@ export function LMSPage() {
   const [editCourseCategory, setEditCourseCategory] = useState("");
   const [attemptCourseId, setAttemptCourseId] = useState<string>("");
   const [attemptScore, setAttemptScore] = useState<string>("80");
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [submitError, setSubmitError] = useState<string>("");
+  const [submitInfo, setSubmitInfo] = useState<string>("");
 
   const assignmentMap = useMemo(() => {
     if (!data) {
@@ -55,6 +61,119 @@ export function LMSPage() {
   }
 
   const canManage = user ? canManageLMS(user.role) : false;
+  const courseId = courseIdParam ? Number(courseIdParam) : undefined;
+  const courseQuestionsQuery = useCourseQuestionsQuery(Number.isNaN(courseId ?? NaN) ? undefined : courseId);
+
+  if (courseId !== undefined && !Number.isNaN(courseId)) {
+    const course = data.courses.find((item) => item.id === courseId);
+    if (!course) {
+      return <p className="text-sm text-gray-500">Курс не найден.</p>;
+    }
+
+    const canOpenCourse = course.status === "published" || canManage;
+    if (!canOpenCourse) {
+      return <p className="text-sm text-gray-500">Курс недоступен для прохождения.</p>;
+    }
+
+    const answeredCount = Object.keys(selectedAnswers).length;
+
+    return (
+      <div className="space-y-4">
+        <Link to="/lms" className="text-sm text-indigo-600 hover:text-indigo-800">
+          ← Назад к LMS
+        </Link>
+
+        <Card className="p-5">
+          <Badge className="mb-2 bg-purple-100 text-purple-700">{course.category}</Badge>
+          <h2 className="text-xl font-bold text-gray-900">{course.title}</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Вопросов: {course.questionsCount} • Порог: {course.passingScore}% • Статус: {course.status ?? "published"}
+          </p>
+        </Card>
+
+        <Card className="p-5">
+          {courseQuestionsQuery.isLoading ? <p className="text-sm text-gray-500">Загрузка вопросов…</p> : null}
+          {courseQuestionsQuery.isError ? (
+            <p className="text-sm text-red-600">Не удалось загрузить вопросы курса.</p>
+          ) : null}
+
+          {courseQuestionsQuery.data ? (
+            <div className="space-y-4">
+              {courseQuestionsQuery.data.items.map((item) => (
+                <div key={item.id} className="rounded-lg border border-gray-200 p-3">
+                  <p className="font-medium text-gray-900">
+                    {item.sortOrder}. {item.question}
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {item.options.map((option, idx) => (
+                      <label key={`${item.id}-${idx}`} className="flex items-start gap-2 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name={`q-${item.id}`}
+                          checked={selectedAnswers[item.id] === idx}
+                          onChange={() =>
+                            setSelectedAnswers((prev) => ({
+                              ...prev,
+                              [item.id]: idx,
+                            }))
+                          }
+                        />
+                        <span>{option}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-900">
+                Отвечено: {answeredCount} из {courseQuestionsQuery.data.items.length}
+              </div>
+
+              {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
+              {submitInfo ? <p className="text-sm text-green-700">{submitInfo}</p> : null}
+
+              <button
+                disabled={submitCourseAnswers.isPending}
+                onClick={async () => {
+                  setSubmitError("");
+                  setSubmitInfo("");
+
+                  const questions = courseQuestionsQuery.data?.items ?? [];
+                  if (questions.length === 0) {
+                    setSubmitError("В курсе пока нет вопросов.");
+                    return;
+                  }
+
+                  if (Object.keys(selectedAnswers).length < questions.length) {
+                    setSubmitError("Ответьте на все вопросы перед отправкой.");
+                    return;
+                  }
+
+                  try {
+                    const response = await submitCourseAnswers.mutateAsync({
+                      courseId: course.id,
+                      answers: questions.map((q) => ({
+                        questionId: q.id,
+                        selectedOption: selectedAnswers[q.id],
+                      })),
+                    });
+                    setSubmitInfo(
+                      `Результат: ${response.score}% (${response.correct}/${response.total}). Попытка #${response.attemptNo} сохранена.`,
+                    );
+                  } catch {
+                    setSubmitError("Не удалось отправить попытку. Попробуйте еще раз.");
+                  }
+                }}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {submitCourseAnswers.isPending ? "Отправка..." : "Завершить тест"}
+              </button>
+            </div>
+          ) : null}
+        </Card>
+      </div>
+    );
+  }
 
   if (userId) {
     const employee = data.users.find((item) => String(item.id) === userId);
@@ -249,6 +368,16 @@ export function LMSPage() {
               </p>
               <p className="mt-1 text-xs text-gray-500">Назначено: {assignedCount}</p>
               <p className="mt-1 text-xs text-gray-500">Статус: {course.status ?? "published"}</p>
+              {course.status === "published" || canManage ? (
+                <div className="mt-3">
+                  <Link
+                    to={`/lms/courses/${course.id}`}
+                    className="inline-flex rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                  >
+                    Пройти курс
+                  </Link>
+                </div>
+              ) : null}
 
               {canManage ? (
                 <div className="mt-3 space-y-2">

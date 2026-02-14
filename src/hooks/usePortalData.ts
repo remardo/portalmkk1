@@ -7,6 +7,7 @@ import {
   portalRepository,
   type CreateDocumentInput,
   type CreateCourseAttemptInput,
+  type SubmitCourseAnswersInput,
   type CreateKbArticleInput,
   type CreateNewsInput,
   type CreateCourseInput,
@@ -171,6 +172,27 @@ export function useCreateCourseAttemptMutation() {
   return useMutation({
     mutationFn: (input: CreateCourseAttemptInput) => portalRepository.createCourseAttempt(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useSubmitCourseAnswersMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SubmitCourseAnswersInput) => portalRepository.submitCourseAnswers(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useCourseQuestionsQuery(courseId?: number) {
+  return useQuery({
+    queryKey: ["course-questions", courseId],
+    queryFn: () => {
+      if (!courseId) {
+        throw new Error("Missing course id");
+      }
+      return portalRepository.getCourseQuestions(courseId);
+    },
+    enabled: Boolean(courseId),
   });
 }
 

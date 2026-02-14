@@ -1627,9 +1627,196 @@ app.get("/api/courses/:id/assignments", requireAuth(), async (req, res) => {
   return res.json(data);
 });
 
+const courseQuestionsQuerySchema = z.object({
+  includeAnswers: z
+    .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
+    .optional(),
+});
+
+app.get("/api/courses/:id/questions", requireAuth(), async (req, res) => {
+  const courseId = Number(req.params.id);
+  if (Number.isNaN(courseId)) {
+    return res.status(400).json({ error: "Invalid course id" });
+  }
+
+  const parsed = courseQuestionsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canViewAnswers = ["admin", "director"].includes(session.profile.role);
+  const includeAnswers =
+    canViewAnswers && (parsed.data.includeAnswers === "1" || parsed.data.includeAnswers === "true");
+
+  const { data: course, error: courseError } = await supabaseAdmin
+    .from("courses")
+    .select("id,title,status")
+    .eq("id", courseId)
+    .single();
+  if (courseError || !course) {
+    return res.status(404).json({ error: courseError?.message ?? "Course not found" });
+  }
+
+  const canReadCourse = course.status === "published" || canViewAnswers;
+  if (!canReadCourse) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("course_questions")
+    .select("id,course_id,sort_order,question,options,correct_option,explanation")
+    .eq("course_id", courseId)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  const items = (data ?? []).map((item) => ({
+    id: item.id,
+    courseId: item.course_id,
+    sortOrder: item.sort_order,
+    question: item.question,
+    options: item.options,
+    explanation: includeAnswers ? item.explanation : null,
+    correctOption: includeAnswers ? item.correct_option : null,
+  }));
+
+  return res.json({
+    course: { id: course.id, title: course.title, status: course.status },
+    questionsCount: items.length,
+    includeAnswers,
+    items,
+  });
+});
+
 const createCourseAttemptSchema = z.object({
   score: z.number().int().min(0).max(100),
   userId: z.string().uuid().optional(),
+});
+
+const submitCourseAnswersSchema = z.object({
+  answers: z
+    .array(
+      z.object({
+        questionId: z.number().int().positive(),
+        selectedOption: z.number().int().min(0),
+      }),
+    )
+    .min(1),
+  userId: z.string().uuid().optional(),
+});
+
+app.post("/api/courses/:id/attempts/grade", requireAuth(), async (req, res) => {
+  const parsed = submitCourseAnswersSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const courseId = Number(req.params.id);
+  if (Number.isNaN(courseId)) {
+    return res.status(400).json({ error: "Invalid course id" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canActForOthers = ["director", "admin", "office_head"].includes(session.profile.role);
+  const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
+
+  const { data: course, error: courseError } = await supabaseAdmin
+    .from("courses")
+    .select("id,passing_score,status")
+    .eq("id", courseId)
+    .single();
+  if (courseError || !course) {
+    return res.status(404).json({ error: courseError?.message ?? "Course not found" });
+  }
+
+  if (course.status !== "published" && !canActForOthers) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const { data: questions, error: questionsError } = await supabaseAdmin
+    .from("course_questions")
+    .select("id,correct_option")
+    .eq("course_id", courseId);
+  if (questionsError) {
+    return res.status(400).json({ error: questionsError.message });
+  }
+
+  const questionRows = questions ?? [];
+  if (questionRows.length === 0) {
+    return res.status(400).json({ error: "Course has no questions" });
+  }
+
+  const questionIdSet = new Set(questionRows.map((item) => Number(item.id)));
+  const answerMap = new Map(parsed.data.answers.map((item) => [item.questionId, item.selectedOption]));
+
+  const hasInvalidQuestionId = parsed.data.answers.some((item) => !questionIdSet.has(item.questionId));
+  if (hasInvalidQuestionId) {
+    return res.status(400).json({ error: "Answers include invalid question ids" });
+  }
+
+  const missingAnswer = questionRows.some((q) => !answerMap.has(Number(q.id)));
+  if (missingAnswer) {
+    return res.status(400).json({ error: "Answers are incomplete" });
+  }
+
+  const correct = questionRows.filter((q) => answerMap.get(Number(q.id)) === Number(q.correct_option)).length;
+  const total = questionRows.length;
+  const score = Math.round((correct / total) * 100);
+  const passed = score >= Number(course.passing_score);
+
+  const { count, error: countError } = await supabaseAdmin
+    .from("course_attempts")
+    .select("*", { count: "exact", head: true })
+    .eq("course_id", courseId)
+    .eq("user_id", targetUserId);
+  if (countError) {
+    return res.status(400).json({ error: countError.message });
+  }
+
+  const attemptNo = (count ?? 0) + 1;
+  const { data: attempt, error: attemptError } = await supabaseAdmin
+    .from("course_attempts")
+    .insert({
+      course_id: courseId,
+      user_id: targetUserId,
+      score,
+      passed,
+      attempt_no: attemptNo,
+    })
+    .select("*")
+    .single();
+  if (attemptError || !attempt) {
+    return res.status(400).json({ error: attemptError?.message ?? "Failed to create attempt" });
+  }
+
+  await supabaseAdmin.from("attestations").insert({
+    course_id: courseId,
+    user_id: targetUserId,
+    date: new Date().toISOString().slice(0, 10),
+    score,
+    passed,
+  });
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "courses.attempt.grade",
+    entityType: "course_attempts",
+    entityId: String(attempt.id),
+    payload: { courseId, userId: targetUserId, score, passed, attemptNo, correct, total },
+  });
+
+  return res.status(201).json({
+    attemptId: attempt.id,
+    score,
+    passed,
+    attemptNo,
+    correct,
+    total,
+  });
 });
 
 app.post("/api/courses/:id/attempts", requireAuth(), async (req, res) => {

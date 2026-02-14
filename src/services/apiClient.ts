@@ -409,8 +409,32 @@ export const backendApi = {
   createCourseAttempt: (id: number, input: { score: number; userId?: string }) =>
     apiRequest(`/api/courses/${id}/attempts`, { method: "POST", body: JSON.stringify(input) }),
 
+  submitCourseAnswers: (
+    id: number,
+    input: { answers: Array<{ questionId: number; selectedOption: number }>; userId?: string },
+  ) => apiRequest<{ attemptId: number; score: number; passed: boolean; attemptNo: number; correct: number; total: number }>(
+    `/api/courses/${id}/attempts/grade`,
+    { method: "POST", body: JSON.stringify(input) },
+  ),
+
   getCourseAttempts: (id: number, userId?: string) =>
     apiRequest(`/api/courses/${id}/attempts${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`),
+
+  getCourseQuestions: (id: number) =>
+    apiRequest<{
+      course: { id: number; title: string; status: "draft" | "published" | "archived" };
+      questionsCount: number;
+      includeAnswers: boolean;
+      items: Array<{
+        id: number;
+        courseId: number;
+        sortOrder: number;
+        question: string;
+        options: string[];
+        explanation: string | null;
+        correctOption: number | null;
+      }>;
+    }>(`/api/courses/${id}/questions`),
 
   adminCreateUser: (input: {
     email: string;
