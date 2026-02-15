@@ -5997,7 +5997,7 @@ app.post("/api/lms-quizzes/:id/submit", requireAuth(), async (req, res) => {
   const { data: options, error: optionsError } = questionIds.length > 0
     ? await supabaseAdmin
         .from("lms_quiz_options")
-        .select("id,question_id,is_correct")
+        .select("id,question_id,is_correct,sort_order")
         .in("question_id", questionIds)
     : { data: [], error: null };
 
