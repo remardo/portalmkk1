@@ -2665,7 +2665,38 @@ app.post("/api/reports/schedules/:id/run", requireAuth(), requireRole(["admin", 
 });
 
 app.get("/api/reports/runs", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
-  const scheduleId = req.query.scheduleId ? Number(req.query.scheduleId) : undefined;
+  const rawScheduleId = req.query.scheduleId;
+  const scheduleId = rawScheduleId === undefined ? undefined : Number(rawScheduleId);
+  if (rawScheduleId !== undefined && Number.isNaN(scheduleId)) {
+    return res.status(400).json({ error: "Invalid schedule id" });
+  }
+  if (env.SMOKE_AUTH_BYPASS_ENABLED && isDryRunQueryFlag(req.query.dryRun)) {
+    const dryRuns = [
+      {
+        id: 901,
+        schedule_id: 11,
+        recipient_user_id: "00000000-0000-0000-0000-000000000111",
+        status: "ready",
+        format: "csv",
+        generated_at: "2026-01-15T10:00:00.000Z",
+        file_name: "report-901.csv",
+        rows_count: 3,
+      },
+      {
+        id: 900,
+        schedule_id: 12,
+        recipient_user_id: "00000000-0000-0000-0000-000000000112",
+        status: "ready",
+        format: "csv",
+        generated_at: "2026-01-14T09:00:00.000Z",
+        file_name: "report-900.csv",
+        rows_count: 2,
+      },
+    ];
+    const filtered = scheduleId === undefined ? dryRuns : dryRuns.filter((run) => run.schedule_id === scheduleId);
+    return res.json(filtered);
+  }
+
   let query = supabaseAdmin
     .from("report_delivery_runs")
     .select("id,schedule_id,recipient_user_id,status,format,generated_at,file_name,rows_count")
@@ -2687,6 +2718,16 @@ app.get("/api/reports/runs/:id/download", requireAuth(), async (req, res) => {
     return res.status(400).json({ error: "Invalid run id" });
   }
   const session = (req as express.Request & { session: Session }).session;
+  if (env.SMOKE_AUTH_BYPASS_ENABLED && isDryRunQueryFlag(req.query.dryRun)) {
+    const mockRecipientUserId = req.query.mockRecipient === "self" ? session.profile.id : "00000000-0000-0000-0000-000000000999";
+    if (mockRecipientUserId !== session.profile.id && !["admin", "director"].includes(session.profile.role)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename=\"report-${runId}.csv\"`);
+    return res.status(200).send("metric,value\nsmoke,1\n");
+  }
+
   const { data, error } = await supabaseAdmin
     .from("report_delivery_runs")
     .select("id,recipient_user_id,file_name,payload_csv")

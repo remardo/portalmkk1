@@ -661,6 +661,186 @@ test("POST /api/reports/schedules/:id/run returns 400 for invalid schedule id", 
   }
 });
 
+test("POST /api/reports/schedules/:id/run returns 404 for missing schedule id", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/reports/schedules/999999/run`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+      },
+    });
+    assert.equal(response.status, 404);
+    const data = await response.json();
+    assert.equal(typeof data, "object");
+    assert.equal(typeof data?.error, "string");
+    assert.ok((data?.error ?? "").length > 0);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs returns 401 without token", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/reports/runs`);
+    assert.equal(response.status, 401);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs returns 403 for operator role", async () => {
+  const server = await startTestServer({ role: "operator", token: "smoke-operator-reports-runs-list" });
+  try {
+    const response = await fetch(`${server.baseUrl}/api/reports/runs`, {
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+      },
+    });
+    assert.equal(response.status, 403);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs returns 400 for invalid scheduleId query", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/reports/runs?scheduleId=abc`, {
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+      },
+    });
+    assert.equal(response.status, 400);
+    const data = await response.json();
+    assert.match(String(data?.error ?? ""), /Invalid schedule id/i);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs returns deterministic dry-run list and filter by scheduleId", async () => {
+  const server = await startTestServer();
+  try {
+    const allResponse = await fetch(`${server.baseUrl}/api/reports/runs?dryRun=true`, {
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+      },
+    });
+    assert.equal(allResponse.status, 200);
+    const allData = await allResponse.json();
+    assert.equal(Array.isArray(allData), true);
+    assert.equal(allData.length, 2);
+    assert.deepEqual(
+      allData.map((row) => row.schedule_id),
+      [11, 12],
+    );
+
+    const filteredResponse = await fetch(
+      `${server.baseUrl}/api/reports/runs?dryRun=true&scheduleId=12`,
+      {
+        headers: {
+          Authorization: `Bearer ${server.smokeToken}`,
+        },
+      },
+    );
+    assert.equal(filteredResponse.status, 200);
+    const filteredData = await filteredResponse.json();
+    assert.equal(Array.isArray(filteredData), true);
+    assert.equal(filteredData.length, 1);
+    assert.equal(filteredData[0]?.schedule_id, 12);
+    assert.equal(filteredData[0]?.id, 900);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs/:id/download returns 401 without token", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/reports/runs/1/download`);
+    assert.equal(response.status, 401);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs/:id/download returns 400 for invalid run id", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/reports/runs/abc/download`, {
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+      },
+    });
+    assert.equal(response.status, 400);
+    const data = await response.json();
+    assert.match(String(data?.error ?? ""), /Invalid run id/i);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs/:id/download returns 404 for missing run id", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/reports/runs/999999/download`, {
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+      },
+    });
+    assert.equal(response.status, 404);
+    const data = await response.json();
+    assert.equal(typeof data, "object");
+    assert.equal(typeof data?.error, "string");
+    assert.ok((data?.error ?? "").length > 0);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs/:id/download returns 403 for foreign run in dry-run smoke mode", async () => {
+  const server = await startTestServer({ role: "operator", token: "smoke-operator-report-download-foreign" });
+  try {
+    const response = await fetch(
+      `${server.baseUrl}/api/reports/runs/1/download?dryRun=true&mockRecipient=other`,
+      {
+        headers: {
+          Authorization: `Bearer ${server.smokeToken}`,
+        },
+      },
+    );
+    assert.equal(response.status, 403);
+    const data = await response.json();
+    assert.equal(data?.error, "Forbidden");
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/reports/runs/:id/download returns 200 CSV for own run in dry-run smoke mode", async () => {
+  const server = await startTestServer({ role: "operator", token: "smoke-operator-report-download-own" });
+  try {
+    const response = await fetch(
+      `${server.baseUrl}/api/reports/runs/1/download?dryRun=true&mockRecipient=self`,
+      {
+        headers: {
+          Authorization: `Bearer ${server.smokeToken}`,
+        },
+      },
+    );
+    assert.equal(response.status, 200);
+    assert.match(String(response.headers.get("content-type") ?? ""), /text\/csv/i);
+    assert.match(String(response.headers.get("content-disposition") ?? ""), /attachment/i);
+    const body = await response.text();
+    assert.match(body, /metric,value/i);
+    assert.match(body, /smoke,1/i);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("PATCH /api/reports/schedules/:id returns 401 without token", async () => {
   const server = await startTestServer();
   try {

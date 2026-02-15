@@ -186,6 +186,33 @@
 ## Stage 53: Patch Business Validation Contract
 - [x] Add integration tests that lock `{ error: "No fields to update" }` contract for empty `PATCH` payload business validation.
 
+## Stage 54: Report Run Not-Found Contract
+- [x] Add integration test that locks `404` response contract for missing report schedule run target.
+
+## Stage 55: Report Download Not-Found Contract
+- [x] Add integration test that locks `404` response contract for missing report run download target.
+
+## Stage 56: Report Download Forbidden Contract
+- [x] Add deterministic integration test that locks `403` response contract for downloading a foreign report run.
+
+## Stage 57: Report Download Success Contract
+- [x] Add deterministic integration test that locks `200` CSV download contract for owned report run in dry-run test mode.
+
+## Stage 58: Report Runs Query Validation Guard
+- [x] Add integration test that locks `400` response contract for invalid `scheduleId` query on `GET /api/reports/runs`.
+
+## Stage 59: Report Runs Dry-Run List Contract
+- [x] Add deterministic integration test that locks `200` list contract for `GET /api/reports/runs?dryRun=true`, including `scheduleId` filter behavior.
+
+## Stage 60: Report Runs Access Guards
+- [x] Add integration tests for `GET /api/reports/runs` access matrix (`401` without token, `403` for `operator`).
+
+## Stage 61: Report Download Invalid-Id Guard
+- [x] Add integration test that locks `400` response contract for invalid `run id` on `GET /api/reports/runs/:id/download`.
+
+## Stage 62: Report Download Unauthorized Guard
+- [x] Add integration test that locks `401` response contract for `GET /api/reports/runs/:id/download` without token.
+
 ## Current Sprint Focus
 - [x] Ship LMS Builder baseline.
 - [x] Fix frontend critical crash behavior on route errors.

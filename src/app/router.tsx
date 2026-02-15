@@ -17,6 +17,7 @@ import { ReportsPage } from "../pages/ReportsPage";
 import { LMSBuilderPage } from "../pages/LMSBuilderPage";
 import { RouteErrorPage } from "../pages/RouteErrorPage";
 import { SearchPage } from "../pages/SearchPage";
+import { SystemGuidePage } from "../pages/SystemGuidePage";
 import { ProtectedRoute } from "./ProtectedRoute";
 
 export const router = createBrowserRouter([
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
           { path: "ops", element: <OpsCenterPage /> },
           { path: "notifications", element: <NotificationsPage /> },
           { path: "search", element: <SearchPage /> },
+          { path: "system-guide", element: <SystemGuidePage /> },
           { path: "reports", element: <ReportsPage /> },
           { path: "org", element: <OrgPage /> },
           { path: "ratings", element: <RatingsPage /> },

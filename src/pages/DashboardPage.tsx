@@ -1,4 +1,5 @@
 import { Building2, FileText, GraduationCap, ListTodo, Pin, Star, Trophy, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
 import { Badge } from "../components/ui/Badge";
@@ -21,6 +22,19 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Дашборд</h1>
+
+      <Card className="border-indigo-100 bg-indigo-50 p-4 sm:p-5">
+        <h2 className="text-lg font-semibold text-indigo-900">Новый в системе? Начни с простого обучения</h2>
+        <p className="mt-1 text-sm text-indigo-800">
+          Короткая страница на простом языке: что означает каждый раздел и как делать основные действия шаг за шагом.
+        </p>
+        <Link
+          to="/system-guide"
+          className="mt-3 inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+        >
+          Открыть обучение
+        </Link>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard icon={Building2} label="Офисов" value={data.offices.length} color="bg-indigo-500" sub="в сети" />
