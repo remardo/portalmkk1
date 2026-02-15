@@ -1,0 +1,92 @@
+{
+  "summaryVersion": 1,
+  "contractHash": "0a8e2ae628c7b8566bb77c1bc7590de9faa5403255aa3f32f97c449abfff5d32",
+  "startedAt": "2026-02-15T09:16:46.159Z",
+  "finishedAt": "2026-02-15T09:16:47.421Z",
+  "baseUrl": "http://127.0.0.1:4100",
+  "status": "passed",
+  "totalDurationMs": 1262,
+  "serverStartupMs": 902,
+  "checks": [
+    {
+      "label": "[Public] health responds 200",
+      "section": "Public",
+      "timeoutMs": 10000,
+      "durationMs": 902,
+      "status": "passed",
+      "error": null
+    },
+    {
+      "label": "[Unauthorized] auth/me unauthorized",
+      "section": "Unauthorized",
+      "timeoutMs": 5000,
+      "durationMs": 7,
+      "status": "passed",
+      "error": null
+    },
+    {
+      "label": "[Unauthorized] admin slo unauthorized",
+      "section": "Unauthorized",
+      "timeoutMs": 5000,
+      "durationMs": 6,
+      "status": "passed",
+      "error": null
+    },
+    {
+      "label": "[Authenticated] auth/me happy path",
+      "section": "Authenticated",
+      "timeoutMs": 5000,
+      "durationMs": 4,
+      "status": "passed",
+      "error": null
+    },
+    {
+      "label": "[Authenticated] tasks paginated shape",
+      "section": "Authenticated",
+      "timeoutMs": 5000,
+      "durationMs": 6,
+      "status": "passed",
+      "error": null
+    },
+    {
+      "label": "[Authenticated] admin slo happy path",
+      "section": "Authenticated",
+      "timeoutMs": 5000,
+      "durationMs": 5,
+      "status": "passed",
+      "error": null
+    },
+    {
+      "label": "[Authenticated] notifications read-all dry-run",
+      "section": "Authenticated",
+      "timeoutMs": 5000,
+      "durationMs": 5,
+      "status": "passed",
+      "error": null
+    }
+  ],
+  "sections": [
+    {
+      "name": "Public",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "durationMs": 902
+    },
+    {
+      "name": "Unauthorized",
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "durationMs": 13
+    },
+    {
+      "name": "Authenticated",
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "durationMs": 20
+    }
+  ],
+  "error": null
+}
