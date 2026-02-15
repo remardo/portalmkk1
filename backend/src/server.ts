@@ -5032,10 +5032,29 @@ app.post("/api/lms-builder/courses/:id/sections", requireAuth(), requireRole(["a
   const courseId = Number(req.params.id);
   if (Number.isNaN(courseId)) return res.status(400).json({ error: "Invalid course id" });
 
-  const { count } = await supabaseAdmin
+  const lmsCourseCheck = await supabaseAdmin.from("lms_courses").select("id").eq("id", courseId).maybeSingle();
+  if (lmsCourseCheck.error && isMissingLmsSchemaError(lmsCourseCheck.error)) {
+    return res.status(400).json({
+      error:
+        "LMS schema is not initialized for sections. Run DB migration backend/supabase/schema.sql and seed.sql.",
+    });
+  }
+  if (!lmsCourseCheck.error && !lmsCourseCheck.data) {
+    const legacyCourse = await supabaseAdmin.from("courses").select("id").eq("id", courseId).maybeSingle();
+    if (!legacyCourse.error && legacyCourse.data) {
+      return res.status(400).json({
+        error:
+          "Курс найден в legacy LMS, но не в новом конструкторе. Создайте курс заново в LMS Конструкторе или выполните миграцию данных.",
+      });
+    }
+    return res.status(400).json({ error: "LMS course not found" });
+  }
+
+  const { count, error: countError } = await supabaseAdmin
     .from("lms_sections")
     .select("*", { head: true, count: "exact" })
     .eq("course_id", courseId);
+  if (countError) return res.status(400).json({ error: countError.message });
 
   const payload = {
     course_id: courseId,
@@ -5103,10 +5122,15 @@ app.post("/api/lms-builder/sections/:id/subsections", requireAuth(), requireRole
   const sectionId = Number(req.params.id);
   if (Number.isNaN(sectionId)) return res.status(400).json({ error: "Invalid section id" });
 
-  const { count } = await supabaseAdmin
+  const sectionCheck = await supabaseAdmin.from("lms_sections").select("id").eq("id", sectionId).maybeSingle();
+  if (sectionCheck.error) return res.status(400).json({ error: sectionCheck.error.message });
+  if (!sectionCheck.data) return res.status(400).json({ error: "LMS section not found" });
+
+  const { count, error: countError } = await supabaseAdmin
     .from("lms_subsections")
     .select("*", { head: true, count: "exact" })
     .eq("section_id", sectionId);
+  if (countError) return res.status(400).json({ error: countError.message });
 
   const payload = {
     section_id: sectionId,
@@ -5178,10 +5202,15 @@ app.post("/api/lms-builder/subsections/:id/media/image", requireAuth(), requireR
   if (Number.isNaN(subsectionId)) return res.status(400).json({ error: "Invalid subsection id" });
 
   const base64 = parsed.data.dataBase64.replace(/^data:[^;]+;base64,/, "");
-  const { count } = await supabaseAdmin
+  const subsectionCheck = await supabaseAdmin.from("lms_subsections").select("id").eq("id", subsectionId).maybeSingle();
+  if (subsectionCheck.error) return res.status(400).json({ error: subsectionCheck.error.message });
+  if (!subsectionCheck.data) return res.status(400).json({ error: "LMS subsection not found" });
+
+  const { count, error: countError } = await supabaseAdmin
     .from("lms_media")
     .select("*", { head: true, count: "exact" })
     .eq("subsection_id", subsectionId);
+  if (countError) return res.status(400).json({ error: countError.message });
 
   const payload = {
     subsection_id: subsectionId,
@@ -5218,10 +5247,15 @@ app.post("/api/lms-builder/subsections/:id/media/video", requireAuth(), requireR
   const subsectionId = Number(req.params.id);
   if (Number.isNaN(subsectionId)) return res.status(400).json({ error: "Invalid subsection id" });
 
-  const { count } = await supabaseAdmin
+  const subsectionCheck = await supabaseAdmin.from("lms_subsections").select("id").eq("id", subsectionId).maybeSingle();
+  if (subsectionCheck.error) return res.status(400).json({ error: subsectionCheck.error.message });
+  if (!subsectionCheck.data) return res.status(400).json({ error: "LMS subsection not found" });
+
+  const { count, error: countError } = await supabaseAdmin
     .from("lms_media")
     .select("*", { head: true, count: "exact" })
     .eq("subsection_id", subsectionId);
+  if (countError) return res.status(400).json({ error: countError.message });
 
   const payload = {
     subsection_id: subsectionId,

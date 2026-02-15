@@ -335,6 +335,11 @@ export function LMSBuilderPage() {
           ) : (
             <>
               <p className="text-sm text-gray-600">{selectedCourse.title}</p>
+              {courseTreeQuery.isError ? (
+                <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                  Не удалось загрузить структуру: {(courseTreeQuery.error as Error).message}
+                </p>
+              ) : null}
               <div className="space-y-2">
                 <input
                   value={newSectionTitle}
@@ -349,6 +354,11 @@ export function LMSBuilderPage() {
                 >
                   Добавить раздел
                 </button>
+                {createSectionMutation.error ? (
+                  <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                    Ошибка создания раздела: {createSectionMutation.error.message}
+                  </p>
+                ) : null}
               </div>
 
               <div className="max-h-[560px] space-y-2 overflow-auto pr-1">
@@ -420,6 +430,11 @@ export function LMSBuilderPage() {
                   >
                     Добавить урок
                   </button>
+                  {createSubsectionMutation.error ? (
+                    <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                      Ошибка создания урока: {createSubsectionMutation.error.message}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </>
@@ -458,6 +473,11 @@ export function LMSBuilderPage() {
               >
                 Сохранить урок
               </button>
+              {updateSubsectionMutation.error ? (
+                <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                  Ошибка сохранения урока: {updateSubsectionMutation.error.message}
+                </p>
+              ) : null}
 
               <div className="grid grid-cols-1 gap-2 border-t border-gray-200 pt-3">
                 <label className="text-sm font-medium">Добавить изображение</label>
@@ -500,6 +520,11 @@ export function LMSBuilderPage() {
                 >
                   Добавить видео
                 </button>
+                {addVideoMutation.error ? (
+                  <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                    Ошибка добавления видео: {addVideoMutation.error.message}
+                  </p>
+                ) : null}
               </div>
 
               <div className="space-y-3 border-t border-gray-200 pt-3">
