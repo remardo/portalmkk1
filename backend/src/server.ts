@@ -4888,19 +4888,9 @@ app.post("/api/lms-builder/courses", requireAuth(), requireRole(["admin", "direc
   let createdRow: Record<string, unknown> | null = null;
 
   // First try LMS table.
-  let inserted = await supabaseAdmin.from("lms_courses").insert(payload).select("*").limit(1).maybeSingle();
+  const lmsInsert = await supabaseAdmin.from("lms_courses").insert(payload);
 
-  // Fallback for older LMS variants where only subset of columns exists.
-  if (inserted.error && !isMissingLmsSchemaError(inserted.error)) {
-    const fallbackPayload = {
-      title: parsed.data.title,
-      description: parsed.data.description ?? null,
-      status: parsed.data.status,
-    };
-    inserted = await supabaseAdmin.from("lms_courses").insert(fallbackPayload).select("*").limit(1).maybeSingle();
-  }
-
-  if (inserted.error && isMissingLmsSchemaError(inserted.error)) {
+  if (lmsInsert.error && isMissingLmsSchemaError(lmsInsert.error)) {
     // Legacy fallback to old `courses` table.
     const legacyInsert = await supabaseAdmin
       .from("courses")
@@ -4910,26 +4900,42 @@ app.post("/api/lms-builder/courses", requireAuth(), requireRole(["admin", "direc
         questions_count: 0,
         passing_score: 80,
         status: parsed.data.status,
-      })
+      });
+    if (legacyInsert.error) {
+      return res.status(400).json({ error: legacyInsert.error.message });
+    }
+
+    const legacyRead = await supabaseAdmin
+      .from("courses")
       .select("*")
+      .eq("title", parsed.data.title)
+      .order("id", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (legacyInsert.error || !legacyInsert.data) {
-      return res.status(400).json({ error: legacyInsert.error?.message ?? "Failed to create LMS course" });
-    }
+    if (legacyRead.error || !legacyRead.data) return res.status(400).json({ error: legacyRead.error?.message ?? "Failed to create LMS course" });
+
     createdRow = {
-      id: legacyInsert.data.id,
-      title: legacyInsert.data.title,
-      description: legacyInsert.data.category ?? null,
-      status: legacyInsert.data.status ?? "published",
-      created_at: legacyInsert.data.created_at,
-      updated_at: legacyInsert.data.updated_at,
+      id: legacyRead.data.id,
+      title: legacyRead.data.title,
+      description: legacyRead.data.category ?? null,
+      status: legacyRead.data.status ?? "published",
+      created_at: legacyRead.data.created_at,
+      updated_at: legacyRead.data.updated_at,
       created_by: null,
     };
-  } else if (inserted.error || !inserted.data) {
-    return res.status(400).json({ error: inserted.error?.message ?? "Failed to create LMS course" });
+  } else if (lmsInsert.error) {
+    return res.status(400).json({ error: lmsInsert.error.message });
   } else {
-    createdRow = inserted.data as Record<string, unknown>;
+    const lmsRead = await supabaseAdmin
+      .from("lms_courses")
+      .select("*")
+      .eq("created_by", session.profile.id)
+      .eq("title", parsed.data.title)
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lmsRead.error || !lmsRead.data) return res.status(400).json({ error: lmsRead.error?.message ?? "Failed to create LMS course" });
+    createdRow = lmsRead.data as Record<string, unknown>;
   }
 
   try {
