@@ -5736,6 +5736,9 @@ app.get("/api/lms-quizzes", requireAuth(), async (req, res) => {
     .order("created_at", { ascending: true });
 
   if (error) {
+    if (isMissingLmsSchemaError(error)) {
+      return res.json([]);
+    }
     return res.status(400).json({ error: error.message });
   }
 
