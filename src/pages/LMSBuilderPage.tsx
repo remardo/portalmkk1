@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
@@ -7,6 +8,7 @@ import { canManageLMS } from "../lib/permissions";
 import { backendApi } from "../services/apiClient";
 
 type LmsStatus = "draft" | "published" | "archived";
+type BuilderStep = "basic" | "structure" | "content" | "review";
 
 function MarkdownPreview({ markdown }: { markdown: string }) {
   const lines = markdown.split(/\r?\n/);
@@ -29,6 +31,7 @@ export function LMSBuilderPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const [activeStep, setActiveStep] = useState<BuilderStep>("basic");
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
   const [selectedSubsectionId, setSelectedSubsectionId] = useState<number | null>(null);
@@ -42,6 +45,9 @@ export function LMSBuilderPage() {
   const [newCourseTitle, setNewCourseTitle] = useState("");
   const [newCourseDescription, setNewCourseDescription] = useState("");
   const [newCourseStatus, setNewCourseStatus] = useState<LmsStatus>("draft");
+  const [basicTitle, setBasicTitle] = useState("");
+  const [basicDescription, setBasicDescription] = useState("");
+  const [basicStatus, setBasicStatus] = useState<LmsStatus>("draft");
 
   const [newSectionTitle, setNewSectionTitle] = useState("");
   const [newSubsectionTitle, setNewSubsectionTitle] = useState("");
@@ -90,6 +96,25 @@ export function LMSBuilderPage() {
     setEditorMarkdown(selectedSubsection.markdown_content);
   }, [selectedSubsection]);
 
+  useEffect(() => {
+    if (!selectedCourse) {
+      setBasicTitle("");
+      setBasicDescription("");
+      setBasicStatus("draft");
+      return;
+    }
+    setBasicTitle(selectedCourse.title);
+    setBasicDescription(selectedCourse.description ?? "");
+    setBasicStatus(selectedCourse.status);
+  }, [selectedCourse]);
+
+  useEffect(() => {
+    const sections = courseTreeQuery.data?.sections ?? [];
+    if (!sections.length) return;
+    if (selectedSectionId && sections.some((section) => Number(section.id) === selectedSectionId)) return;
+    setSelectedSectionId(Number(sections[0].id));
+  }, [courseTreeQuery.data, selectedSectionId]);
+
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["lms-builder-courses"] });
     if (selectedCourseId) {
@@ -111,6 +136,7 @@ export function LMSBuilderPage() {
       setCourseSearch("");
       setCourseStatusFilter("all");
       setSelectedCourseId(Number((createdCourse as { id: number | string }).id));
+      setActiveStep("basic");
       await refresh();
     },
   });
@@ -118,6 +144,16 @@ export function LMSBuilderPage() {
   const updateCourseMutation = useMutation({
     mutationFn: (input: { id: number; status: LmsStatus }) =>
       backendApi.updateLmsBuilderCourse(input.id, { status: input.status }),
+    onSuccess: refresh,
+  });
+
+  const updateCourseDetailsMutation = useMutation({
+    mutationFn: (input: { id: number; title: string; description: string; status: LmsStatus }) =>
+      backendApi.updateLmsBuilderCourse(input.id, {
+        title: input.title,
+        description: input.description,
+        status: input.status,
+      }),
     onSuccess: refresh,
   });
 
@@ -183,6 +219,24 @@ export function LMSBuilderPage() {
       .sort((a, b) => Number(b.id) - Number(a.id));
   }, [courses, courseSearch, courseStatusFilter]);
 
+  const sections = courseTreeQuery.data?.sections ?? [];
+  const subsectionCount = sections.reduce((sum, section) => sum + section.subsections.length, 0);
+  const lessonsWithContent = sections.reduce(
+    (sum, section) =>
+      sum + section.subsections.filter((item) => item.markdown_content.trim().length > 0).length,
+    0,
+  );
+
+  const reviewChecks = [
+    { label: "Выбран курс", ok: Boolean(selectedCourse) },
+    { label: "Есть название", ok: Boolean(basicTitle.trim()) },
+    { label: "Есть описание", ok: Boolean(basicDescription.trim()) },
+    { label: "Есть разделы", ok: sections.length > 0 },
+    { label: "Есть уроки", ok: subsectionCount > 0 },
+    { label: "Есть контент уроков", ok: lessonsWithContent > 0 },
+  ];
+  const canPublish = reviewChecks.every((item) => item.ok);
+
   const reorderSections = async (targetSectionId: number) => {
     if (!draggedSectionId || !courseTreeQuery.data) return;
     if (draggedSectionId === targetSectionId) return;
@@ -227,8 +281,34 @@ export function LMSBuilderPage() {
       <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-white via-indigo-50/60 to-white p-5">
         <h1 className="text-2xl font-bold text-gray-900">LMS Конструктор</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Один экран: выберите курс, настройте структуру и сразу редактируйте выбранный урок.
+          Поток как в современном course-builder: Basic, Structure, Content, Review.
         </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <button
+            onClick={() => setActiveStep("basic")}
+            className={`rounded-lg border px-3 py-2 text-left text-sm font-medium ${activeStep === "basic" ? "border-sky-400 bg-sky-50 text-sky-700" : "border-gray-200 bg-white text-gray-700"}`}
+          >
+            1. Basic
+          </button>
+          <button
+            onClick={() => setActiveStep("structure")}
+            className={`rounded-lg border px-3 py-2 text-left text-sm font-medium ${activeStep === "structure" ? "border-sky-400 bg-sky-50 text-sky-700" : "border-gray-200 bg-white text-gray-700"}`}
+          >
+            2. Structure
+          </button>
+          <button
+            onClick={() => setActiveStep("content")}
+            className={`rounded-lg border px-3 py-2 text-left text-sm font-medium ${activeStep === "content" ? "border-sky-400 bg-sky-50 text-sky-700" : "border-gray-200 bg-white text-gray-700"}`}
+          >
+            3. Content
+          </button>
+          <button
+            onClick={() => setActiveStep("review")}
+            className={`rounded-lg border px-3 py-2 text-left text-sm font-medium ${activeStep === "review" ? "border-sky-400 bg-sky-50 text-sky-700" : "border-gray-200 bg-white text-gray-700"}`}
+          >
+            4. Review
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -264,6 +344,7 @@ export function LMSBuilderPage() {
                     setSelectedCourseId(Number(course.id));
                     setSelectedSectionId(null);
                     setSelectedSubsectionId(null);
+                    setActiveStep("basic");
                   }}
                   className="w-full text-left"
                 >
@@ -329,11 +410,98 @@ export function LMSBuilderPage() {
         </Card>
 
         <Card className="space-y-3 p-4 xl:col-span-4">
-          <h2 className="font-semibold">Структура курса</h2>
-          {!selectedCourse ? (
-            <p className="text-sm text-gray-500">Выберите курс слева.</p>
+          {activeStep === "basic" ? (
+            <>
+              <h2 className="font-semibold">Basic Page</h2>
+              {!selectedCourse ? (
+                <p className="text-sm text-gray-500">Выберите курс слева.</p>
+              ) : (
+                <>
+                  <input
+                    value={basicTitle}
+                    onChange={(e) => setBasicTitle(e.target.value)}
+                    placeholder="Название курса"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <textarea
+                    value={basicDescription}
+                    onChange={(e) => setBasicDescription(e.target.value)}
+                    rows={6}
+                    placeholder="Описание курса"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <select
+                    value={basicStatus}
+                    onChange={(e) => setBasicStatus(e.target.value as LmsStatus)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="draft">draft</option>
+                    <option value="published">published</option>
+                    <option value="archived">archived</option>
+                  </select>
+                  {updateCourseDetailsMutation.error ? (
+                    <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                      Ошибка сохранения: {updateCourseDetailsMutation.error.message}
+                    </p>
+                  ) : null}
+                  <button
+                    onClick={() =>
+                      selectedCourseId &&
+                      updateCourseDetailsMutation.mutate({
+                        id: selectedCourseId,
+                        title: basicTitle.trim(),
+                        description: basicDescription.trim(),
+                        status: basicStatus,
+                      })
+                    }
+                    disabled={!selectedCourseId || !basicTitle.trim() || updateCourseDetailsMutation.isPending}
+                    className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+                  >
+                    Сохранить Basic
+                  </button>
+                </>
+              )}
+            </>
+          ) : activeStep === "review" ? (
+            <>
+              <h2 className="font-semibold">Review Page</h2>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded border border-gray-200 bg-gray-50 p-2 text-sm">Разделы: {sections.length}</div>
+                <div className="rounded border border-gray-200 bg-gray-50 p-2 text-sm">Уроки: {subsectionCount}</div>
+                <div className="rounded border border-gray-200 bg-gray-50 p-2 text-sm">С контентом: {lessonsWithContent}</div>
+                <div className="rounded border border-gray-200 bg-gray-50 p-2 text-sm">Статус: {selectedCourse?.status ?? "-"}</div>
+              </div>
+              <div className="space-y-1">
+                {reviewChecks.map((item) => (
+                  <div key={item.label} className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className={`h-4 w-4 ${item.ok ? "text-emerald-600" : "text-gray-300"}`} />
+                    <span className={item.ok ? "text-gray-700" : "text-gray-400"}>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() =>
+                  selectedCourseId &&
+                  updateCourseDetailsMutation.mutate({
+                    id: selectedCourseId,
+                    title: basicTitle.trim() || (selectedCourse?.title ?? ""),
+                    description: basicDescription.trim() || (selectedCourse?.description ?? ""),
+                    status: "published",
+                  })
+                }
+                disabled={!selectedCourseId || !canPublish || updateCourseDetailsMutation.isPending}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                Опубликовать курс
+              </button>
+            </>
           ) : (
             <>
+              <h2 className="font-semibold">Structure Page</h2>
+              {!selectedCourse ? (
+                <p className="text-sm text-gray-500">Выберите курс слева.</p>
+              ) : (
+                <>
               <p className="text-sm text-gray-600">{selectedCourse.title}</p>
               {courseTreeQuery.isError ? (
                 <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
@@ -395,6 +563,7 @@ export function LMSBuilderPage() {
                             onClick={() => {
                               setSelectedSectionId(Number(section.id));
                               setSelectedSubsectionId(Number(sub.id));
+                              setActiveStep("content");
                             }}
                             className="w-full text-left"
                           >
@@ -437,16 +606,25 @@ export function LMSBuilderPage() {
                   ) : null}
                 </div>
               ) : null}
+                </>
+              )}
             </>
           )}
         </Card>
 
         <Card className="space-y-3 p-4 xl:col-span-5">
-          <h2 className="font-semibold">Редактор урока</h2>
-          {!selectedSubsection ? (
-            <p className="text-sm text-gray-500">Выберите урок в структуре курса.</p>
+          {activeStep !== "content" ? (
+            <>
+              <h2 className="font-semibold">Content Page</h2>
+              <p className="text-sm text-gray-500">Переключитесь на шаг Content, чтобы редактировать урок.</p>
+            </>
           ) : (
             <>
+              <h2 className="font-semibold">Content Page</h2>
+              {!selectedSubsection ? (
+                <p className="text-sm text-gray-500">Выберите урок в структуре курса.</p>
+              ) : (
+                <>
               <input
                 value={editorTitle}
                 onChange={(e) => setEditorTitle(e.target.value)}
@@ -548,6 +726,8 @@ export function LMSBuilderPage() {
                   </div>
                 ))}
               </div>
+                </>
+              )}
             </>
           )}
         </Card>
