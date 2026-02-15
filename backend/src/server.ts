@@ -4837,8 +4837,20 @@ app.post("/api/lms-builder/courses", requireAuth(), requireRole(["admin", "direc
     created_by: session.profile.id,
   };
 
-  const { data, error } = await supabaseAdmin.from("lms_courses").insert(payload).select("*").single();
-  if (error || !data) return res.status(400).json({ error: error?.message ?? "Failed to create LMS course" });
+  const { error: insertError } = await supabaseAdmin.from("lms_courses").insert(payload);
+  if (insertError) return res.status(400).json({ error: insertError.message });
+
+  const { data, error } = await supabaseAdmin
+    .from("lms_courses")
+    .select("*")
+    .eq("created_by", session.profile.id)
+    .eq("title", payload.title)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to load created LMS course" });
+  }
 
   try {
     await saveLmsCourseVersionSnapshot({

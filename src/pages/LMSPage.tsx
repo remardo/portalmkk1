@@ -3,13 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import {
-  useAssignCourseMutation,
   useCourseQuestionsQuery,
-  useCreateCourseAttemptMutation,
-  useCreateCourseMutation,
   usePortalData,
   useSubmitCourseAnswersMutation,
-  useUpdateCourseMutation,
 } from "../hooks/usePortalData";
 import { useAuth } from "../contexts/useAuth";
 import { canManageLMS } from "../lib/permissions";
@@ -20,25 +16,8 @@ export function LMSPage() {
   const { userId, courseId: courseIdParam } = useParams();
   const { user } = useAuth();
 
-  const createCourse = useCreateCourseMutation();
-  const updateCourse = useUpdateCourseMutation();
-  const assignCourse = useAssignCourseMutation();
-  const createCourseAttempt = useCreateCourseAttemptMutation();
   const submitCourseAnswers = useSubmitCourseAnswersMutation();
 
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("Базовый");
-  const [questionsCount, setQuestionsCount] = useState("10");
-  const [passingScore, setPassingScore] = useState("80");
-
-  const [assignCourseId, setAssignCourseId] = useState<number | null>(null);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-
-  const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
-  const [editCourseTitle, setEditCourseTitle] = useState("");
-  const [editCourseCategory, setEditCourseCategory] = useState("");
-  const [attemptCourseId, setAttemptCourseId] = useState<string>("");
-  const [attemptScore, setAttemptScore] = useState<string>("80");
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [submitError, setSubmitError] = useState<string>("");
   const [submitInfo, setSubmitInfo] = useState<string>("");
@@ -223,47 +202,6 @@ export function LMSPage() {
             })}
           </div>
 
-          {canManage ? (
-            <div className="mt-4 space-y-2 rounded-lg border border-gray-200 p-3">
-              <h4 className="text-sm font-semibold">Добавить попытку</h4>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <select
-                  value={attemptCourseId}
-                  onChange={(event) => setAttemptCourseId(event.target.value)}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                >
-                  <option value="">Выберите курс</option>
-                  {data.courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.title}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={attemptScore}
-                  onChange={(event) => setAttemptScore(event.target.value)}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <button
-                onClick={() => {
-                  if (!attemptCourseId) return;
-                  createCourseAttempt.mutate({
-                    courseId: Number(attemptCourseId),
-                    score: Number(attemptScore || 0),
-                    userId: String(employee.id),
-                  });
-                }}
-                className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-              >
-                Добавить попытку
-              </button>
-            </div>
-          ) : null}
-
           <div className="mt-4 space-y-1 text-xs text-gray-500">
             <h4 className="font-semibold text-sm text-gray-700">Попытки (детально)</h4>
             {employeeAttempts.length === 0 ? (
@@ -288,82 +226,16 @@ export function LMSPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Обучение (LMS)</h1>
 
-      {canManage ? (
-        <Card className="p-4">
-          <h2 className="mb-3 font-semibold">Создать курс</h2>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Название"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-              placeholder="Категория"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={questionsCount}
-              onChange={(event) => setQuestionsCount(event.target.value)}
-              placeholder="Вопросов"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={passingScore}
-              onChange={(event) => setPassingScore(event.target.value)}
-              placeholder="Порог %"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <button
-            onClick={() => {
-              if (!title.trim()) return;
-              createCourse.mutate({
-                title: title.trim(),
-                category: category.trim() || "Общее",
-                questionsCount: Number(questionsCount || 10),
-                passingScore: Number(passingScore || 80),
-                status: "draft",
-              });
-              setTitle("");
-            }}
-            className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-          >
-            Создать
-          </button>
-        </Card>
-      ) : null}
-
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {data.courses.map((course) => {
           const attempts = data.attestations.filter((item) => item.courseId === course.id);
           const passed = attempts.filter((item) => item.passed).length;
           const assignedCount = assignmentMap.get(course.id)?.length ?? 0;
-          const isEditing = editingCourseId === course.id;
-          const courseUsers = data.users.filter((u) => u.role !== "admin");
-          const isAssigning = assignCourseId === course.id;
 
           return (
             <Card key={course.id} className="p-4">
               <Badge className="mb-2 bg-purple-100 text-purple-700">{course.category}</Badge>
-              {!isEditing ? (
-                <h3 className="font-semibold text-gray-900">{course.title}</h3>
-              ) : (
-                <div className="space-y-2">
-                  <input
-                    value={editCourseTitle}
-                    onChange={(event) => setEditCourseTitle(event.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                  <input
-                    value={editCourseCategory}
-                    onChange={(event) => setEditCourseCategory(event.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </div>
-              )}
+              <h3 className="font-semibold text-gray-900">{course.title}</h3>
               <p className="mt-2 text-xs text-gray-500">
                 {course.questionsCount} вопросов • Порог {course.passingScore}% • Сдали {passed}/{attempts.length}
               </p>
@@ -377,98 +249,6 @@ export function LMSPage() {
                   >
                     Пройти курс
                   </Link>
-                </div>
-              ) : null}
-
-              {canManage ? (
-                <div className="mt-3 space-y-2">
-                  {!isEditing ? (
-                    <button
-                      onClick={() => {
-                        setEditingCourseId(course.id);
-                        setEditCourseTitle(course.title);
-                        setEditCourseCategory(course.category);
-                      }}
-                      className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
-                    >
-                      Редактировать курс
-                    </button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          updateCourse.mutate({
-                            id: course.id,
-                            title: editCourseTitle,
-                            category: editCourseCategory,
-                          });
-                          setEditingCourseId(null);
-                        }}
-                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-                      >
-                        Сохранить
-                      </button>
-                      <button
-                        onClick={() => setEditingCourseId(null)}
-                        className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300"
-                      >
-                        Отмена
-                      </button>
-                    </div>
-                  )}
-
-                  {!isAssigning ? (
-                    <button
-                      onClick={() => {
-                        setAssignCourseId(course.id);
-                        setSelectedUsers([]);
-                      }}
-                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-                    >
-                      Назначить курс
-                    </button>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="max-h-36 overflow-auto rounded-lg border border-gray-200 p-2">
-                        {courseUsers.map((u) => {
-                          const checked = selectedUsers.includes(String(u.id));
-                          return (
-                            <label key={String(u.id)} className="flex items-center gap-2 py-0.5 text-xs">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(event) => {
-                                  setSelectedUsers((prev) => {
-                                    if (event.target.checked) return [...prev, String(u.id)];
-                                    return prev.filter((id) => id !== String(u.id));
-                                  });
-                                }}
-                              />
-                              <span>{u.name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            if (selectedUsers.length === 0) return;
-                            assignCourse.mutate({ courseId: course.id, userIds: selectedUsers });
-                            setAssignCourseId(null);
-                          }}
-                          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-                        >
-                          Сохранить назначения
-                        </button>
-                        <button
-                          onClick={() => setAssignCourseId(null)}
-                          className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300"
-                        >
-                          Отмена
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               ) : null}
             </Card>
