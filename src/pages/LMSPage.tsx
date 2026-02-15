@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Award, BookOpen, ChevronLeft, ChevronRight, Clock, Play, Users, CheckCircle } from "lucide-react";
+import { Award, BookOpen, ChevronLeft, ChevronRight, Clock, Users, CheckCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
@@ -7,47 +7,6 @@ import { useAuth } from "../contexts/useAuth";
 import { usePortalData } from "../hooks/usePortalData";
 import { canManageLMS } from "../lib/permissions";
 import { backendApi } from "../services/apiClient";
-
-function MarkdownPreview({ markdown }: { markdown: string }) {
-  const lines = markdown.split(/\r?\n/);
-  return (
-    <div className="prose prose-sm max-w-none space-y-2 text-gray-700">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={idx} className="h-2" />;
-        if (trimmed.startsWith("### "))
-          return (
-            <h4 key={idx} className="text-sm font-semibold text-gray-800">
-              {trimmed.slice(4)}
-            </h4>
-          );
-        if (trimmed.startsWith("## "))
-          return (
-            <h3 key={idx} className="text-base font-semibold text-gray-800">
-              {trimmed.slice(3)}
-            </h3>
-          );
-        if (trimmed.startsWith("# "))
-          return (
-            <h2 key={idx} className="text-lg font-bold text-gray-900">
-              {trimmed.slice(2)}
-            </h2>
-          );
-        if (trimmed.startsWith("- "))
-          return (
-            <li key={idx} className="ml-4 list-disc text-sm">
-              {trimmed.slice(2)}
-            </li>
-          );
-        return (
-          <p key={idx} className="text-sm">
-            {trimmed}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
 
 export function LMSPage() {
   const { data } = usePortalData();
@@ -67,6 +26,12 @@ export function LMSPage() {
   const lmsCourseQuery = useQuery({
     queryKey: ["lms-course", courseId],
     queryFn: () => backendApi.getLmsBuilderCourse(Number(courseId)),
+    enabled: Boolean(courseId && !Number.isNaN(courseId)),
+  });
+
+  const courseProgressQuery = useQuery({
+    queryKey: ["lms-progress", courseId],
+    queryFn: () => backendApi.getLmsCourseProgress(Number(courseId)),
     enabled: Boolean(courseId && !Number.isNaN(courseId)),
   });
 
@@ -115,13 +80,6 @@ export function LMSPage() {
     }
 
     const course = lmsCourseQuery.data;
-
-    // Fetch course progress
-    const courseProgressQuery = useQuery({
-      queryKey: ["lms-progress", courseId],
-      queryFn: () => backendApi.getLmsCourseProgress(Number(courseId)),
-      enabled: Boolean(courseId && !Number.isNaN(courseId)),
-    });
 
     // Calculate total lessons
     const totalLessons = (course.sections ?? []).reduce(
@@ -174,7 +132,6 @@ export function LMSPage() {
         {/* Course sections with clickable lessons */}
         {(course.sections ?? []).map((section, sectionIndex) => {
           // Calculate section progress
-          const sectionSubsectionIds = (section.subsections ?? []).map((s) => s.id);
           const sectionCompleted = courseProgressQuery.data?.sections
             .find((s) => s.sectionId === section.id)?.completedSubsections ?? 0;
           const sectionTotal = section.subsections?.length ?? 0;

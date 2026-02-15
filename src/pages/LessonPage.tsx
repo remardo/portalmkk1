@@ -6,7 +6,6 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
-  Clock,
   HelpCircle,
   ListChecks,
   Play,
@@ -14,10 +13,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { Badge } from "../components/ui/Badge";
+import { Link, useParams } from "react-router-dom";
 import { Card } from "../components/ui/Card";
-import { useAuth } from "../contexts/useAuth";
 import { backendApi } from "../services/apiClient";
 
 // Types for quiz data
@@ -67,41 +64,6 @@ interface Quiz {
   sort_order: number;
   status: "draft" | "published" | "archived";
   questions?: QuizQuestion[];
-}
-
-interface Subsection {
-  id: number;
-  section_id: number;
-  title: string;
-  sort_order: number;
-  markdown_content: string;
-  media: Array<{
-    id: number;
-    subsection_id: number;
-    media_type: "image" | "video";
-    image_data_base64: string | null;
-    image_mime_type: string | null;
-    external_url: string | null;
-    caption: string | null;
-    sort_order: number;
-  }>;
-  quizzes?: Quiz[];
-}
-
-interface Section {
-  id: number;
-  course_id: number;
-  title: string;
-  sort_order: number;
-  subsections: Subsection[];
-}
-
-interface Course {
-  id: number;
-  title: string;
-  description: string | null;
-  status: "draft" | "published" | "archived";
-  sections: Section[];
 }
 
 interface QuizAttempt {
@@ -187,7 +149,6 @@ function QuizPlayer({
   onComplete: () => void;
   onClose: () => void;
 }) {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<
@@ -546,8 +507,6 @@ function QuizPlayer({
 // Main Lesson Page component
 export function LessonPage() {
   const { courseId, lessonId } = useParams();
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
 
   // Fetch course data
