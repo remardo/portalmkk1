@@ -1,61 +1,78 @@
+import { useQuery } from "@tanstack/react-query";
 import { Award } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
-import {
-  useCourseQuestionsQuery,
-  usePortalData,
-  useSubmitCourseAnswersMutation,
-} from "../hooks/usePortalData";
+import { Card } from "../components/ui/Card";
 import { useAuth } from "../contexts/useAuth";
+import { usePortalData } from "../hooks/usePortalData";
 import { canManageLMS } from "../lib/permissions";
-import { useMemo, useState } from "react";
+import { backendApi } from "../services/apiClient";
+
+function MarkdownPreview({ markdown }: { markdown: string }) {
+  const lines = markdown.split(/\r?\n/);
+  return (
+    <div className="space-y-2 text-sm text-gray-800">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="h-2" />;
+        if (trimmed.startsWith("### ")) return <h4 key={idx} className="font-semibold">{trimmed.slice(4)}</h4>;
+        if (trimmed.startsWith("## ")) return <h3 key={idx} className="text-base font-semibold">{trimmed.slice(3)}</h3>;
+        if (trimmed.startsWith("# ")) return <h2 key={idx} className="text-lg font-bold">{trimmed.slice(2)}</h2>;
+        if (trimmed.startsWith("- ")) return <li key={idx} className="ml-4 list-disc">{trimmed.slice(2)}</li>;
+        return <p key={idx}>{trimmed}</p>;
+      })}
+    </div>
+  );
+}
 
 export function LMSPage() {
   const { data } = usePortalData();
   const { userId, courseId: courseIdParam } = useParams();
   const { user } = useAuth();
 
-  const submitCourseAnswers = useSubmitCourseAnswersMutation();
+  const canManage = user ? canManageLMS(user.role) : false;
 
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
-  const [submitError, setSubmitError] = useState<string>("");
-  const [submitInfo, setSubmitInfo] = useState<string>("");
-
-  const assignmentMap = useMemo(() => {
-    if (!data) {
-      return new Map<number, string[]>();
-    }
-    const map = new Map<number, string[]>();
-    data.courseAssignments.forEach((item) => {
-      const current = map.get(item.courseId) ?? [];
-      current.push(item.userId);
-      map.set(item.courseId, current);
-    });
-    return map;
-  }, [data]);
+  const lmsCoursesQuery = useQuery({
+    queryKey: ["lms-courses", canManage],
+    queryFn: () => backendApi.getLmsBuilderCourses(canManage),
+    enabled: true,
+  });
 
   const courseId = courseIdParam ? Number(courseIdParam) : undefined;
-  const courseQuestionsQuery = useCourseQuestionsQuery(Number.isNaN(courseId ?? NaN) ? undefined : courseId);
+
+  const lmsCourseQuery = useQuery({
+    queryKey: ["lms-course", courseId],
+    queryFn: () => backendApi.getLmsBuilderCourse(Number(courseId)),
+    enabled: Boolean(courseId && !Number.isNaN(courseId)),
+  });
 
   if (!data) {
     return null;
   }
 
-  const canManage = user ? canManageLMS(user.role) : false;
+  const legacyPublishedCourses = data.courses
+    .filter((course) => (course.status ?? "published") === "published")
+    .map((course) => ({
+      id: course.id,
+      title: course.title,
+      description: course.category,
+      status: (course.status ?? "published") as "draft" | "published" | "archived",
+    }));
+
+  const visibleCourses = lmsCoursesQuery.data && lmsCoursesQuery.data.length > 0
+    ? lmsCoursesQuery.data
+    : legacyPublishedCourses;
 
   if (courseId !== undefined && !Number.isNaN(courseId)) {
-    const course = data.courses.find((item) => item.id === courseId);
-    if (!course) {
+    if (lmsCourseQuery.isLoading) {
+      return <p className="text-sm text-gray-500">Загрузка курса...</p>;
+    }
+
+    if (lmsCourseQuery.isError || !lmsCourseQuery.data) {
       return <p className="text-sm text-gray-500">Курс не найден.</p>;
     }
 
-    const canOpenCourse = course.status === "published" || canManage;
-    if (!canOpenCourse) {
-      return <p className="text-sm text-gray-500">Курс недоступен для прохождения.</p>;
-    }
-
-    const answeredCount = Object.keys(selectedAnswers).length;
+    const course = lmsCourseQuery.data;
 
     return (
       <div className="space-y-4">
@@ -64,93 +81,52 @@ export function LMSPage() {
         </Link>
 
         <Card className="p-5">
-          <Badge className="mb-2 bg-purple-100 text-purple-700">{course.category}</Badge>
+          <Badge className="mb-2 bg-purple-100 text-purple-700">{course.status}</Badge>
           <h2 className="text-xl font-bold text-gray-900">{course.title}</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Вопросов: {course.questionsCount} • Порог: {course.passingScore}% • Статус: {course.status ?? "published"}
-          </p>
+          {course.description ? <p className="mt-1 text-sm text-gray-500">{course.description}</p> : null}
         </Card>
 
-        <Card className="p-5">
-          {courseQuestionsQuery.isLoading ? <p className="text-sm text-gray-500">Загрузка вопросов…</p> : null}
-          {courseQuestionsQuery.isError ? (
-            <p className="text-sm text-red-600">Не удалось загрузить вопросы курса.</p>
-          ) : null}
+        {(course.sections ?? []).map((section) => (
+          <Card key={section.id} className="space-y-3 p-5">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {section.sort_order}. {section.title}
+            </h3>
 
-          {courseQuestionsQuery.data ? (
-            <div className="space-y-4">
-              {courseQuestionsQuery.data.items.map((item) => (
-                <div key={item.id} className="rounded-lg border border-gray-200 p-3">
-                  <p className="font-medium text-gray-900">
-                    {item.sortOrder}. {item.question}
-                  </p>
-                  <div className="mt-2 space-y-1">
-                    {item.options.map((option, idx) => (
-                      <label key={`${item.id}-${idx}`} className="flex items-start gap-2 text-sm text-gray-700">
-                        <input
-                          type="radio"
-                          name={`q-${item.id}`}
-                          checked={selectedAnswers[item.id] === idx}
-                          onChange={() =>
-                            setSelectedAnswers((prev) => ({
-                              ...prev,
-                              [item.id]: idx,
-                            }))
-                          }
+            {(section.subsections ?? []).map((subsection) => (
+              <div key={subsection.id} className="rounded-lg border border-gray-200 p-4">
+                <h4 className="mb-2 font-semibold text-gray-900">
+                  {subsection.sort_order}. {subsection.title}
+                </h4>
+
+                <MarkdownPreview markdown={subsection.markdown_content ?? ""} />
+
+                <div className="mt-3 space-y-2">
+                  {(subsection.media ?? []).map((item) => (
+                    <div key={item.id} className="rounded border border-gray-200 p-2">
+                      {item.media_type === "image" && item.image_data_base64 ? (
+                        <img
+                          src={`data:${item.image_mime_type ?? "image/png"};base64,${item.image_data_base64}`}
+                          alt={item.caption ?? "image"}
+                          className="max-h-80 w-auto rounded"
                         />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </div>
+                      ) : null}
+                      {item.media_type === "video" && item.external_url ? (
+                        <a href={item.external_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">
+                          {item.external_url}
+                        </a>
+                      ) : null}
+                      {item.caption ? <p className="mt-1 text-sm text-gray-500">{item.caption}</p> : null}
+                    </div>
+                  ))}
                 </div>
-              ))}
-
-              <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-900">
-                Отвечено: {answeredCount} из {courseQuestionsQuery.data.items.length}
               </div>
+            ))}
+          </Card>
+        ))}
 
-              {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
-              {submitInfo ? <p className="text-sm text-green-700">{submitInfo}</p> : null}
-
-              <button
-                disabled={submitCourseAnswers.isPending}
-                onClick={async () => {
-                  setSubmitError("");
-                  setSubmitInfo("");
-
-                  const questions = courseQuestionsQuery.data?.items ?? [];
-                  if (questions.length === 0) {
-                    setSubmitError("В курсе пока нет вопросов.");
-                    return;
-                  }
-
-                  if (Object.keys(selectedAnswers).length < questions.length) {
-                    setSubmitError("Ответьте на все вопросы перед отправкой.");
-                    return;
-                  }
-
-                  try {
-                    const response = await submitCourseAnswers.mutateAsync({
-                      courseId: course.id,
-                      answers: questions.map((q) => ({
-                        questionId: q.id,
-                        selectedOption: selectedAnswers[q.id],
-                      })),
-                    });
-                    setSubmitInfo(
-                      `Результат: ${response.score}% (${response.correct}/${response.total}). Попытка #${response.attemptNo} сохранена.`,
-                    );
-                  } catch {
-                    setSubmitError("Не удалось отправить попытку. Попробуйте еще раз.");
-                  }
-                }}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-              >
-                {submitCourseAnswers.isPending ? "Отправка..." : "Завершить тест"}
-              </button>
-            </div>
-          ) : null}
-        </Card>
+        {(course.sections ?? []).length === 0 ? (
+          <Card className="p-5 text-sm text-gray-500">В курсе пока нет разделов и уроков.</Card>
+        ) : null}
       </div>
     );
   }
@@ -203,7 +179,7 @@ export function LMSPage() {
           </div>
 
           <div className="mt-4 space-y-1 text-xs text-gray-500">
-            <h4 className="font-semibold text-sm text-gray-700">Попытки (детально)</h4>
+            <h4 className="text-sm font-semibold text-gray-700">Попытки (детально)</h4>
             {employeeAttempts.length === 0 ? (
               <p>Пока нет попыток</p>
             ) : (
@@ -226,35 +202,32 @@ export function LMSPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Обучение (LMS)</h1>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {data.courses.map((course) => {
-          const attempts = data.attestations.filter((item) => item.courseId === course.id);
-          const passed = attempts.filter((item) => item.passed).length;
-          const assignedCount = assignmentMap.get(course.id)?.length ?? 0;
+      {lmsCoursesQuery.isLoading ? <p className="text-sm text-gray-500">Загрузка курсов...</p> : null}
+      {lmsCoursesQuery.isError ? (
+        <p className="text-sm text-red-600">Не удалось загрузить курсы: {(lmsCoursesQuery.error as Error).message}</p>
+      ) : null}
 
-          return (
-            <Card key={course.id} className="p-4">
-              <Badge className="mb-2 bg-purple-100 text-purple-700">{course.category}</Badge>
-              <h3 className="font-semibold text-gray-900">{course.title}</h3>
-              <p className="mt-2 text-xs text-gray-500">
-                {course.questionsCount} вопросов • Порог {course.passingScore}% • Сдали {passed}/{attempts.length}
-              </p>
-              <p className="mt-1 text-xs text-gray-500">Назначено: {assignedCount}</p>
-              <p className="mt-1 text-xs text-gray-500">Статус: {course.status ?? "published"}</p>
-              {course.status === "published" || canManage ? (
-                <div className="mt-3">
-                  <Link
-                    to={`/lms/courses/${course.id}`}
-                    className="inline-flex rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-                  >
-                    Пройти курс
-                  </Link>
-                </div>
-              ) : null}
-            </Card>
-          );
-        })}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {visibleCourses.map((course) => (
+          <Card key={course.id} className="p-4">
+            <Badge className="mb-2 bg-purple-100 text-purple-700">{course.status}</Badge>
+            <h3 className="font-semibold text-gray-900">{course.title}</h3>
+            <p className="mt-2 text-xs text-gray-500">{course.description ?? "Описание не заполнено"}</p>
+            <div className="mt-3">
+              <Link
+                to={`/lms/courses/${course.id}`}
+                className="inline-flex rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+              >
+                Открыть курс
+              </Link>
+            </div>
+          </Card>
+        ))}
       </div>
+
+      {!lmsCoursesQuery.isLoading && !lmsCoursesQuery.isError && visibleCourses.length === 0 ? (
+        <Card className="p-4 text-sm text-gray-500">Курсы пока не опубликованы.</Card>
+      ) : null}
 
       <Card className="p-4">
         <h2 className="mb-3 font-semibold">Сотрудники</h2>
