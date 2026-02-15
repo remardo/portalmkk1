@@ -12,11 +12,14 @@ import {
 } from "../hooks/usePortalData";
 import { canAccessAdmin } from "../lib/permissions";
 import { RoleLabels, type Office, type Role, type User } from "../domain/models";
+import { useSearchParams } from "react-router-dom";
 
 const roleOptions: Role[] = ["operator", "office_head", "director", "admin"];
 type ToastItem = { id: number; kind: "success" | "error"; message: string };
+type AdminTab = "users" | "offices" | "other";
 
 export function AdminPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data } = usePortalData();
   const { user } = useAuth();
   const createUser = useAdminCreateUserMutation();
@@ -44,6 +47,12 @@ export function AdminPage() {
     Record<number, { name: string; city: string; address: string; rating: string; headId: string }>
   >({});
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const initialTab = (() => {
+    const raw = searchParams.get("tab");
+    if (raw === "users" || raw === "offices" || raw === "other") return raw as AdminTab;
+    return "users";
+  })();
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const pageSize = Number(auditLimit) || 50;
   const audit = useAdminAuditQuery({
     limit: pageSize,
@@ -77,6 +86,13 @@ export function AdminPage() {
   function generateResetLogin(userId: string | number) {
     const compact = String(userId).replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toLowerCase() || "user";
     return `reset.${compact}.${Date.now().toString().slice(-5)}@portal.local`;
+  }
+
+  function switchTab(tab: AdminTab) {
+    setActiveTab(tab);
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
   }
 
   async function handleExportAudit() {
@@ -138,6 +154,34 @@ export function AdminPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Админка</h1>
+      <Card className="p-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => switchTab("users")}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              activeTab === "users" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Пользователи ({data.users.length})
+          </button>
+          <button
+            onClick={() => switchTab("offices")}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              activeTab === "offices" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Офисы ({data.offices.length})
+          </button>
+          <button
+            onClick={() => switchTab("other")}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              activeTab === "other" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Другое (журнал)
+          </button>
+        </div>
+      </Card>
       <div className="fixed right-4 top-4 z-50 space-y-2">
         {toasts.map((toast) => (
           <div
@@ -151,6 +195,7 @@ export function AdminPage() {
         ))}
       </div>
 
+      {activeTab === "users" ? (
       <Card className="p-4">
         <h2 className="mb-3 font-semibold">Создать пользователя</h2>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -226,7 +271,9 @@ export function AdminPage() {
           Создать
         </button>
       </Card>
+      ) : null}
 
+      {activeTab === "users" ? (
       <div className="space-y-2">
         {data.users.map((item) => (
           <Card key={String(item.id)} className="p-4">
@@ -409,7 +456,9 @@ export function AdminPage() {
           </Card>
         ))}
       </div>
+      ) : null}
 
+      {activeTab === "offices" ? (
       <Card className="p-4">
         <h2 className="mb-3 font-semibold">Редактирование офисов</h2>
         <div className="space-y-3">
@@ -506,7 +555,9 @@ export function AdminPage() {
           ))}
         </div>
       </Card>
+      ) : null}
 
+      {activeTab === "other" ? (
       <Card className="p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">Журнал действий</h2>
@@ -635,6 +686,7 @@ export function AdminPage() {
           </div>
         </div>
       </Card>
+      ) : null}
     </div>
   );
 }
