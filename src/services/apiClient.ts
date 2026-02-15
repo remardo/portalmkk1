@@ -1200,7 +1200,7 @@ export const backendApi = {
         sort_order: number;
         status: "draft" | "published" | "archived";
       }>
-    >(`/api/lms-quizzes?subsectionId=${subsectionId}`),
+    >(`/api/lms-quizzes?subsection_id=${subsectionId}`),
 
   getLmsQuiz: (quizId: number) =>
     apiRequest<{

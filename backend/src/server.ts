@@ -5694,9 +5694,14 @@ app.post("/api/lms-progress/subsections/:id", requireAuth(), async (req, res) =>
 // LMS Quiz API Endpoints
 // ============================================
 
-const lmsQuizQuerySchema = z.object({
-  subsection_id: z.coerce.number().int().positive().optional(),
-});
+const lmsQuizQuerySchema = z
+  .object({
+    subsection_id: z.coerce.number().int().positive().optional(),
+    subsectionId: z.coerce.number().int().positive().optional(),
+  })
+  .transform((input) => ({
+    subsection_id: input.subsection_id ?? input.subsectionId,
+  }));
 
 const startLmsQuizAttemptSchema = z.object({
   userId: z.string().uuid().optional(),
