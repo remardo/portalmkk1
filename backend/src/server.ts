@@ -4500,6 +4500,16 @@ async function getLmsCourseIdBySubsectionId(subsectionId: number) {
   return getLmsCourseIdBySectionId(Number(subsection.section_id));
 }
 
+function isMissingLmsSchemaError(error: { message?: string } | null | undefined) {
+  const message = (error?.message ?? "").toLowerCase();
+  return (
+    message.includes("lms_courses")
+    || message.includes("relation")
+    || message.includes("does not exist")
+    || message.includes("schema cache")
+  );
+}
+
 async function saveLmsCourseVersionSnapshot(input: {
   courseId: number;
   createdBy: string;
@@ -4798,10 +4808,27 @@ app.get("/api/lms-builder/courses", requireAuth(), async (req, res) => {
   const canManage = ["admin", "director"].includes(session.profile.role);
 
   // Keep query tolerant to schema drift: do not rely on optional columns in SQL layer.
-  const { data, error } = await supabaseAdmin.from("lms_courses").select("*");
-  if (error) return res.status(400).json({ error: error.message });
+  let data: Array<Record<string, unknown>> | null = null;
+  const primary = await supabaseAdmin.from("lms_courses").select("*");
+  if (!primary.error) {
+    data = (primary.data ?? []) as Array<Record<string, unknown>>;
+  } else if (isMissingLmsSchemaError(primary.error)) {
+    const legacy = await supabaseAdmin.from("courses").select("*");
+    if (legacy.error) return res.status(400).json({ error: legacy.error.message });
+    data = ((legacy.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description ?? row.category ?? null,
+      status: row.status ?? "published",
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      created_by: null,
+    }));
+  } else {
+    return res.status(400).json({ error: primary.error.message });
+  }
 
-  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const rows = data ?? [];
   const filtered = rows.filter((row) => {
     if (canManage && includeDrafts) return true;
     return (row.status as string | undefined) === "published";
@@ -4831,6 +4858,17 @@ app.get("/api/lms-builder/courses/:id", requireAuth(), async (req, res) => {
     }
     return res.json(tree);
   } catch (error) {
+    // Legacy fallback: map old `courses` record to empty LMS tree so editor can open.
+    const legacy = await supabaseAdmin.from("courses").select("*").eq("id", courseId).maybeSingle();
+    if (!legacy.error && legacy.data) {
+      return res.json({
+        id: legacy.data.id,
+        title: legacy.data.title,
+        description: legacy.data.category ?? "",
+        status: legacy.data.status ?? "published",
+        sections: [],
+      });
+    }
     return res.status(404).json({ error: error instanceof Error ? error.message : "LMS course not found" });
   }
 });
@@ -4849,29 +4887,50 @@ app.post("/api/lms-builder/courses", requireAuth(), requireRole(["admin", "direc
 
   let createdRow: Record<string, unknown> | null = null;
 
-  // First try full payload for current schema.
-  let { data: inserted, error: insertError } = await supabaseAdmin
-    .from("lms_courses")
-    .insert(payload)
-    .select("*")
-    .limit(1)
-    .maybeSingle();
+  // First try LMS table.
+  let inserted = await supabaseAdmin.from("lms_courses").insert(payload).select("*").limit(1).maybeSingle();
 
-  // Fallback for older schema variants where some columns may not exist.
-  if (insertError) {
+  // Fallback for older LMS variants where only subset of columns exists.
+  if (inserted.error && !isMissingLmsSchemaError(inserted.error)) {
     const fallbackPayload = {
       title: parsed.data.title,
       description: parsed.data.description ?? null,
+      status: parsed.data.status,
     };
-    const retry = await supabaseAdmin.from("lms_courses").insert(fallbackPayload).select("*").limit(1).maybeSingle();
-    inserted = retry.data;
-    insertError = retry.error;
+    inserted = await supabaseAdmin.from("lms_courses").insert(fallbackPayload).select("*").limit(1).maybeSingle();
   }
 
-  if (insertError || !inserted) {
-    return res.status(400).json({ error: insertError?.message ?? "Failed to create LMS course" });
+  if (inserted.error && isMissingLmsSchemaError(inserted.error)) {
+    // Legacy fallback to old `courses` table.
+    const legacyInsert = await supabaseAdmin
+      .from("courses")
+      .insert({
+        title: parsed.data.title,
+        category: "Базовый",
+        questions_count: 0,
+        passing_score: 80,
+        status: parsed.data.status,
+      })
+      .select("*")
+      .limit(1)
+      .maybeSingle();
+    if (legacyInsert.error || !legacyInsert.data) {
+      return res.status(400).json({ error: legacyInsert.error?.message ?? "Failed to create LMS course" });
+    }
+    createdRow = {
+      id: legacyInsert.data.id,
+      title: legacyInsert.data.title,
+      description: legacyInsert.data.category ?? null,
+      status: legacyInsert.data.status ?? "published",
+      created_at: legacyInsert.data.created_at,
+      updated_at: legacyInsert.data.updated_at,
+      created_by: null,
+    };
+  } else if (inserted.error || !inserted.data) {
+    return res.status(400).json({ error: inserted.error?.message ?? "Failed to create LMS course" });
+  } else {
+    createdRow = inserted.data as Record<string, unknown>;
   }
-  createdRow = inserted as Record<string, unknown>;
 
   try {
     await saveLmsCourseVersionSnapshot({
@@ -4912,13 +4971,43 @@ app.patch("/api/lms-builder/courses/:id", requireAuth(), requireRole(["admin", "
     }
   }
 
-  const { data, error } = await supabaseAdmin
+  let updatedData: Record<string, unknown> | null = null;
+  const lmsUpdate = await supabaseAdmin
     .from("lms_courses")
     .update(payload)
     .eq("id", courseId)
     .select("*")
     .single();
-  if (error) return res.status(400).json({ error: error.message });
+
+  if (!lmsUpdate.error && lmsUpdate.data) {
+    updatedData = lmsUpdate.data as Record<string, unknown>;
+  } else if (isMissingLmsSchemaError(lmsUpdate.error)) {
+    const legacyPayload: Record<string, unknown> = {};
+    if (parsed.data.title !== undefined) legacyPayload.title = parsed.data.title;
+    if (parsed.data.status !== undefined) legacyPayload.status = parsed.data.status;
+    if (parsed.data.description !== undefined) legacyPayload.category = parsed.data.description;
+
+    const legacyUpdate = await supabaseAdmin
+      .from("courses")
+      .update(legacyPayload)
+      .eq("id", courseId)
+      .select("*")
+      .single();
+    if (legacyUpdate.error || !legacyUpdate.data) {
+      return res.status(400).json({ error: legacyUpdate.error?.message ?? "Failed to update course" });
+    }
+    updatedData = {
+      id: legacyUpdate.data.id,
+      title: legacyUpdate.data.title,
+      description: legacyUpdate.data.category ?? null,
+      status: legacyUpdate.data.status ?? "published",
+      created_at: legacyUpdate.data.created_at,
+      updated_at: legacyUpdate.data.updated_at,
+      created_by: null,
+    };
+  } else {
+    return res.status(400).json({ error: lmsUpdate.error?.message ?? "Failed to update course" });
+  }
 
   const session = (req as express.Request & { session: Session }).session;
   try {
@@ -4933,7 +5022,7 @@ app.patch("/api/lms-builder/courses/:id", requireAuth(), requireRole(["admin", "
     });
   }
 
-  return res.json(data);
+  return res.json(updatedData);
 });
 
 app.post("/api/lms-builder/courses/:id/sections", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
