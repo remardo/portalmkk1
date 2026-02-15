@@ -3,8 +3,15 @@ import type { Task } from "../domain/models";
 import {
   type AdminAuditList,
   type AdminCreateUserInput,
+  type AdminSloStatus,
   type AdminUpdateUserInput,
+  type KpiReport,
   portalRepository,
+  type ReportDeliveryRun,
+  type ReportDeliverySchedule,
+  type ReportsDrilldown,
+  type SloRoutingPolicy,
+  type UnifiedSearchResult,
   type CreateDocumentInput,
   type CreateCourseAttemptInput,
   type SubmitCourseAnswersInput,
@@ -220,6 +227,7 @@ export function useAdminAuditQuery(input?: {
   entityType?: string;
   fromDate?: string;
   toDate?: string;
+  enabled?: boolean;
 }) {
   return useQuery<AdminAuditList>({
     queryKey: [
@@ -233,6 +241,7 @@ export function useAdminAuditQuery(input?: {
       input?.toDate ?? "",
     ],
     queryFn: () => portalRepository.adminGetAudit(input),
+    enabled: input?.enabled ?? true,
   });
 }
 
@@ -252,6 +261,86 @@ export function useRunOpsRemindersMutation() {
   });
 }
 
+export function useAdminSloStatusQuery(input?: { windowMinutes?: number; enabled?: boolean }) {
+  return useQuery<AdminSloStatus>({
+    queryKey: ["admin-slo-status", input?.windowMinutes ?? "default"],
+    queryFn: () => portalRepository.getAdminSloStatus(input?.windowMinutes),
+    enabled: input?.enabled ?? true,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useRunOpsSloCheckMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (windowMinutes?: number) => portalRepository.runOpsSloCheck(windowMinutes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-slo-status"] });
+      queryClient.invalidateQueries({ queryKey: ["slo-routing-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-audit"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+    },
+  });
+}
+
+export function useSloRoutingPoliciesQuery(enabled = true) {
+  return useQuery<SloRoutingPolicy[]>({
+    queryKey: ["slo-routing-policies"],
+    queryFn: () => portalRepository.getSloRoutingPolicies(),
+    enabled,
+  });
+}
+
+export function useCreateSloRoutingPolicyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      breachType: "any" | "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+      severity: "any" | "warning" | "critical";
+      channels: Array<"webhook" | "email" | "messenger">;
+      priority?: number;
+      isActive?: boolean;
+    }) => portalRepository.createSloRoutingPolicy(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["slo-routing-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-audit"] });
+    },
+  });
+}
+
+export function useUpdateSloRoutingPolicyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: number;
+      patch: {
+        name?: string;
+        breachType?: "any" | "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+        severity?: "any" | "warning" | "critical";
+        channels?: Array<"webhook" | "email" | "messenger">;
+        priority?: number;
+        isActive?: boolean;
+      };
+    }) => portalRepository.updateSloRoutingPolicy(input.id, input.patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["slo-routing-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-audit"] });
+    },
+  });
+}
+
+export function useDeleteSloRoutingPolicyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => portalRepository.deleteSloRoutingPolicy(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["slo-routing-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-audit"] });
+    },
+  });
+}
+
 export function useReadNotificationMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -265,5 +354,97 @@ export function useReadAllNotificationsMutation() {
   return useMutation({
     mutationFn: () => portalRepository.readAllNotifications(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useUnifiedSearchQuery(input: { q: string; limit?: number }) {
+  const normalizedQuery = input.q.trim();
+  return useQuery<UnifiedSearchResult>({
+    queryKey: ["unified-search", normalizedQuery, input.limit ?? 25],
+    queryFn: () => portalRepository.searchUnified({ q: normalizedQuery, limit: input.limit }),
+    enabled: normalizedQuery.length >= 2,
+  });
+}
+
+export function useKpiReportQuery(input?: { days?: number; officeId?: number }) {
+  return useQuery<KpiReport>({
+    queryKey: ["kpi-report", input?.days ?? 30, input?.officeId ?? "all"],
+    queryFn: () => portalRepository.getKpiReport(input),
+  });
+}
+
+export function useReportsDrilldownQuery(input?: {
+  days?: number;
+  officeId?: number;
+  role?: "operator" | "office_head" | "director" | "admin";
+}) {
+  return useQuery<ReportsDrilldown>({
+    queryKey: ["reports-drilldown", input?.days ?? 30, input?.officeId ?? "all", input?.role ?? "all"],
+    queryFn: () => portalRepository.getReportsDrilldown(input),
+  });
+}
+
+export function useReportSchedulesQuery(enabled = true) {
+  return useQuery<ReportDeliverySchedule[]>({
+    queryKey: ["report-schedules"],
+    queryFn: () => portalRepository.getReportSchedules(),
+    enabled,
+  });
+}
+
+export function useReportRunsQuery(input?: { scheduleId?: number }, enabled = true) {
+  return useQuery<ReportDeliveryRun[]>({
+    queryKey: ["report-runs", input?.scheduleId ?? "all"],
+    queryFn: () => portalRepository.getReportRuns(input),
+    enabled,
+  });
+}
+
+export function useCreateReportScheduleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      recipientUserId: string;
+      officeId?: number;
+      roleFilter?: "operator" | "office_head" | "director" | "admin";
+      daysWindow?: number;
+      frequency?: "daily" | "weekly" | "monthly";
+      nextRunAt?: string;
+      isActive?: boolean;
+    }) => portalRepository.createReportSchedule(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["report-schedules"] }),
+  });
+}
+
+export function useUpdateReportScheduleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: number;
+      patch: {
+        name?: string;
+        recipientUserId?: string;
+        officeId?: number;
+        roleFilter?: "operator" | "office_head" | "director" | "admin";
+        daysWindow?: number;
+        frequency?: "daily" | "weekly" | "monthly";
+        nextRunAt?: string;
+        isActive?: boolean;
+      };
+    }) => portalRepository.updateReportSchedule(input.id, input.patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["report-schedules"] }),
+  });
+}
+
+export function useRunReportScheduleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => portalRepository.runReportSchedule(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["report-schedules"] });
+      queryClient.invalidateQueries({ queryKey: ["report-runs"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+    },
   });
 }

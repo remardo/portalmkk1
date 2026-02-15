@@ -279,6 +279,10 @@ export const backendApi = {
         author: string;
         date: string;
         office_id: number;
+        body?: string | null;
+        template_id?: number | null;
+        approval_route_id?: number | null;
+        current_approval_step?: number | null;
       }>;
       documentApprovals: Array<{
         id: number;
@@ -347,8 +351,61 @@ export const backendApi = {
 
   deleteTask: (id: number) => apiRequest(`/api/tasks/${id}`, { method: "DELETE" }),
 
-  createDocument: (input: { title: string; type: "incoming" | "outgoing" | "internal"; officeId: number }) =>
+  createDocument: (input: {
+    title: string;
+    type: "incoming" | "outgoing" | "internal";
+    officeId: number;
+    body?: string;
+    templateId?: number;
+    approvalRouteId?: number;
+  }) =>
     apiRequest("/api/documents", { method: "POST", body: JSON.stringify(input) }),
+
+  getDocumentTemplates: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        name: string;
+        type: "incoming" | "outgoing" | "internal";
+        title_template: string;
+        body_template: string | null;
+        default_route_id: number | null;
+        status: "draft" | "review" | "approved" | "rejected";
+      }>
+    >("/api/document-templates"),
+
+  createDocumentTemplate: (input: {
+    name: string;
+    type: "incoming" | "outgoing" | "internal";
+    titleTemplate: string;
+    bodyTemplate?: string;
+    defaultRouteId?: number;
+    status?: "draft" | "review" | "approved" | "rejected";
+  }) => apiRequest("/api/document-templates", { method: "POST", body: JSON.stringify(input) }),
+
+  getDocumentApprovalRoutes: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        name: string;
+        description: string | null;
+        steps: Array<{
+          id: number;
+          route_id: number;
+          step_order: number;
+          required_role: "operator" | "office_head" | "director" | "admin";
+        }>;
+      }>
+    >("/api/document-approval-routes"),
+
+  createDocumentApprovalRoute: (input: {
+    name: string;
+    description?: string;
+    steps: Array<{
+      stepOrder: number;
+      requiredRole: "operator" | "office_head" | "director" | "admin";
+    }>;
+  }) => apiRequest("/api/document-approval-routes", { method: "POST", body: JSON.stringify(input) }),
 
   submitDocument: (id: number) => apiRequest(`/api/documents/${id}/submit`, { method: "POST" }),
 
@@ -436,6 +493,179 @@ export const backendApi = {
       }>;
     }>(`/api/courses/${id}/questions`),
 
+  getLmsBuilderCourses: (includeDrafts = true) =>
+    apiRequest<
+      Array<{
+        id: number;
+        title: string;
+        description: string | null;
+        status: "draft" | "published" | "archived";
+        created_by: string;
+        created_at: string;
+        updated_at: string;
+      }>
+    >(`/api/lms-builder/courses${includeDrafts ? "?includeDrafts=1" : ""}`),
+
+  getLmsBuilderCourse: (id: number) =>
+    apiRequest<{
+      id: number;
+      title: string;
+      description: string | null;
+      status: "draft" | "published" | "archived";
+      sections: Array<{
+        id: number;
+        course_id: number;
+        title: string;
+        sort_order: number;
+        subsections: Array<{
+          id: number;
+          section_id: number;
+          title: string;
+          sort_order: number;
+          markdown_content: string;
+          media: Array<{
+            id: number;
+            subsection_id: number;
+            media_type: "image" | "video";
+            image_data_base64: string | null;
+            image_mime_type: string | null;
+            external_url: string | null;
+            caption: string | null;
+            sort_order: number;
+          }>;
+        }>;
+      }>;
+    }>(`/api/lms-builder/courses/${id}`),
+
+  getLmsBuilderCourseVersions: (id: number) =>
+    apiRequest<
+      Array<{
+        id: number;
+        course_id: number;
+        version: number;
+        reason: string;
+        created_by: string;
+        created_at: string;
+      }>
+    >(`/api/lms-builder/courses/${id}/versions`),
+
+  createLmsBuilderCourse: (input: {
+    title: string;
+    description?: string;
+    status?: "draft" | "published" | "archived";
+  }) => apiRequest("/api/lms-builder/courses", { method: "POST", body: JSON.stringify(input) }),
+
+  updateLmsBuilderCourse: (
+    id: number,
+    input: { title?: string; description?: string; status?: "draft" | "published" | "archived" },
+  ) => apiRequest(`/api/lms-builder/courses/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  createLmsBuilderSection: (courseId: number, input: { title: string; sortOrder?: number }) =>
+    apiRequest(`/api/lms-builder/courses/${courseId}/sections`, { method: "POST", body: JSON.stringify(input) }),
+
+  updateLmsBuilderSection: (sectionId: number, input: { title?: string; sortOrder?: number }) =>
+    apiRequest(`/api/lms-builder/sections/${sectionId}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  createLmsBuilderSubsection: (
+    sectionId: number,
+    input: { title: string; sortOrder?: number; markdownContent?: string },
+  ) => apiRequest(`/api/lms-builder/sections/${sectionId}/subsections`, { method: "POST", body: JSON.stringify(input) }),
+
+  updateLmsBuilderSubsection: (
+    subsectionId: number,
+    input: { title?: string; sortOrder?: number; markdownContent?: string },
+  ) => apiRequest(`/api/lms-builder/subsections/${subsectionId}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  addLmsBuilderImage: (
+    subsectionId: number,
+    input: { dataBase64: string; mimeType: string; caption?: string; sortOrder?: number },
+  ) =>
+    apiRequest(`/api/lms-builder/subsections/${subsectionId}/media/image`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  addLmsBuilderVideo: (
+    subsectionId: number,
+    input: { url: string; caption?: string; sortOrder?: number },
+  ) =>
+    apiRequest(`/api/lms-builder/subsections/${subsectionId}/media/video`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  importLmsBuilderMarkdown: (input: {
+    title: string;
+    markdown: string;
+    courseId?: number;
+    status?: "draft" | "published" | "archived";
+  }) => apiRequest("/api/lms-builder/import-markdown", { method: "POST", body: JSON.stringify(input) }),
+
+  rollbackLmsBuilderCourseVersion: (courseId: number, version: number) =>
+    apiRequest(`/api/lms-builder/courses/${courseId}/rollback/${version}`, { method: "POST" }),
+
+  getLmsCourseProgress: (courseId: number, userId?: string) =>
+    apiRequest<{
+      courseId: number;
+      status: "draft" | "published" | "archived";
+      totalSubsections: number;
+      completedSubsections: number;
+      completionPercent: number;
+      averageProgressPercent: number;
+      sections: Array<{
+        sectionId: number;
+        totalSubsections: number;
+        completedSubsections: number;
+        completionPercent: number;
+        progressPercent: number;
+        subsections: Array<{
+          subsectionId: number;
+          completed: boolean;
+          progressPercent: number;
+          updatedAt: string | null;
+          completedAt: string | null;
+        }>;
+      }>;
+    }>(`/api/lms-progress/courses/${courseId}${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`),
+
+  upsertLmsSubsectionProgress: (
+    subsectionId: number,
+    input: { userId?: string; completed?: boolean; progressPercent?: number },
+  ) =>
+    apiRequest<{
+      item: {
+        id: number;
+        user_id: string;
+        subsection_id: number;
+        completed: boolean;
+        progress_percent: number;
+        completed_at: string | null;
+        updated_at: string;
+      };
+      courseProgress: {
+        courseId: number;
+        status: "draft" | "published" | "archived";
+        totalSubsections: number;
+        completedSubsections: number;
+        completionPercent: number;
+        averageProgressPercent: number;
+        sections: Array<{
+          sectionId: number;
+          totalSubsections: number;
+          completedSubsections: number;
+          completionPercent: number;
+          progressPercent: number;
+          subsections: Array<{
+            subsectionId: number;
+            completed: boolean;
+            progressPercent: number;
+            updatedAt: string | null;
+            completedAt: string | null;
+          }>;
+        }>;
+      };
+    }>(`/api/lms-progress/subsections/${subsectionId}`, { method: "POST", body: JSON.stringify(input) }),
+
   adminCreateUser: (input: {
     email: string;
     password: string;
@@ -443,6 +673,64 @@ export const backendApi = {
     role: "operator" | "office_head" | "director" | "admin";
     officeId?: number | null;
   }) => apiRequest("/api/admin/users", { method: "POST", body: JSON.stringify(input) }),
+
+  getAdminUsers: () =>
+    apiRequest<
+      Array<{
+        id: string;
+        full_name: string;
+        role: "operator" | "office_head" | "director" | "admin";
+        office_id: number | null;
+        email: string | null;
+        phone: string | null;
+        points: number | null;
+        position: string | null;
+        avatar: string | null;
+      }>
+    >("/api/admin/users"),
+
+  getOffices: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        name: string;
+        city: string;
+        address: string;
+        head_id: string | null;
+        rating: number;
+      }>
+    >("/api/offices"),
+
+  getLmsBuilderCourseAssignments: (courseId: number) =>
+    apiRequest<
+      Array<{
+        id: number;
+        course_id: number;
+        user_id: string;
+        assigned_by: string;
+        due_date: string | null;
+        source_role: "operator" | "office_head" | "director" | "admin" | null;
+        source_office_id: number | null;
+        created_at: string;
+        profile: {
+          id: string;
+          full_name: string;
+          role: "operator" | "office_head" | "director" | "admin";
+          office_id: number | null;
+          email: string | null;
+        } | null;
+      }>
+    >(`/api/lms-builder/courses/${courseId}/assignments`),
+
+  assignLmsBuilderCourse: (
+    courseId: number,
+    input: {
+      userIds?: string[];
+      role?: "operator" | "office_head" | "director" | "admin";
+      officeId?: number;
+      dueDate?: string;
+    },
+  ) => apiRequest(`/api/lms-builder/courses/${courseId}/assignments`, { method: "POST", body: JSON.stringify(input) }),
 
   adminUpdateUser: (
     id: string,
@@ -519,6 +807,9 @@ export const backendApi = {
       ok: boolean;
       updatedCount: number;
       updatedIds: string[];
+      taskEscalationNotifications: number;
+      documentEscalationNotifications: number;
+      appliedPolicyCount: number;
     }>("/api/ops/escalations/run", { method: "POST" }),
 
   runOpsReminders: () =>
@@ -527,6 +818,329 @@ export const backendApi = {
       taskReminders: number;
       lmsReminders: number;
     }>("/api/ops/reminders/run", { method: "POST" }),
+
+  getAdminSloStatus: (windowMinutes?: number) => {
+    const params = new URLSearchParams();
+    if (windowMinutes !== undefined) {
+      params.set("windowMinutes", String(windowMinutes));
+    }
+    const query = params.toString();
+    return apiRequest<{
+      ok: boolean;
+      windowMinutes: number;
+      generatedAt: string;
+      metrics: {
+        api: {
+          totalRequests: number;
+          errorRequests: number;
+          errorRatePercent: number;
+          p95LatencyMs: number;
+        };
+        notifications: {
+          totalDeliveries: number;
+          failedDeliveries: number;
+          failureRatePercent: number;
+        };
+      };
+      thresholds: {
+        apiErrorRatePercent: number;
+        apiLatencyP95Ms: number;
+        notificationFailureRatePercent: number;
+      };
+      breaches: string[];
+    }>(`/api/admin/ops/slo-status${query ? `?${query}` : ""}`);
+  },
+
+  runOpsSloCheck: (windowMinutes?: number) => {
+    const params = new URLSearchParams();
+    if (windowMinutes !== undefined) {
+      params.set("windowMinutes", String(windowMinutes));
+    }
+    const query = params.toString();
+    return apiRequest<{
+      ok: boolean;
+      alerted: boolean;
+      recipients: number;
+      webhookSent: boolean;
+      routedChannels?: Array<"webhook" | "email" | "messenger">;
+      severity?: "warning" | "critical";
+      breachSeverities?: Partial<Record<"api_error_rate" | "api_latency_p95" | "notification_failure_rate", "warning" | "critical">>;
+      status: {
+        ok: boolean;
+        windowMinutes: number;
+        generatedAt: string;
+        metrics: {
+          api: {
+            totalRequests: number;
+            errorRequests: number;
+            errorRatePercent: number;
+            p95LatencyMs: number;
+          };
+          notifications: {
+            totalDeliveries: number;
+            failedDeliveries: number;
+            failureRatePercent: number;
+          };
+        };
+        thresholds: {
+          apiErrorRatePercent: number;
+          apiLatencyP95Ms: number;
+          notificationFailureRatePercent: number;
+        };
+        breaches: string[];
+      };
+    }>(`/api/ops/slo-check${query ? `?${query}` : ""}`, { method: "POST" });
+  },
+
+  getSloRoutingPolicies: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        name: string;
+        breach_type: "any" | "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+        severity: "any" | "warning" | "critical";
+        channels: Array<"webhook" | "email" | "messenger">;
+        priority: number;
+        is_active: boolean;
+        created_by: string;
+        created_at: string;
+        updated_at: string;
+      }>
+    >("/api/ops/slo-routing-policies"),
+
+  createSloRoutingPolicy: (input: {
+    name: string;
+    breachType: "any" | "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+    severity: "any" | "warning" | "critical";
+    channels: Array<"webhook" | "email" | "messenger">;
+    priority?: number;
+    isActive?: boolean;
+  }) => apiRequest("/api/ops/slo-routing-policies", { method: "POST", body: JSON.stringify(input) }),
+
+  updateSloRoutingPolicy: (
+    id: number,
+    input: {
+      name?: string;
+      breachType?: "any" | "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+      severity?: "any" | "warning" | "critical";
+      channels?: Array<"webhook" | "email" | "messenger">;
+      priority?: number;
+      isActive?: boolean;
+    },
+  ) => apiRequest(`/api/ops/slo-routing-policies/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  deleteSloRoutingPolicy: (id: number) =>
+    apiRequest(`/api/ops/slo-routing-policies/${id}`, { method: "DELETE" }),
+
+  searchUnified: (input: { q: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    params.set("q", input.q);
+    if (input.limit) {
+      params.set("limit", String(input.limit));
+    }
+    const query = params.toString();
+    return apiRequest<{
+      query: string;
+      documents: Array<{
+        id: number;
+        title: string;
+        excerpt: string;
+        status: "draft" | "review" | "approved" | "rejected";
+        author: string;
+        date: string;
+        officeId: number;
+        updatedAt: string;
+        href: string;
+      }>;
+      kb: Array<{
+        id: number;
+        title: string;
+        excerpt: string;
+        status: "draft" | "review" | "published" | "archived";
+        category: string;
+        date: string;
+        updatedAt: string;
+        href: string;
+      }>;
+      lms: Array<{
+        id: string;
+        title: string;
+        excerpt: string;
+        status: "draft" | "published" | "archived";
+        kind: "course" | "subsection";
+        sectionTitle?: string;
+        courseTitle?: string;
+        updatedAt: string;
+        href: string;
+      }>;
+    }>(`/api/search/unified?${query}`);
+  },
+
+  getKpiReport: (input?: { days?: number; officeId?: number }) => {
+    const params = new URLSearchParams();
+    if (input?.days) {
+      params.set("days", String(input.days));
+    }
+    if (input?.officeId) {
+      params.set("officeId", String(input.officeId));
+    }
+    const query = params.toString();
+    return apiRequest<{
+      fromDate: string;
+      toDate: string;
+      totals: {
+        tasksTotal: number;
+        tasksDone: number;
+        tasksOverdue: number;
+        taskCompletionRate: number;
+        docsReview: number;
+        docsFinalized: number;
+        approvalsThroughputPerDay: number;
+        approvalsAvgHours: number;
+        lmsAssigned: number;
+        lmsPassed: number;
+        lmsCompletionRate: number;
+      };
+      byOffice: Array<{
+        officeId: number;
+        office: string;
+        tasksTotal: number;
+        tasksDone: number;
+        tasksOverdue: number;
+        taskCompletionRate: number;
+        docsReview: number;
+        docsFinalized: number;
+        lmsAssigned: number;
+        lmsPassed: number;
+        lmsCompletionRate: number;
+      }>;
+    }>(`/api/reports/kpi${query ? `?${query}` : ""}`);
+  },
+
+  getReportsDrilldown: (input?: {
+    days?: number;
+    officeId?: number;
+    role?: "operator" | "office_head" | "director" | "admin";
+  }) => {
+    const params = new URLSearchParams();
+    if (input?.days) {
+      params.set("days", String(input.days));
+    }
+    if (input?.officeId) {
+      params.set("officeId", String(input.officeId));
+    }
+    if (input?.role) {
+      params.set("role", input.role);
+    }
+    const query = params.toString();
+    return apiRequest<{
+      fromDate: string;
+      toDate: string;
+      officeId: number | null;
+      role: "operator" | "office_head" | "director" | "admin" | null;
+      totals: {
+        usersCount: number;
+        tasksTotal: number;
+        tasksOverdue: number;
+        lmsAssigned: number;
+        lmsPassed: number;
+        docsAuthored: number;
+        approvalsHandled: number;
+      };
+      byRole: Array<{
+        role: "operator" | "office_head" | "director" | "admin";
+        usersCount: number;
+        tasksTotal: number;
+        tasksDone: number;
+        tasksOverdue: number;
+        lmsAssigned: number;
+        lmsPassed: number;
+        docsAuthored: number;
+        approvalsHandled: number;
+        taskCompletionRate: number;
+        lmsCompletionRate: number;
+      }>;
+      byUser: Array<{
+        userId: string;
+        fullName: string;
+        role: "operator" | "office_head" | "director" | "admin";
+        officeId: number | null;
+        tasksTotal: number;
+        tasksDone: number;
+        tasksOverdue: number;
+        lmsAssigned: number;
+        lmsPassed: number;
+        docsAuthored: number;
+        approvalsHandled: number;
+      }>;
+      availableRoles: Array<"operator" | "office_head" | "director" | "admin">;
+    }>(`/api/reports/drilldown${query ? `?${query}` : ""}`);
+  },
+
+  getReportSchedules: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        name: string;
+        recipient_user_id: string;
+        office_id: number | null;
+        role_filter: "operator" | "office_head" | "director" | "admin" | null;
+        days_window: number;
+        frequency: "daily" | "weekly" | "monthly";
+        next_run_at: string;
+        last_run_at: string | null;
+        is_active: boolean;
+        created_by: string;
+        created_at: string;
+      }>
+    >("/api/reports/schedules"),
+
+  createReportSchedule: (input: {
+    name: string;
+    recipientUserId: string;
+    officeId?: number;
+    roleFilter?: "operator" | "office_head" | "director" | "admin";
+    daysWindow?: number;
+    frequency?: "daily" | "weekly" | "monthly";
+    nextRunAt?: string;
+    isActive?: boolean;
+  }) => apiRequest("/api/reports/schedules", { method: "POST", body: JSON.stringify(input) }),
+
+  updateReportSchedule: (
+    id: number,
+    input: {
+      name?: string;
+      recipientUserId?: string;
+      officeId?: number;
+      roleFilter?: "operator" | "office_head" | "director" | "admin";
+      daysWindow?: number;
+      frequency?: "daily" | "weekly" | "monthly";
+      nextRunAt?: string;
+      isActive?: boolean;
+    },
+  ) => apiRequest(`/api/reports/schedules/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  runReportSchedule: (id: number) => apiRequest(`/api/reports/schedules/${id}/run`, { method: "POST" }),
+
+  getReportRuns: (input?: { scheduleId?: number }) => {
+    const params = new URLSearchParams();
+    if (input?.scheduleId) params.set("scheduleId", String(input.scheduleId));
+    const query = params.toString();
+    return apiRequest<
+      Array<{
+        id: number;
+        schedule_id: number;
+        recipient_user_id: string;
+        status: string;
+        format: string;
+        generated_at: string;
+        file_name: string | null;
+        rows_count: number;
+      }>
+    >(`/api/reports/runs${query ? `?${query}` : ""}`);
+  },
+
+  downloadReportRun: (id: number) => apiRequestBlob(`/api/reports/runs/${id}/download`),
 
   getNotifications: (input?: { limit?: number; unreadOnly?: boolean }) => {
     const params = new URLSearchParams();

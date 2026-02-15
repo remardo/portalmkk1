@@ -7,8 +7,15 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test --test-concurrency=1",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "bootstrap-admin": "tsx src/scripts/bootstrapAdmin.ts"
+    "bootstrap-admin": "tsx src/scripts/bootstrapAdmin.ts",
+    "check:migrations": "node scripts/check-migrations.mjs",
+    "check:schema-sync": "node scripts/check-schema-sync.mjs",
+    "smoke:api": "node scripts/smoke-api.mjs",
+    "check:smoke-summary": "node scripts/assert-smoke-summary.mjs",
+    "print:smoke-summary": "node scripts/print-smoke-summary.mjs"
   },
   "engines": {
     "node": ">=20.19.0"

@@ -11,6 +11,8 @@ npm run lint
 npm run typecheck
 npm run test
 npm run build
+npm run check:backend-guardrails
+cd backend && npm run smoke:api
 PORT=8080 npm run start
 ```
 
@@ -36,6 +38,9 @@ VITE_API_URL=https://<backend-domain>
 
 GitHub Actions workflow: `.github/workflows/ci.yml`.
 Пайплайн проверяет `lint`, `typecheck`, `test`, `build`.
+Для backend также запускаются guardrails:
+- `npm run check:migrations`
+- `npm run check:schema-sync`
 
 ## Deploy в Coolify (Nixpacks)
 
@@ -63,7 +68,19 @@ GitHub Actions workflow: `.github/workflows/ci.yml`.
    - `SUPABASE_ANON_KEY=...`
    - `SUPABASE_SERVICE_ROLE_KEY=...`
 
-После изменений backend/supabase всегда применяйте актуальный `backend/supabase/schema.sql` в проекте Supabase (включая RLS-политики).
+После изменений схемы используйте миграции из `backend/supabase/migrations/` (процесс: `backend/supabase/MIGRATIONS.md`).
+
+Операционные runbook'и:
+- `docs/ops/backup-restore-drill.md`
+- `docs/ops/incident-playbooks.md`
+- `docs/ops/slo-alert-thresholds.md`
+
+Автоматизированный drill:
+- PowerShell: `./scripts/ops/backup-restore-drill.ps1`
+- Bash: `bash ./scripts/ops/backup-restore-drill.sh`
+- GitHub Actions: `.github/workflows/backup-drill.yml` (weekly + manual, requires `SOURCE_DB_URL` and `TARGET_DB_URL` secrets)
+- Smoke checks: `scripts/ops/smoke-check-endpoints.sh` / `scripts/ops/smoke-check-endpoints.ps1`
+- Post-drill summary generator: `scripts/ops/generate-drill-summary.mjs`
 
 После первого деплоя backend создайте администратора:
 ```bash

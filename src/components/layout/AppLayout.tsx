@@ -14,12 +14,14 @@ import {
   Shield,
   Siren,
   ChartNoAxesColumn,
+  Settings2,
+  Search,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { RoleLabels } from "../../domain/models";
 import { useAuth } from "../../contexts/useAuth";
-import { canAccessAdmin, canAccessReports } from "../../lib/permissions";
+import { canAccessAdmin, canAccessReports, canManageLMS } from "../../lib/permissions";
 import { usePortalData } from "../../hooks/usePortalData";
 
 export interface LayoutOutletContext {
@@ -40,6 +42,7 @@ const baseNavItems: NavItem[] = [
   { to: "/lms", label: "Обучение (LMS)", icon: GraduationCap },
   { to: "/docs", label: "Документооборот", icon: FileText },
   { to: "/tasks", label: "Задачи", icon: ListTodo },
+  { to: "/search", label: "Поиск", icon: Search },
   { to: "/ops", label: "Оперцентр", icon: Siren },
   { to: "/org", label: "Оргструктура", icon: Building2 },
   { to: "/ratings", label: "Рейтинги", icon: Trophy },
@@ -63,6 +66,7 @@ export function AppLayout() {
 
   const navItems = [
     ...baseNavItems,
+    ...(canManageLMS(user.role) ? [{ to: "/lms-builder", label: "LMS Конструктор", icon: Settings2 }] : []),
     ...(canAccessReports(user.role) ? [reportsNavItem] : []),
     ...(canAccessAdmin(user.role) ? [{ to: "/admin", label: "Админка", icon: Shield }] : []),
   ];
@@ -170,6 +174,11 @@ export function AppLayout() {
                 placeholder="Поиск..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    navigate("/search");
+                  }
+                }}
                 className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>

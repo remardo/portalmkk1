@@ -88,4 +88,8 @@ export interface Document {
   author: string;
   date: string;
   officeId: number;
+  body?: string;
+  templateId?: number | null;
+  approvalRouteId?: number | null;
+  currentApprovalStep?: number | null;
 }

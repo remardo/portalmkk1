@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
 import cors from "cors";
 import express from "express";
 import morgan from "morgan";
@@ -22,6 +23,46 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value === "1" || value?.toLowerCase() === "true"),
   AUTO_REMINDERS_INTERVAL_MINUTES: z.coerce.number().int().min(5).default(180),
+  AUTO_REPORT_DELIVERY_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "1" || value?.toLowerCase() === "true"),
+  AUTO_REPORT_DELIVERY_INTERVAL_MINUTES: z.coerce.number().int().min(5).default(60),
+  AUTO_REPORT_DELIVERY_SYSTEM_ACTOR_USER_ID: z.string().uuid().optional(),
+  NOTIFICATION_WEBHOOK_URL: z.string().url().optional(),
+  NOTIFICATION_WEBHOOK_SECRET: z.string().optional(),
+  NOTIFICATION_EMAIL_WEBHOOK_URL: z.string().url().optional(),
+  NOTIFICATION_EMAIL_WEBHOOK_SECRET: z.string().optional(),
+  NOTIFICATION_MESSENGER_WEBHOOK_URL: z.string().url().optional(),
+  NOTIFICATION_MESSENGER_WEBHOOK_SECRET: z.string().optional(),
+  SLO_WINDOW_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
+  SLO_API_ERROR_RATE_THRESHOLD_PERCENT: z.coerce.number().min(0).max(100).default(1),
+  SLO_API_LATENCY_P95_THRESHOLD_MS: z.coerce.number().int().min(1).default(800),
+  SLO_NOTIFICATION_FAILURE_RATE_THRESHOLD_PERCENT: z.coerce.number().min(0).max(100).default(5),
+  AUTO_SLO_ALERTS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "1" || value?.toLowerCase() === "true"),
+  AUTO_SLO_ALERTS_INTERVAL_MINUTES: z.coerce.number().int().min(5).default(15),
+  AUTO_SLO_ALERTS_SYSTEM_ACTOR_USER_ID: z.string().uuid().optional(),
+  SLO_ALERT_WEBHOOK_URL: z.string().url().optional(),
+  SLO_ALERT_WEBHOOK_SECRET: z.string().optional(),
+  SLO_ALERT_CHANNELS_WARNING: z.string().optional(),
+  SLO_ALERT_CHANNELS_CRITICAL: z.string().optional(),
+  SLO_ALERT_CHANNELS_API_ERROR_RATE: z.string().optional(),
+  SLO_ALERT_CHANNELS_API_LATENCY_P95: z.string().optional(),
+  SLO_ALERT_CHANNELS_NOTIFICATION_FAILURE_RATE: z.string().optional(),
+  SMOKE_AUTH_BYPASS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "1" || value?.toLowerCase() === "true")
+    .default(false),
+  SMOKE_AUTH_BYPASS_TOKEN: z.string().default("smoke-bypass-token"),
+  SMOKE_AUTH_BYPASS_USER_ID: z.string().uuid().optional(),
+  SMOKE_AUTH_BYPASS_ROLE: z.enum(["operator", "office_head", "director", "admin"]).optional(),
+  SMOKE_AUTH_BYPASS_FULL_NAME: z.string().optional(),
+  SMOKE_AUTH_BYPASS_EMAIL: z.email().optional(),
+  SMOKE_AUTH_BYPASS_OFFICE_ID: z.coerce.number().int().positive().optional(),
 });
 
 const env = envSchema.parse(process.env);
@@ -38,6 +79,338 @@ const app = express();
 app.use(express.json());
 app.use(cors({ origin: env.CORS_ORIGIN.split(",").map((v) => v.trim()), credentials: true }));
 app.use(morgan("tiny"));
+app.set("trust proxy", 1);
+
+type RequestMetric = {
+  timestamp: number;
+  statusCode: number;
+  durationMs: number;
+};
+const requestMetrics: RequestMetric[] = [];
+const requestMetricsMaxSize = 20_000;
+const requestMetricsMaxAgeMs = 24 * 60 * 60 * 1000;
+
+app.use((req, res, next) => {
+  const requestId = req.headers["x-request-id"]?.toString() ?? randomUUID();
+  (req as express.Request & { requestId?: string }).requestId = requestId;
+  res.setHeader("X-Request-Id", requestId);
+
+  const startedAt = Date.now();
+  res.on("finish", () => {
+    const durationMs = Date.now() - startedAt;
+    const now = Date.now();
+    requestMetrics.push({
+      timestamp: now,
+      statusCode: res.statusCode,
+      durationMs,
+    });
+    while (requestMetrics.length > requestMetricsMaxSize) {
+      requestMetrics.shift();
+    }
+    while (requestMetrics.length > 0 && now - requestMetrics[0].timestamp > requestMetricsMaxAgeMs) {
+      requestMetrics.shift();
+    }
+
+    console.log(
+      JSON.stringify({
+        type: "request",
+        requestId,
+        method: req.method,
+        path: req.originalUrl,
+        statusCode: res.statusCode,
+        durationMs,
+      }),
+    );
+  });
+
+  next();
+});
+
+type RateLimitConfig = {
+  windowMs: number;
+  maxRequests: number;
+  keyPrefix: string;
+  keyExtractor?: (req: express.Request) => string;
+};
+
+function getClientIp(req: express.Request) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.length > 0) {
+    return forwarded.split(",")[0]?.trim() ?? req.ip ?? "unknown";
+  }
+  return req.ip ?? "unknown";
+}
+
+function createRateLimitMiddleware(config: RateLimitConfig) {
+  const buckets = new Map<string, { count: number; resetAt: number }>();
+
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const now = Date.now();
+    const baseKey = config.keyExtractor ? config.keyExtractor(req) : getClientIp(req);
+    const key = `${config.keyPrefix}:${baseKey}`;
+
+    const current = buckets.get(key);
+    if (!current || now >= current.resetAt) {
+      buckets.set(key, { count: 1, resetAt: now + config.windowMs });
+      return next();
+    }
+
+    if (current.count >= config.maxRequests) {
+      const retryAfterSec = Math.ceil((current.resetAt - now) / 1000);
+      res.setHeader("Retry-After", String(Math.max(retryAfterSec, 1)));
+      return res.status(429).json({
+        error: "Too many requests. Please try again later.",
+      });
+    }
+
+    current.count += 1;
+    buckets.set(key, current);
+    return next();
+  };
+}
+
+function percentile(values: number[], p: number) {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[index] ?? 0;
+}
+
+type SloStatus = {
+  ok: boolean;
+  windowMinutes: number;
+  generatedAt: string;
+  metrics: {
+    api: {
+      totalRequests: number;
+      errorRequests: number;
+      errorRatePercent: number;
+      p95LatencyMs: number;
+    };
+    notifications: {
+      totalDeliveries: number;
+      failedDeliveries: number;
+      failureRatePercent: number;
+    };
+  };
+  thresholds: {
+    apiErrorRatePercent: number;
+    apiLatencyP95Ms: number;
+    notificationFailureRatePercent: number;
+  };
+  breaches: SloBreachType[];
+};
+
+type NotificationChannel = "webhook" | "email" | "messenger";
+type SloBreachType = "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+type SloBreachSeverity = "warning" | "critical";
+type SloRoutingBreachScope = SloBreachType | "any";
+type SloRoutingSeverityScope = SloBreachSeverity | "any";
+
+async function evaluateSloStatus(windowMinutes: number): Promise<SloStatus> {
+  const now = Date.now();
+  const windowStart = now - windowMinutes * 60 * 1000;
+  const metricsInWindow = requestMetrics.filter((metric) => metric.timestamp >= windowStart);
+  const totalRequests = metricsInWindow.length;
+  const errorRequests = metricsInWindow.filter((metric) => metric.statusCode >= 500).length;
+  const errorRatePercent = totalRequests > 0 ? Number(((errorRequests / totalRequests) * 100).toFixed(2)) : 0;
+  const p95LatencyMs = Math.round(percentile(metricsInWindow.map((metric) => metric.durationMs), 95));
+
+  const sinceIso = new Date(windowStart).toISOString();
+  const { count: totalDeliveries, error: deliveriesError } = await supabaseAdmin
+    .from("notification_delivery_log")
+    .select("*", { head: true, count: "exact" })
+    .gte("created_at", sinceIso);
+  if (deliveriesError) {
+    throw new Error(deliveriesError.message);
+  }
+
+  const { count: failedDeliveries, error: failedError } = await supabaseAdmin
+    .from("notification_delivery_log")
+    .select("*", { head: true, count: "exact" })
+    .gte("created_at", sinceIso)
+    .eq("status", "failed");
+  if (failedError) {
+    throw new Error(failedError.message);
+  }
+
+  const notificationFailureRatePercent =
+    (totalDeliveries ?? 0) > 0 ? Number((((failedDeliveries ?? 0) / (totalDeliveries ?? 0)) * 100).toFixed(2)) : 0;
+
+  const thresholds = {
+    apiErrorRatePercent: env.SLO_API_ERROR_RATE_THRESHOLD_PERCENT,
+    apiLatencyP95Ms: env.SLO_API_LATENCY_P95_THRESHOLD_MS,
+    notificationFailureRatePercent: env.SLO_NOTIFICATION_FAILURE_RATE_THRESHOLD_PERCENT,
+  };
+
+  const breaches: SloBreachType[] = [];
+  if (errorRatePercent > thresholds.apiErrorRatePercent) {
+    breaches.push("api_error_rate");
+  }
+  if (p95LatencyMs > thresholds.apiLatencyP95Ms) {
+    breaches.push("api_latency_p95");
+  }
+  if (notificationFailureRatePercent > thresholds.notificationFailureRatePercent) {
+    breaches.push("notification_failure_rate");
+  }
+
+  return {
+    ok: breaches.length === 0,
+    windowMinutes,
+    generatedAt: new Date().toISOString(),
+    metrics: {
+      api: {
+        totalRequests,
+        errorRequests,
+        errorRatePercent,
+        p95LatencyMs,
+      },
+      notifications: {
+        totalDeliveries: totalDeliveries ?? 0,
+        failedDeliveries: failedDeliveries ?? 0,
+        failureRatePercent: notificationFailureRatePercent,
+      },
+    },
+    thresholds,
+    breaches,
+  };
+}
+
+async function runSloAlertCheck(input: { actorUserId?: string; actorRole?: Profile["role"]; windowMinutes?: number }) {
+  const windowMinutes = input.windowMinutes ?? env.SLO_WINDOW_MINUTES;
+  const status = await evaluateSloStatus(windowMinutes);
+  if (status.ok) {
+    return {
+      status,
+      alerted: false,
+      recipients: 0,
+      webhookSent: false,
+    };
+  }
+
+  const breachKey = status.breaches.sort().join(",");
+  const timeBucket = Math.floor(Date.now() / (windowMinutes * 60 * 1000));
+  const dedupeKey = `slo-breach:${breachKey}:${timeBucket}`;
+  const title = "SLO breach detected";
+  const routing = await resolveSloAlertRouting(status);
+  const body = `Severity: ${routing.overallSeverity}; breaches: ${status.breaches.join(", ")}; api_error=${status.metrics.api.errorRatePercent}% ; p95=${status.metrics.api.p95LatencyMs}ms ; notif_failure=${status.metrics.notifications.failureRatePercent}%`;
+
+  const { data: recipientsData, error: recipientsError } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .in("role", ["admin", "director"]);
+  if (recipientsError) {
+    throw new Error(recipientsError.message);
+  }
+
+  const recipientIds = (recipientsData ?? []).map((row) => row.id);
+  await Promise.all(
+    recipientIds.map((recipientId) =>
+      createNotification({
+        recipientUserId: recipientId,
+        level: routing.overallSeverity,
+        title,
+        body,
+        entityType: "ops_slo",
+        entityId: breachKey,
+        dedupeKey: `${dedupeKey}:${recipientId}`,
+        channels: routing.channels,
+      }),
+    ),
+  );
+
+  let webhookSent = false;
+  if (env.SLO_ALERT_WEBHOOK_URL && routing.channels.includes("webhook")) {
+    const response = await fetch(env.SLO_ALERT_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(env.SLO_ALERT_WEBHOOK_SECRET ? { "X-Portal-Slo-Secret": env.SLO_ALERT_WEBHOOK_SECRET } : {}),
+      },
+      body: JSON.stringify({
+        title,
+        body,
+        severity: routing.overallSeverity,
+        channels: routing.channels,
+        breachSeverities: routing.breachSeverities,
+        status,
+        dedupeKey,
+      }),
+    });
+    webhookSent = response.ok;
+  }
+
+  if (input.actorUserId && input.actorRole) {
+    await writeAuditLog({
+      actorUserId: input.actorUserId,
+      actorRole: input.actorRole,
+      action: "ops.slo.alert_check",
+      entityType: "ops_slo",
+      entityId: breachKey,
+      payload: {
+        windowMinutes,
+        dedupeKey,
+        status,
+        recipientCount: recipientIds.length,
+        webhookSent,
+        routing,
+      },
+    });
+  }
+
+  return {
+    status,
+    alerted: true,
+    recipients: recipientIds.length,
+    webhookSent,
+    routedChannels: routing.channels,
+    severity: routing.overallSeverity,
+    breachSeverities: routing.breachSeverities,
+  };
+}
+
+const apiRateLimit = createRateLimitMiddleware({
+  windowMs: 60_000,
+  maxRequests: 300,
+  keyPrefix: "api",
+});
+
+const authSignInRateLimit = createRateLimitMiddleware({
+  windowMs: 15 * 60_000,
+  maxRequests: 20,
+  keyPrefix: "auth-sign-in",
+  keyExtractor: (req) => {
+    const ip = getClientIp(req);
+    const emailRaw = req.body && typeof req.body.email === "string" ? req.body.email : "";
+    const email = emailRaw.trim().toLowerCase();
+    return `${ip}:${email || "unknown-email"}`;
+  },
+});
+
+const authRefreshRateLimit = createRateLimitMiddleware({
+  windowMs: 5 * 60_000,
+  maxRequests: 60,
+  keyPrefix: "auth-refresh",
+});
+
+const authSignUpRateLimit = createRateLimitMiddleware({
+  windowMs: 60 * 60_000,
+  maxRequests: 10,
+  keyPrefix: "auth-sign-up",
+  keyExtractor: (req) => {
+    const ip = getClientIp(req);
+    const emailRaw = req.body && typeof req.body.email === "string" ? req.body.email : "";
+    const email = emailRaw.trim().toLowerCase();
+    return `${ip}:${email || "unknown-email"}`;
+  },
+});
+
+app.use("/api", apiRateLimit);
+app.use("/auth/sign-in", authSignInRateLimit);
+app.use("/auth/refresh", authRefreshRateLimit);
+app.use("/auth/sign-up", authSignUpRateLimit);
 
 interface Profile {
   id: string;
@@ -50,6 +423,12 @@ interface Session {
   user: { id: string; email?: string };
   profile: Profile;
 }
+
+const smokeBypassUserId = env.SMOKE_AUTH_BYPASS_USER_ID ?? "11111111-1111-1111-1111-111111111111";
+const smokeBypassEmail = env.SMOKE_AUTH_BYPASS_EMAIL ?? "smoke-auth@example.com";
+const smokeBypassFullName = env.SMOKE_AUTH_BYPASS_FULL_NAME ?? "Smoke Auth";
+const smokeBypassRole: Profile["role"] = env.SMOKE_AUTH_BYPASS_ROLE ?? "admin";
+const smokeBypassOfficeId = env.SMOKE_AUTH_BYPASS_OFFICE_ID ?? 1;
 
 async function getProfileByUserId(client: SupabaseClient, userId: string) {
   const { data, error } = await client
@@ -72,6 +451,21 @@ async function resolveUserFromAuthHeader(req: express.Request) {
   }
 
   const token = auth.slice("Bearer ".length);
+  if (env.SMOKE_AUTH_BYPASS_ENABLED && token === env.SMOKE_AUTH_BYPASS_TOKEN) {
+    return {
+      user: {
+        id: smokeBypassUserId,
+        email: smokeBypassEmail,
+      },
+      profile: {
+        id: smokeBypassUserId,
+        full_name: smokeBypassFullName,
+        role: smokeBypassRole,
+        office_id: smokeBypassOfficeId,
+      },
+    };
+  }
+
   const { data, error } = await supabaseAnon.auth.getUser(token);
   if (error || !data.user) {
     return null;
@@ -107,6 +501,22 @@ function requireRole(roles: Array<Profile["role"]>) {
   };
 }
 
+function isSmokeBypassAuthorizedRequest(req: express.Request) {
+  if (!env.SMOKE_AUTH_BYPASS_ENABLED) {
+    return false;
+  }
+  const session = (req as express.Request & { session?: Session }).session;
+  if (session?.user?.id === smokeBypassUserId) {
+    return true;
+  }
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) {
+    return false;
+  }
+  const token = auth.slice("Bearer ".length);
+  return token === env.SMOKE_AUTH_BYPASS_TOKEN;
+}
+
 async function writeAuditLog(input: {
   actorUserId: string;
   actorRole: Profile["role"];
@@ -134,6 +544,7 @@ async function createNotification(input: {
   entityType?: string;
   entityId?: string;
   dedupeKey?: string;
+  channels?: NotificationChannel[];
 }) {
   const row = {
     recipient_user_id: input.recipientUserId,
@@ -145,34 +556,323 @@ async function createNotification(input: {
     dedupe_key: input.dedupeKey ?? null,
   };
 
+  let notificationId: number | null = null;
   if (input.dedupeKey) {
-    await supabaseAdmin.from("notifications").upsert(row, {
+    const { data } = await supabaseAdmin.from("notifications").upsert(row, {
       onConflict: "dedupe_key",
       ignoreDuplicates: true,
-    });
-    return;
+    }).select("id").maybeSingle();
+    notificationId = data?.id ? Number(data.id) : null;
+  } else {
+    const { data } = await supabaseAdmin.from("notifications").insert(row).select("id").single();
+    notificationId = data?.id ? Number(data.id) : null;
   }
 
-  await supabaseAdmin.from("notifications").insert(row);
+  try {
+    await dispatchExternalNotification(
+      {
+        notificationId,
+        recipientUserId: input.recipientUserId,
+        level: input.level,
+        title: input.title,
+        body: input.body,
+        entityType: input.entityType ?? null,
+        entityId: input.entityId ?? null,
+        dedupeKey: input.dedupeKey ?? null,
+        createdAt: new Date().toISOString(),
+      },
+      { channels: input.channels },
+    );
+  } catch (dispatchError) {
+    console.error(
+      `[notification-delivery] failed: ${
+        dispatchError instanceof Error ? dispatchError.message : String(dispatchError)
+      }`,
+    );
+  }
 }
 
-async function runTaskOverdueEscalation(input: { actorUserId?: string; actorRole?: Profile["role"] }) {
-  const today = new Date().toISOString().slice(0, 10);
+type NotificationDeliveryPayload = {
+  notificationId: number | null;
+  recipientUserId: string;
+  level: "info" | "warning" | "critical";
+  title: string;
+  body: string;
+  entityType: string | null;
+  entityId: string | null;
+  dedupeKey: string | null;
+  createdAt: string;
+};
+
+async function dispatchExternalNotification(
+  payload: NotificationDeliveryPayload,
+  options?: { channels?: NotificationChannel[] },
+) {
+  const { data: integrations, error } = await supabaseAdmin
+    .from("notification_integrations")
+    .select("id,channel,endpoint_url,secret,is_active")
+    .eq("is_active", true);
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const envIntegrations: Array<{ channel: NotificationChannel; endpoint_url: string; secret?: string | null; id?: number | null }> = [];
+  if (env.NOTIFICATION_WEBHOOK_URL) {
+    envIntegrations.push({ channel: "webhook", endpoint_url: env.NOTIFICATION_WEBHOOK_URL, secret: env.NOTIFICATION_WEBHOOK_SECRET ?? null });
+  }
+  if (env.NOTIFICATION_EMAIL_WEBHOOK_URL) {
+    envIntegrations.push({ channel: "email", endpoint_url: env.NOTIFICATION_EMAIL_WEBHOOK_URL, secret: env.NOTIFICATION_EMAIL_WEBHOOK_SECRET ?? null });
+  }
+  if (env.NOTIFICATION_MESSENGER_WEBHOOK_URL) {
+    envIntegrations.push({ channel: "messenger", endpoint_url: env.NOTIFICATION_MESSENGER_WEBHOOK_URL, secret: env.NOTIFICATION_MESSENGER_WEBHOOK_SECRET ?? null });
+  }
+
+  const targets = [
+    ...(integrations ?? []).map((item) => ({
+      id: Number(item.id),
+      channel: item.channel as NotificationChannel,
+      endpoint_url: item.endpoint_url,
+      secret: item.secret as string | null,
+    })),
+    ...envIntegrations,
+  ];
+
+  const channelsFilter = options?.channels;
+  const targetsToUse =
+    channelsFilter && channelsFilter.length > 0
+      ? targets.filter((target) => channelsFilter.includes(target.channel))
+      : targets;
+
+  for (const target of targetsToUse) {
+    try {
+      const response = await fetch(target.endpoint_url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(target.secret ? { "X-Portal-Notification-Secret": target.secret } : {}),
+        },
+        body: JSON.stringify({
+          channel: target.channel,
+          notification: payload,
+        }),
+      });
+
+      await supabaseAdmin.from("notification_delivery_log").insert({
+        notification_id: payload.notificationId,
+        integration_id: target.id ?? null,
+        channel: target.channel,
+        destination: target.endpoint_url,
+        status: response.ok ? "delivered" : "failed",
+        response_code: response.status,
+        error_text: response.ok ? null : `HTTP ${response.status}`,
+      });
+    } catch (targetError) {
+      await supabaseAdmin.from("notification_delivery_log").insert({
+        notification_id: payload.notificationId,
+        integration_id: target.id ?? null,
+        channel: target.channel,
+        destination: target.endpoint_url,
+        status: "failed",
+        response_code: null,
+        error_text: targetError instanceof Error ? targetError.message : String(targetError),
+      });
+    }
+  }
+}
+
+function parseNotificationChannels(raw?: string) {
+  const allowed: NotificationChannel[] = ["webhook", "email", "messenger"];
+  if (!raw) {
+    return [] as NotificationChannel[];
+  }
+  const values = raw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item): item is NotificationChannel => allowed.includes(item as NotificationChannel));
+  return [...new Set(values)];
+}
+
+type SloAlertRoutingPolicy = {
+  id: number;
+  name: string;
+  breach_type: SloRoutingBreachScope;
+  severity: SloRoutingSeverityScope;
+  channels: NotificationChannel[];
+  priority: number;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+async function loadActiveSloRoutingPolicies() {
   const { data, error } = await supabaseAdmin
-    .from("tasks")
-    .update({ status: "overdue" })
-    .in("status", ["new", "in_progress"])
-    .lt("due_date", today)
-    .select("id,assignee_id,title,due_date");
+    .from("slo_alert_routing_policies")
+    .select("*")
+    .eq("is_active", true)
+    .order("priority", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return (data ?? []) as SloAlertRoutingPolicy[];
+}
+
+function resolveSloBreachSeverity(status: SloStatus, breach: SloBreachType): SloBreachSeverity {
+  if (breach === "api_error_rate") {
+    return status.metrics.api.errorRatePercent >= status.thresholds.apiErrorRatePercent * 2 ? "critical" : "warning";
+  }
+  if (breach === "api_latency_p95") {
+    return status.metrics.api.p95LatencyMs >= status.thresholds.apiLatencyP95Ms * 2 ? "critical" : "warning";
+  }
+  return status.metrics.notifications.failureRatePercent >= status.thresholds.notificationFailureRatePercent * 2
+    ? "critical"
+    : "warning";
+}
+
+async function resolveSloAlertRouting(status: SloStatus): Promise<{
+  channels: NotificationChannel[];
+  overallSeverity: SloBreachSeverity;
+  breachSeverities: Record<SloBreachType, SloBreachSeverity>;
+}> {
+  const defaultChannelsBySeverity: Record<SloBreachSeverity, NotificationChannel[]> = {
+    warning: parseNotificationChannels(env.SLO_ALERT_CHANNELS_WARNING).length
+      ? parseNotificationChannels(env.SLO_ALERT_CHANNELS_WARNING)
+      : ["webhook", "email"],
+    critical: parseNotificationChannels(env.SLO_ALERT_CHANNELS_CRITICAL).length
+      ? parseNotificationChannels(env.SLO_ALERT_CHANNELS_CRITICAL)
+      : ["webhook", "email", "messenger"],
+  };
+  const perBreachChannelOverrides: Record<SloBreachType, NotificationChannel[]> = {
+    api_error_rate: parseNotificationChannels(env.SLO_ALERT_CHANNELS_API_ERROR_RATE),
+    api_latency_p95: parseNotificationChannels(env.SLO_ALERT_CHANNELS_API_LATENCY_P95),
+    notification_failure_rate: parseNotificationChannels(env.SLO_ALERT_CHANNELS_NOTIFICATION_FAILURE_RATE),
+  };
+  let dbPolicies: SloAlertRoutingPolicy[] = [];
+  try {
+    dbPolicies = await loadActiveSloRoutingPolicies();
+  } catch (error) {
+    console.error(
+      `[slo-routing] failed to load DB policies, fallback to env routing: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  const breachSeverities = Object.fromEntries(
+    status.breaches.map((breach) => [breach, resolveSloBreachSeverity(status, breach)]),
+  ) as Record<SloBreachType, SloBreachSeverity>;
+  const overallSeverity: SloBreachSeverity = Object.values(breachSeverities).includes("critical") ? "critical" : "warning";
+
+  const channels = new Set<NotificationChannel>();
+  for (const breach of status.breaches) {
+    const matchedPolicy = dbPolicies.find((policy) => {
+      const breachMatched = policy.breach_type === "any" || policy.breach_type === breach;
+      const severityMatched = policy.severity === "any" || policy.severity === breachSeverities[breach];
+      return breachMatched && severityMatched;
+    });
+    const channelsForBreach =
+      matchedPolicy?.channels && matchedPolicy.channels.length > 0
+        ? matchedPolicy.channels
+        : perBreachChannelOverrides[breach].length > 0
+          ? perBreachChannelOverrides[breach]
+          : defaultChannelsBySeverity[breachSeverities[breach]];
+    for (const channel of channelsForBreach) {
+      channels.add(channel);
+    }
+  }
+  if (channels.size === 0) {
+    channels.add("webhook");
+  }
+
+  return {
+    channels: Array.from(channels),
+    overallSeverity,
+    breachSeverities,
+  };
+}
+
+type SlaEntityType = "task" | "document";
+
+type SlaPolicy = {
+  id: number;
+  name: string;
+  entity_type: SlaEntityType;
+  trigger_status: string;
+  threshold_hours: number;
+  level: "info" | "warning" | "critical";
+  target_role: Profile["role"];
+  office_scoped: boolean;
+  message_template: string | null;
+  is_active: boolean;
+};
+
+async function loadActiveSlaPolicies() {
+  const { data, error } = await supabaseAdmin
+    .from("sla_escalation_matrix")
+    .select("*")
+    .eq("is_active", true)
+    .order("threshold_hours", { ascending: true });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const updatedRows = data ?? [];
-  const updatedIds = updatedRows.map((row) => String(row.id));
+  return (data ?? []) as SlaPolicy[];
+}
+
+async function getEscalationRecipients(input: { targetRole: Profile["role"]; officeId?: number; officeScoped?: boolean }) {
+  let query = supabaseAdmin.from("profiles").select("id").eq("role", input.targetRole);
+  if (input.officeScoped && input.officeId) {
+    query = query.eq("office_id", input.officeId);
+  }
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(error.message);
+  }
+  return (data ?? []).map((item) => item.id);
+}
+
+function getTaskOverdueHours(dueDate: string, now: Date) {
+  const dueAt = new Date(`${dueDate}T23:59:59.999Z`);
+  return Math.max(0, Math.floor((now.getTime() - dueAt.getTime()) / (60 * 60 * 1000)));
+}
+
+function getDocumentReviewHours(updatedAt: string | null, createdAt: string, now: Date) {
+  const startedAt = new Date(updatedAt ?? createdAt);
+  return Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / (60 * 60 * 1000)));
+}
+
+async function runTaskOverdueEscalation(input: { actorUserId?: string; actorRole?: Profile["role"] }) {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const activePolicies = await loadActiveSlaPolicies();
+  const taskPolicies = activePolicies.filter((policy) => policy.entity_type === "task");
+  const documentPolicies = activePolicies.filter((policy) => policy.entity_type === "document");
+
+  const { data: overdueTasks, error: overdueTasksError } = await supabaseAdmin
+    .from("tasks")
+    .select("id,assignee_id,title,due_date,status,office_id")
+    .in("status", ["new", "in_progress"])
+    .lt("due_date", today);
+
+  if (overdueTasksError) {
+    throw new Error(overdueTasksError.message);
+  }
+
+  const overdueTaskRows = overdueTasks ?? [];
+  const taskIds = overdueTaskRows.map((row) => Number(row.id));
+  const updatedIds = taskIds.map((id) => String(id));
+
+  if (taskIds.length > 0) {
+    const { error: updateError } = await supabaseAdmin.from("tasks").update({ status: "overdue" }).in("id", taskIds);
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+  }
+
   await Promise.all(
-    updatedRows.map((row) =>
+    overdueTaskRows.map((row) =>
       createNotification({
         recipientUserId: row.assignee_id,
         level: "critical",
@@ -180,9 +880,94 @@ async function runTaskOverdueEscalation(input: { actorUserId?: string; actorRole
         body: `Задача "${row.title}" просрочена (срок: ${row.due_date}).`,
         entityType: "tasks",
         entityId: String(row.id),
+        dedupeKey: `task-overdue:${row.id}:${today}`,
       }),
     ),
   );
+
+  let taskEscalationNotifications = 0;
+  for (const task of overdueTaskRows) {
+    const overdueHours = getTaskOverdueHours(task.due_date, now);
+    const matchedPolicies = taskPolicies.filter(
+      (policy) => policy.trigger_status === task.status && overdueHours >= policy.threshold_hours,
+    );
+    for (const policy of matchedPolicies) {
+      const recipients = await getEscalationRecipients({
+        targetRole: policy.target_role,
+        officeId: task.office_id,
+        officeScoped: policy.office_scoped,
+      });
+      if (recipients.length === 0) {
+        continue;
+      }
+
+      const body =
+        policy.message_template?.trim() ||
+        `SLA-эскалация по задаче "${task.title}": просрочка ${overdueHours} ч.`;
+
+      await Promise.all(
+        recipients.map((recipientId) =>
+          createNotification({
+            recipientUserId: recipientId,
+            level: policy.level,
+            title: "SLA-эскалация по задаче",
+            body,
+            entityType: "tasks",
+            entityId: String(task.id),
+            dedupeKey: `sla:${policy.id}:task:${task.id}:${today}`,
+          }),
+        ),
+      );
+      taskEscalationNotifications += recipients.length;
+    }
+  }
+
+  let documentEscalationNotifications = 0;
+  const { data: reviewDocuments, error: reviewDocumentsError } = await supabaseAdmin
+    .from("documents")
+    .select("id,title,status,office_id,created_at,updated_at")
+    .eq("status", "review");
+  if (reviewDocumentsError) {
+    throw new Error(reviewDocumentsError.message);
+  }
+
+  for (const document of reviewDocuments ?? []) {
+    const reviewHours = getDocumentReviewHours(document.updated_at, document.created_at, now);
+    const matchedPolicies = documentPolicies.filter(
+      (policy) => policy.trigger_status === document.status && reviewHours >= policy.threshold_hours,
+    );
+
+    for (const policy of matchedPolicies) {
+      const recipients = await getEscalationRecipients({
+        targetRole: policy.target_role,
+        officeId: document.office_id,
+        officeScoped: policy.office_scoped,
+      });
+      if (recipients.length === 0) {
+        continue;
+      }
+
+      const body =
+        policy.message_template?.trim() ||
+        `SLA-эскалация по документу "${document.title}": ожидание согласования ${reviewHours} ч.`;
+
+      await Promise.all(
+        recipients.map((recipientId) =>
+          createNotification({
+            recipientUserId: recipientId,
+            level: policy.level,
+            title: "SLA-эскалация по документу",
+            body,
+            entityType: "documents",
+            entityId: String(document.id),
+            dedupeKey: `sla:${policy.id}:document:${document.id}:${today}`,
+          }),
+        ),
+      );
+      documentEscalationNotifications += recipients.length;
+    }
+  }
+
   if (updatedIds.length > 0 && input.actorUserId && input.actorRole) {
     await supabaseAdmin.from("audit_log").insert(
       updatedIds.map((taskId) => ({
@@ -196,7 +981,13 @@ async function runTaskOverdueEscalation(input: { actorUserId?: string; actorRole
     );
   }
 
-  return { updatedCount: updatedIds.length, updatedIds };
+  return {
+    updatedCount: updatedIds.length,
+    updatedIds,
+    taskEscalationNotifications,
+    documentEscalationNotifications,
+    appliedPolicyCount: activePolicies.length,
+  };
 }
 
 function formatDateISO(date: Date) {
@@ -600,6 +1391,25 @@ const adminAuditExportQuerySchema = z.object({
     .optional(),
 });
 
+const createNotificationIntegrationSchema = z.object({
+  name: z.string().min(2).max(120),
+  channel: z.enum(["webhook", "email", "messenger"]),
+  endpointUrl: z.string().url(),
+  secret: z.string().max(512).optional(),
+  isActive: z.boolean().default(true),
+});
+
+const updateNotificationIntegrationSchema = createNotificationIntegrationSchema.partial();
+const createSloRoutingPolicySchema = z.object({
+  name: z.string().min(2).max(120),
+  breachType: z.enum(["any", "api_error_rate", "api_latency_p95", "notification_failure_rate"]),
+  severity: z.enum(["any", "warning", "critical"]),
+  channels: z.array(z.enum(["webhook", "email", "messenger"])).min(1).max(3),
+  priority: z.number().int().min(0).max(1000).default(100),
+  isActive: z.boolean().default(true),
+});
+const updateSloRoutingPolicySchema = createSloRoutingPolicySchema.partial();
+
 function csvEscape(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
@@ -674,6 +1484,210 @@ app.get("/api/admin/audit/export", requireAuth(), requireRole(["admin", "directo
   return res.status(200).send(csv);
 });
 
+app.get(
+  "/api/admin/notification-integrations",
+  requireAuth(),
+  requireRole(["admin", "director"]),
+  async (_req, res) => {
+    const { data, error } = await supabaseAdmin
+      .from("notification_integrations")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.json(data ?? []);
+  },
+);
+
+app.post(
+  "/api/admin/notification-integrations",
+  requireAuth(),
+  requireRole(["admin", "director"]),
+  async (req, res) => {
+    const parsed = createNotificationIntegrationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error.format());
+    }
+    const session = (req as express.Request & { session: Session }).session;
+    const payload = {
+      name: parsed.data.name,
+      channel: parsed.data.channel,
+      endpoint_url: parsed.data.endpointUrl,
+      secret: parsed.data.secret ?? null,
+      is_active: parsed.data.isActive,
+      created_by: session.profile.id,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabaseAdmin
+      .from("notification_integrations")
+      .insert(payload)
+      .select("*")
+      .single();
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    await writeAuditLog({
+      actorUserId: session.profile.id,
+      actorRole: session.profile.role,
+      action: "admin.notification_integrations.create",
+      entityType: "notification_integrations",
+      entityId: String(data.id),
+      payload,
+    });
+    return res.status(201).json(data);
+  },
+);
+
+app.patch(
+  "/api/admin/notification-integrations/:id",
+  requireAuth(),
+  requireRole(["admin", "director"]),
+  async (req, res) => {
+    const parsed = updateNotificationIntegrationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error.format());
+    }
+    const integrationId = Number(req.params.id);
+    if (Number.isNaN(integrationId)) {
+      return res.status(400).json({ error: "Invalid integration id" });
+    }
+    const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+    if (parsed.data.channel !== undefined) updatePayload.channel = parsed.data.channel;
+    if (parsed.data.endpointUrl !== undefined) updatePayload.endpoint_url = parsed.data.endpointUrl;
+    if (parsed.data.secret !== undefined) updatePayload.secret = parsed.data.secret ?? null;
+    if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
+
+    const { data, error } = await supabaseAdmin
+      .from("notification_integrations")
+      .update(updatePayload)
+      .eq("id", integrationId)
+      .select("*")
+      .single();
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    const session = (req as express.Request & { session: Session }).session;
+    await writeAuditLog({
+      actorUserId: session.profile.id,
+      actorRole: session.profile.role,
+      action: "admin.notification_integrations.update",
+      entityType: "notification_integrations",
+      entityId: String(integrationId),
+      payload: updatePayload,
+    });
+    return res.json(data);
+  },
+);
+
+app.get("/api/ops/slo-routing-policies", requireAuth(), requireRole(["admin", "director"]), async (_req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("slo_alert_routing_policies")
+    .select("*")
+    .order("priority", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.post("/api/ops/slo-routing-policies", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = createSloRoutingPolicySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    name: parsed.data.name,
+    breach_type: parsed.data.breachType,
+    severity: parsed.data.severity,
+    channels: parsed.data.channels,
+    priority: parsed.data.priority,
+    is_active: parsed.data.isActive,
+    created_by: session.profile.id,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabaseAdmin
+    .from("slo_alert_routing_policies")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "ops.slo_routing.create_policy",
+    entityType: "slo_alert_routing_policies",
+    entityId: String(data.id),
+    payload,
+  });
+  return res.status(201).json(data);
+});
+
+app.patch("/api/ops/slo-routing-policies/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = updateSloRoutingPolicySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const policyId = Number(req.params.id);
+  if (Number.isNaN(policyId)) {
+    return res.status(400).json({ error: "Invalid policy id" });
+  }
+  const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+  if (parsed.data.breachType !== undefined) updatePayload.breach_type = parsed.data.breachType;
+  if (parsed.data.severity !== undefined) updatePayload.severity = parsed.data.severity;
+  if (parsed.data.channels !== undefined) updatePayload.channels = parsed.data.channels;
+  if (parsed.data.priority !== undefined) updatePayload.priority = parsed.data.priority;
+  if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
+  const { data, error } = await supabaseAdmin
+    .from("slo_alert_routing_policies")
+    .update(updatePayload)
+    .eq("id", policyId)
+    .select("*")
+    .single();
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "ops.slo_routing.update_policy",
+    entityType: "slo_alert_routing_policies",
+    entityId: String(policyId),
+    payload: updatePayload,
+  });
+  return res.json(data);
+});
+
+app.delete("/api/ops/slo-routing-policies/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const policyId = Number(req.params.id);
+  if (Number.isNaN(policyId)) {
+    return res.status(400).json({ error: "Invalid policy id" });
+  }
+  const { error } = await supabaseAdmin
+    .from("slo_alert_routing_policies")
+    .delete()
+    .eq("id", policyId);
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "ops.slo_routing.delete_policy",
+    entityType: "slo_alert_routing_policies",
+    entityId: String(policyId),
+  });
+  return res.status(204).send();
+});
+
 const signInSchema = z.object({ email: z.email(), password: z.string().min(1) });
 
 app.post("/auth/sign-in", async (req, res) => {
@@ -741,6 +1755,14 @@ app.get("/auth/me", requireAuth(), async (req, res) => {
   });
 });
 
+app.get("/api/offices", requireAuth(), async (_req, res) => {
+  const { data, error } = await supabaseAdmin.from("offices").select("*").order("name");
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
 app.get("/api/bootstrap", requireAuth(), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
   const [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications] = await Promise.all([
@@ -782,6 +1804,903 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     documentApprovals: documentApprovals.data,
     notifications: notifications.data,
   });
+});
+
+const unifiedSearchQuerySchema = z.object({
+  q: z.string().trim().min(2).max(120),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+app.get("/api/search/unified", requireAuth(), async (req, res) => {
+  const parsed = unifiedSearchQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const { q, limit } = parsed.data;
+  const pattern = `%${q}%`;
+  const isAdmin = ["admin", "director"].includes(session.profile.role);
+
+  let docsQuery = supabaseAdmin
+    .from("documents")
+    .select("id,title,body,status,author,date,office_id,updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (!isAdmin) {
+    if (session.profile.role === "office_head" && session.profile.office_id) {
+      docsQuery = docsQuery.eq("office_id", session.profile.office_id);
+    } else {
+      docsQuery = docsQuery.eq("author", session.profile.full_name);
+    }
+  }
+  docsQuery = docsQuery.or(`title.ilike.${pattern},body.ilike.${pattern}`);
+
+  let kbQuery = supabaseAdmin
+    .from("kb_articles")
+    .select("id,title,content,status,category,date,updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(limit)
+    .or(`title.ilike.${pattern},content.ilike.${pattern},category.ilike.${pattern}`);
+  if (!isAdmin) {
+    kbQuery = kbQuery.eq("status", "published");
+  }
+
+  let lmsCoursesQuery = supabaseAdmin
+    .from("lms_courses")
+    .select("id,title,description,status,updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(limit)
+    .or(`title.ilike.${pattern},description.ilike.${pattern}`);
+  if (!isAdmin) {
+    lmsCoursesQuery = lmsCoursesQuery.eq("status", "published");
+  }
+
+  let lmsSubsectionsQuery = supabaseAdmin
+    .from("lms_subsections")
+    .select("id,title,markdown_content,updated_at,section:lms_sections!inner(id,title,course:lms_courses!inner(id,title,status))")
+    .order("updated_at", { ascending: false })
+    .limit(limit)
+    .or(`title.ilike.${pattern},markdown_content.ilike.${pattern}`);
+  if (!isAdmin) {
+    lmsSubsectionsQuery = lmsSubsectionsQuery.eq("lms_sections.lms_courses.status", "published");
+  }
+
+  const [documentsRes, kbRes, lmsCoursesRes, lmsSubsectionsRes] = await Promise.all([
+    docsQuery,
+    kbQuery,
+    lmsCoursesQuery,
+    lmsSubsectionsQuery,
+  ]);
+
+  const firstError = [documentsRes, kbRes, lmsCoursesRes, lmsSubsectionsRes].map((r) => r.error).find(Boolean);
+  if (firstError) {
+    return res.status(400).json({ error: firstError.message });
+  }
+
+  return res.json({
+    query: q,
+    documents: (documentsRes.data ?? []).map((item) => ({
+      id: Number(item.id),
+      title: item.title,
+      excerpt: (item.body ?? "").slice(0, 220),
+      status: item.status,
+      author: item.author,
+      date: item.date,
+      officeId: item.office_id,
+      updatedAt: item.updated_at,
+      href: "/docs",
+    })),
+    kb: (kbRes.data ?? []).map((item) => ({
+      id: Number(item.id),
+      title: item.title,
+      excerpt: item.content.slice(0, 220),
+      status: item.status,
+      category: item.category,
+      date: item.date,
+      updatedAt: item.updated_at,
+      href: `/kb/${item.id}`,
+    })),
+    lms: [
+      ...(lmsCoursesRes.data ?? []).map((item) => ({
+        id: `course:${item.id}`,
+        title: item.title,
+        excerpt: (item.description ?? "").slice(0, 220),
+        status: item.status,
+        kind: "course",
+        updatedAt: item.updated_at,
+        href: `/lms`,
+      })),
+      ...(lmsSubsectionsRes.data ?? []).map((item) => {
+        const section = Array.isArray(item.section) ? item.section[0] : item.section;
+        const course = section?.course
+          ? Array.isArray(section.course)
+            ? section.course[0]
+            : section.course
+          : null;
+        return {
+          id: `subsection:${item.id}`,
+          title: item.title,
+          excerpt: item.markdown_content.slice(0, 220),
+          status: course?.status ?? "draft",
+          kind: "subsection",
+          sectionTitle: section?.title ?? "",
+          courseTitle: course?.title ?? "",
+          updatedAt: item.updated_at,
+          href: `/lms`,
+        };
+      }),
+    ],
+  });
+});
+
+const reportsKpiQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+  officeId: z.coerce.number().int().positive().optional(),
+});
+
+const reportsDrilldownQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+  officeId: z.coerce.number().int().positive().optional(),
+  role: z.enum(["operator", "office_head", "director", "admin"]).optional(),
+});
+
+const reportFrequencySchema = z.enum(["daily", "weekly", "monthly"]);
+
+const createReportScheduleSchema = z.object({
+  name: z.string().min(2).max(120),
+  recipientUserId: z.string().uuid(),
+  daysWindow: z.number().int().min(1).max(365).default(30),
+  officeId: z.number().int().positive().optional(),
+  roleFilter: z.enum(["operator", "office_head", "director", "admin"]).optional(),
+  frequency: reportFrequencySchema.default("weekly"),
+  nextRunAt: z.iso.datetime().optional(),
+  isActive: z.boolean().default(true),
+});
+
+const updateReportScheduleSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  recipientUserId: z.string().uuid().optional(),
+  daysWindow: z.number().int().min(1).max(365).optional(),
+  officeId: z.number().int().positive().optional(),
+  roleFilter: z.enum(["operator", "office_head", "director", "admin"]).optional(),
+  frequency: reportFrequencySchema.optional(),
+  nextRunAt: z.iso.datetime().optional(),
+  isActive: z.boolean().optional(),
+});
+
+function getNextRunAt(frequency: "daily" | "weekly" | "monthly", fromDate: Date = new Date()) {
+  const next = new Date(fromDate);
+  if (frequency === "daily") {
+    next.setDate(next.getDate() + 1);
+  } else if (frequency === "weekly") {
+    next.setDate(next.getDate() + 7);
+  } else {
+    next.setDate(next.getDate() + 30);
+  }
+  return next.toISOString();
+}
+
+function toCsv(rows: Array<Record<string, string | number>>) {
+  if (rows.length === 0) {
+    return "";
+  }
+  const headers = Object.keys(rows[0]);
+  const esc = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+  const body = rows.map((row) => headers.map((header) => esc(row[header] ?? "")).join(","));
+  return [headers.join(","), ...body].join("\n");
+}
+
+async function buildKpiRowsForScope(input: { daysWindow: number; officeId?: number | null }) {
+  const fromDate = formatDateISO(addDays(new Date(), -input.daysWindow));
+  const today = formatDateISO(new Date());
+
+  let officesQuery = supabaseAdmin.from("offices").select("id,name").order("name");
+  if (input.officeId) {
+    officesQuery = officesQuery.eq("id", input.officeId);
+  }
+  const { data: offices, error: officesError } = await officesQuery;
+  if (officesError) {
+    throw new Error(officesError.message);
+  }
+
+  const officeIds = (offices ?? []).map((office) => Number(office.id));
+  if (officeIds.length === 0) {
+    return [];
+  }
+
+  const [profilesRes, tasksRes, documentsRes, approvalsRes, assignmentsRes, attemptsRes] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id,office_id").in("office_id", officeIds),
+    supabaseAdmin
+      .from("tasks")
+      .select("id,office_id,status,due_date,created_date")
+      .in("office_id", officeIds)
+      .gte("created_date", fromDate),
+    supabaseAdmin
+      .from("documents")
+      .select("id,office_id,status")
+      .in("office_id", officeIds),
+    supabaseAdmin
+      .from("document_approvals")
+      .select("document_id,decision")
+      .in("decision", ["submitted", "approved", "rejected"])
+      .gte("created_at", `${fromDate}T00:00:00.000Z`),
+    supabaseAdmin
+      .from("course_assignments")
+      .select("id,course_id,user_id,created_at")
+      .gte("created_at", `${fromDate}T00:00:00.000Z`),
+    supabaseAdmin.from("course_attempts").select("course_id,user_id,passed"),
+  ]);
+  const firstError = [profilesRes, tasksRes, documentsRes, approvalsRes, assignmentsRes, attemptsRes]
+    .map((result) => result.error)
+    .find(Boolean);
+  if (firstError) {
+    throw new Error(firstError.message);
+  }
+
+  const profiles = profilesRes.data ?? [];
+  const tasks = tasksRes.data ?? [];
+  const documents = documentsRes.data ?? [];
+  const approvals = approvalsRes.data ?? [];
+  const assignments = assignmentsRes.data ?? [];
+  const attempts = attemptsRes.data ?? [];
+
+  const officeNameMap = new Map((offices ?? []).map((office) => [Number(office.id), office.name]));
+  const passedSet = new Set(
+    attempts.filter((item) => item.passed).map((item) => `${item.course_id}:${item.user_id}`),
+  );
+
+  return officeIds.map((officeId) => {
+    const officeTasks = tasks.filter((task) => Number(task.office_id) === officeId);
+    const tasksDone = officeTasks.filter((task) => task.status === "done").length;
+    const tasksOverdue = officeTasks.filter(
+      (task) => task.status === "overdue" || (task.status !== "done" && task.due_date < today),
+    ).length;
+    const officeDocuments = documents.filter((document) => Number(document.office_id) === officeId);
+    const officeDocumentIds = new Set(officeDocuments.map((document) => Number(document.id)));
+    const docsReview = officeDocuments.filter((document) => document.status === "review").length;
+    const docsFinalized = approvals.filter(
+      (approval) =>
+        officeDocumentIds.has(Number(approval.document_id)) &&
+        (approval.decision === "approved" || approval.decision === "rejected"),
+    ).length;
+    const officeUserIds = new Set(
+      profiles.filter((profile) => Number(profile.office_id) === officeId).map((profile) => profile.id),
+    );
+    const officeAssignments = assignments.filter((assignment) => officeUserIds.has(assignment.user_id));
+    const lmsAssigned = officeAssignments.length;
+    const lmsPassed = officeAssignments.filter((assignment) =>
+      passedSet.has(`${assignment.course_id}:${assignment.user_id}`),
+    ).length;
+
+    return {
+      officeId,
+      office: officeNameMap.get(officeId) ?? `Офис #${officeId}`,
+      tasksTotal: officeTasks.length,
+      tasksDone,
+      tasksOverdue,
+      taskCompletionRate: officeTasks.length > 0 ? Math.round((tasksDone / officeTasks.length) * 100) : 0,
+      docsReview,
+      docsFinalized,
+      lmsAssigned,
+      lmsPassed,
+      lmsCompletionRate: lmsAssigned > 0 ? Math.round((lmsPassed / lmsAssigned) * 100) : 0,
+    };
+  });
+}
+
+async function runReportScheduleExecution(
+  schedule: {
+    id: number;
+    recipient_user_id: string;
+    days_window: number;
+    office_id: number | null;
+    role_filter: Profile["role"] | null;
+    frequency: "daily" | "weekly" | "monthly";
+    name: string;
+  },
+  actor: { userId?: string; role?: Profile["role"] } = {},
+) {
+  const rows = await buildKpiRowsForScope({
+    daysWindow: schedule.days_window,
+    officeId: schedule.office_id,
+  });
+  const scopedRows = rows;
+  const csv = toCsv(scopedRows);
+  const generatedAt = new Date().toISOString();
+  const { data: runRow, error: runError } = await supabaseAdmin
+    .from("report_delivery_runs")
+    .insert({
+      schedule_id: schedule.id,
+      recipient_user_id: schedule.recipient_user_id,
+      status: "ready",
+      format: "csv",
+      generated_at: generatedAt,
+      file_name: `report-${schedule.id}-${generatedAt.slice(0, 10)}.csv`,
+      payload_csv: csv,
+      rows_count: scopedRows.length,
+    })
+    .select("*")
+    .single();
+  if (runError || !runRow) {
+    throw new Error(runError?.message ?? "Failed to create report run");
+  }
+
+  await createNotification({
+    recipientUserId: schedule.recipient_user_id,
+    level: "info",
+    title: "Плановый отчёт готов",
+    body: `Отчёт "${schedule.name}" сформирован (${scopedRows.length} строк).`,
+    entityType: "report_delivery_runs",
+    entityId: String(runRow.id),
+  });
+
+  await supabaseAdmin
+    .from("report_delivery_schedules")
+    .update({
+      last_run_at: generatedAt,
+      next_run_at: getNextRunAt(schedule.frequency, new Date(generatedAt)),
+    })
+    .eq("id", schedule.id);
+
+  if (actor.userId && actor.role) {
+    await writeAuditLog({
+      actorUserId: actor.userId,
+      actorRole: actor.role,
+      action: "reports.schedule.run",
+      entityType: "report_delivery_schedules",
+      entityId: String(schedule.id),
+      payload: { runId: runRow.id, rowsCount: scopedRows.length },
+    });
+  }
+
+  return runRow;
+}
+
+async function runScheduledReportDeliveries(input: { actorUserId?: string; actorRole?: Profile["role"] } = {}) {
+  const nowIso = new Date().toISOString();
+  const { data: schedules, error } = await supabaseAdmin
+    .from("report_delivery_schedules")
+    .select("id,name,recipient_user_id,days_window,office_id,role_filter,frequency")
+    .eq("is_active", true)
+    .lte("next_run_at", nowIso);
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const rows = schedules ?? [];
+  let delivered = 0;
+  for (const schedule of rows) {
+    await runReportScheduleExecution(schedule, { userId: input.actorUserId, role: input.actorRole });
+    delivered += 1;
+  }
+  return { delivered, scheduleIds: rows.map((row) => Number(row.id)) };
+}
+
+app.get("/api/reports/kpi", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = reportsKpiQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const isOfficeHead = session.profile.role === "office_head";
+  const forcedOfficeId = isOfficeHead ? session.profile.office_id : null;
+  const requestedOfficeId = parsed.data.officeId;
+  const scopeOfficeId = forcedOfficeId ?? requestedOfficeId ?? null;
+
+  const fromDate = formatDateISO(addDays(new Date(), -parsed.data.days));
+  const today = formatDateISO(new Date());
+
+  let officesQuery = supabaseAdmin.from("offices").select("id,name").order("name");
+  if (scopeOfficeId) {
+    officesQuery = officesQuery.eq("id", scopeOfficeId);
+  }
+  const { data: offices, error: officesError } = await officesQuery;
+  if (officesError) {
+    return res.status(400).json({ error: officesError.message });
+  }
+
+  const officeIds = (offices ?? []).map((office) => Number(office.id));
+  if (officeIds.length === 0) {
+    return res.json({
+      fromDate,
+      toDate: today,
+      totals: {
+        tasksTotal: 0,
+        tasksDone: 0,
+        tasksOverdue: 0,
+        taskCompletionRate: 0,
+        docsReview: 0,
+        docsFinalized: 0,
+        approvalsThroughputPerDay: 0,
+        approvalsAvgHours: 0,
+        lmsAssigned: 0,
+        lmsPassed: 0,
+        lmsCompletionRate: 0,
+      },
+      byOffice: [],
+    });
+  }
+
+  const [profilesRes, tasksRes, documentsRes, approvalsRes, assignmentsRes, attemptsRes] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id,office_id").in("office_id", officeIds),
+    supabaseAdmin
+      .from("tasks")
+      .select("id,office_id,status,due_date,created_date")
+      .in("office_id", officeIds)
+      .gte("created_date", fromDate),
+    supabaseAdmin
+      .from("documents")
+      .select("id,office_id,status,created_at")
+      .in("office_id", officeIds),
+    supabaseAdmin
+      .from("document_approvals")
+      .select("document_id,decision,created_at")
+      .in("decision", ["submitted", "approved", "rejected"])
+      .gte("created_at", `${fromDate}T00:00:00.000Z`),
+    supabaseAdmin
+      .from("course_assignments")
+      .select("id,course_id,user_id,created_at")
+      .gte("created_at", `${fromDate}T00:00:00.000Z`),
+    supabaseAdmin.from("course_attempts").select("course_id,user_id,passed"),
+  ]);
+
+  const firstError = [profilesRes, tasksRes, documentsRes, approvalsRes, assignmentsRes, attemptsRes]
+    .map((result) => result.error)
+    .find(Boolean);
+  if (firstError) {
+    return res.status(400).json({ error: firstError.message });
+  }
+
+  const profiles = profilesRes.data ?? [];
+  const tasks = tasksRes.data ?? [];
+  const documents = documentsRes.data ?? [];
+  const approvals = approvalsRes.data ?? [];
+  const assignments = assignmentsRes.data ?? [];
+  const attempts = attemptsRes.data ?? [];
+
+  const officeNameMap = new Map((offices ?? []).map((office) => [Number(office.id), office.name]));
+  const passedSet = new Set(
+    attempts.filter((item) => item.passed).map((item) => `${item.course_id}:${item.user_id}`),
+  );
+
+  const officeRows = officeIds.map((officeId) => {
+    const officeTasks = tasks.filter((task) => Number(task.office_id) === officeId);
+    const officeTasksDone = officeTasks.filter((task) => task.status === "done").length;
+    const officeTasksOverdue = officeTasks.filter(
+      (task) => task.status === "overdue" || (task.status !== "done" && task.due_date < today),
+    ).length;
+
+    const officeDocuments = documents.filter((document) => Number(document.office_id) === officeId);
+    const officeDocumentIds = new Set(officeDocuments.map((document) => Number(document.id)));
+    const officeDocsReview = officeDocuments.filter((document) => document.status === "review").length;
+    const officeApprovals = approvals.filter((approval) => officeDocumentIds.has(Number(approval.document_id)));
+    const officeDocsFinalized = officeApprovals.filter(
+      (approval) => approval.decision === "approved" || approval.decision === "rejected",
+    ).length;
+
+    const officeUserIds = new Set(
+      profiles.filter((profile) => Number(profile.office_id) === officeId).map((profile) => profile.id),
+    );
+    const officeAssignments = assignments.filter((assignment) => officeUserIds.has(assignment.user_id));
+    const officeLmsAssigned = officeAssignments.length;
+    const officeLmsPassed = officeAssignments.filter((assignment) =>
+      passedSet.has(`${assignment.course_id}:${assignment.user_id}`),
+    ).length;
+
+    return {
+      officeId,
+      office: officeNameMap.get(officeId) ?? `Офис #${officeId}`,
+      tasksTotal: officeTasks.length,
+      tasksDone: officeTasksDone,
+      tasksOverdue: officeTasksOverdue,
+      taskCompletionRate:
+        officeTasks.length > 0 ? Math.round((officeTasksDone / officeTasks.length) * 100) : 0,
+      docsReview: officeDocsReview,
+      docsFinalized: officeDocsFinalized,
+      lmsAssigned: officeLmsAssigned,
+      lmsPassed: officeLmsPassed,
+      lmsCompletionRate:
+        officeLmsAssigned > 0 ? Math.round((officeLmsPassed / officeLmsAssigned) * 100) : 0,
+    };
+  });
+
+  const docById = new Map(documents.map((document) => [Number(document.id), document]));
+  const approvalsByDocument = approvals.reduce<Map<number, Array<{ decision: string; created_at: string }>>>(
+    (map, approval) => {
+      const key = Number(approval.document_id);
+      const bucket = map.get(key) ?? [];
+      bucket.push({ decision: approval.decision, created_at: approval.created_at });
+      map.set(key, bucket);
+      return map;
+    },
+    new Map(),
+  );
+
+  const finalizedLeadTimesHours: number[] = [];
+  for (const [documentId, items] of approvalsByDocument) {
+    const sorted = [...items].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    const submitted = sorted.find((item) => item.decision === "submitted");
+    const finalized = [...sorted]
+      .reverse()
+      .find((item) => item.decision === "approved" || item.decision === "rejected");
+    if (!finalized) {
+      continue;
+    }
+
+    const document = docById.get(documentId);
+    const startAt = submitted?.created_at ?? document?.created_at;
+    if (!startAt) {
+      continue;
+    }
+    const hours = Math.max(
+      0,
+      Math.round((Date.parse(finalized.created_at) - Date.parse(startAt)) / (60 * 60 * 1000)),
+    );
+    finalizedLeadTimesHours.push(hours);
+  }
+
+  const totals = officeRows.reduce(
+    (acc, row) => {
+      acc.tasksTotal += row.tasksTotal;
+      acc.tasksDone += row.tasksDone;
+      acc.tasksOverdue += row.tasksOverdue;
+      acc.docsReview += row.docsReview;
+      acc.docsFinalized += row.docsFinalized;
+      acc.lmsAssigned += row.lmsAssigned;
+      acc.lmsPassed += row.lmsPassed;
+      return acc;
+    },
+    {
+      tasksTotal: 0,
+      tasksDone: 0,
+      tasksOverdue: 0,
+      docsReview: 0,
+      docsFinalized: 0,
+      lmsAssigned: 0,
+      lmsPassed: 0,
+    },
+  );
+
+  const periodDays = Math.max(parsed.data.days, 1);
+  const approvalsThroughputPerDay = Number((totals.docsFinalized / periodDays).toFixed(2));
+  const approvalsAvgHours =
+    finalizedLeadTimesHours.length > 0
+      ? Math.round(finalizedLeadTimesHours.reduce((sum, value) => sum + value, 0) / finalizedLeadTimesHours.length)
+      : 0;
+
+  return res.json({
+    fromDate,
+    toDate: today,
+    totals: {
+      ...totals,
+      taskCompletionRate:
+        totals.tasksTotal > 0 ? Math.round((totals.tasksDone / totals.tasksTotal) * 100) : 0,
+      approvalsThroughputPerDay,
+      approvalsAvgHours,
+      lmsCompletionRate:
+        totals.lmsAssigned > 0 ? Math.round((totals.lmsPassed / totals.lmsAssigned) * 100) : 0,
+    },
+    byOffice: officeRows,
+  });
+});
+
+app.get("/api/reports/drilldown", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = reportsDrilldownQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const isOfficeHead = session.profile.role === "office_head";
+  const forcedOfficeId = isOfficeHead ? session.profile.office_id : null;
+  const requestedOfficeId = parsed.data.officeId;
+  const scopeOfficeId = forcedOfficeId ?? requestedOfficeId ?? null;
+  const fromDate = formatDateISO(addDays(new Date(), -parsed.data.days));
+  const today = formatDateISO(new Date());
+
+  let profilesQuery = supabaseAdmin.from("profiles").select("id,full_name,role,office_id");
+  if (scopeOfficeId) {
+    profilesQuery = profilesQuery.eq("office_id", scopeOfficeId);
+  }
+
+  const [profilesRes, tasksRes, assignmentsRes, attemptsRes, documentsRes, approvalsRes] = await Promise.all([
+    profilesQuery,
+    scopeOfficeId
+      ? supabaseAdmin
+          .from("tasks")
+          .select("id,assignee_id,status,due_date,created_date")
+          .eq("office_id", scopeOfficeId)
+          .gte("created_date", fromDate)
+      : supabaseAdmin.from("tasks").select("id,assignee_id,status,due_date,created_date").gte("created_date", fromDate),
+    supabaseAdmin
+      .from("course_assignments")
+      .select("id,course_id,user_id,created_at")
+      .gte("created_at", `${fromDate}T00:00:00.000Z`),
+    supabaseAdmin.from("course_attempts").select("course_id,user_id,passed"),
+    scopeOfficeId
+      ? supabaseAdmin
+          .from("documents")
+          .select("id,author,status,office_id,created_at")
+          .eq("office_id", scopeOfficeId)
+          .gte("created_at", `${fromDate}T00:00:00.000Z`)
+      : supabaseAdmin
+          .from("documents")
+          .select("id,author,status,office_id,created_at")
+          .gte("created_at", `${fromDate}T00:00:00.000Z`),
+    supabaseAdmin
+      .from("document_approvals")
+      .select("id,actor_user_id,decision,created_at")
+      .gte("created_at", `${fromDate}T00:00:00.000Z`),
+  ]);
+
+  const firstError = [profilesRes, tasksRes, assignmentsRes, attemptsRes, documentsRes, approvalsRes]
+    .map((result) => result.error)
+    .find(Boolean);
+  if (firstError) {
+    return res.status(400).json({ error: firstError.message });
+  }
+
+  const profiles = profilesRes.data ?? [];
+  const tasks = tasksRes.data ?? [];
+  const assignments = assignmentsRes.data ?? [];
+  const attempts = attemptsRes.data ?? [];
+  const documents = documentsRes.data ?? [];
+  const approvals = approvalsRes.data ?? [];
+  const roleFilter = parsed.data.role;
+
+  const scopedUsers = roleFilter ? profiles.filter((profile) => profile.role === roleFilter) : profiles;
+  const scopedUserIds = new Set(scopedUsers.map((profile) => profile.id));
+  const passedSet = new Set(attempts.filter((attempt) => attempt.passed).map((attempt) => `${attempt.course_id}:${attempt.user_id}`));
+
+  const perUser = scopedUsers.map((profile) => {
+    const userTasks = tasks.filter((task) => task.assignee_id === profile.id);
+    const tasksDone = userTasks.filter((task) => task.status === "done").length;
+    const tasksOverdue = userTasks.filter(
+      (task) => task.status === "overdue" || (task.status !== "done" && task.due_date < today),
+    ).length;
+
+    const userAssignments = assignments.filter((assignment) => assignment.user_id === profile.id);
+    const lmsAssigned = userAssignments.length;
+    const lmsPassed = userAssignments.filter((assignment) =>
+      passedSet.has(`${assignment.course_id}:${assignment.user_id}`),
+    ).length;
+
+    const docsAuthored = documents.filter((document) => document.author === profile.full_name).length;
+    const approvalsHandled = approvals.filter(
+      (approval) =>
+        approval.actor_user_id === profile.id &&
+        (approval.decision === "approved" || approval.decision === "rejected"),
+    ).length;
+
+    return {
+      userId: profile.id,
+      fullName: profile.full_name,
+      role: profile.role,
+      officeId: profile.office_id,
+      tasksTotal: userTasks.length,
+      tasksDone,
+      tasksOverdue,
+      lmsAssigned,
+      lmsPassed,
+      docsAuthored,
+      approvalsHandled,
+    };
+  });
+
+  const roleOrder: Array<Profile["role"]> = ["operator", "office_head", "director", "admin"];
+  const byRole = roleOrder
+    .filter((role) => !roleFilter || role === roleFilter)
+    .map((role) => {
+      const rows = perUser.filter((item) => item.role === role);
+      const totals = rows.reduce(
+        (acc, row) => {
+          acc.usersCount += 1;
+          acc.tasksTotal += row.tasksTotal;
+          acc.tasksDone += row.tasksDone;
+          acc.tasksOverdue += row.tasksOverdue;
+          acc.lmsAssigned += row.lmsAssigned;
+          acc.lmsPassed += row.lmsPassed;
+          acc.docsAuthored += row.docsAuthored;
+          acc.approvalsHandled += row.approvalsHandled;
+          return acc;
+        },
+        {
+          usersCount: 0,
+          tasksTotal: 0,
+          tasksDone: 0,
+          tasksOverdue: 0,
+          lmsAssigned: 0,
+          lmsPassed: 0,
+          docsAuthored: 0,
+          approvalsHandled: 0,
+        },
+      );
+      return {
+        role,
+        ...totals,
+        taskCompletionRate: totals.tasksTotal > 0 ? Math.round((totals.tasksDone / totals.tasksTotal) * 100) : 0,
+        lmsCompletionRate: totals.lmsAssigned > 0 ? Math.round((totals.lmsPassed / totals.lmsAssigned) * 100) : 0,
+      };
+    });
+
+  return res.json({
+    fromDate,
+    toDate: today,
+    officeId: scopeOfficeId,
+    role: roleFilter ?? null,
+    totals: {
+      usersCount: scopedUsers.length,
+      tasksTotal: perUser.reduce((sum, row) => sum + row.tasksTotal, 0),
+      tasksOverdue: perUser.reduce((sum, row) => sum + row.tasksOverdue, 0),
+      lmsAssigned: perUser.reduce((sum, row) => sum + row.lmsAssigned, 0),
+      lmsPassed: perUser.reduce((sum, row) => sum + row.lmsPassed, 0),
+      docsAuthored: perUser.reduce((sum, row) => sum + row.docsAuthored, 0),
+      approvalsHandled: perUser.reduce((sum, row) => sum + row.approvalsHandled, 0),
+    },
+    byRole,
+    byUser: perUser.sort((a, b) => {
+      const overdueDiff = b.tasksOverdue - a.tasksOverdue;
+      if (overdueDiff !== 0) return overdueDiff;
+      return b.tasksTotal - a.tasksTotal;
+    }),
+    availableRoles: roleOrder.filter((role) => profiles.some((profile) => profile.role === role && scopedUserIds.has(profile.id))),
+  });
+});
+
+app.get("/api/reports/schedules", requireAuth(), requireRole(["admin", "director"]), async (_req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("report_delivery_schedules")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.post("/api/reports/schedules", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = createReportScheduleSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    name: parsed.data.name,
+    recipient_user_id: parsed.data.recipientUserId,
+    office_id: parsed.data.officeId ?? null,
+    role_filter: parsed.data.roleFilter ?? null,
+    days_window: parsed.data.daysWindow,
+    frequency: parsed.data.frequency,
+    next_run_at: parsed.data.nextRunAt ?? getNextRunAt(parsed.data.frequency),
+    is_active: parsed.data.isActive,
+    created_by: session.profile.id,
+  };
+  const { data, error } = await supabaseAdmin
+    .from("report_delivery_schedules")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "reports.schedule.create",
+    entityType: "report_delivery_schedules",
+    entityId: String(data.id),
+    payload,
+  });
+  return res.status(201).json(data);
+});
+
+app.patch("/api/reports/schedules/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = updateReportScheduleSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const scheduleId = Number(req.params.id);
+  if (Number.isNaN(scheduleId)) {
+    return res.status(400).json({ error: "Invalid schedule id" });
+  }
+  const updatePayload: Record<string, unknown> = {};
+  if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+  if (parsed.data.recipientUserId !== undefined) updatePayload.recipient_user_id = parsed.data.recipientUserId;
+  if (parsed.data.officeId !== undefined) updatePayload.office_id = parsed.data.officeId ?? null;
+  if (parsed.data.roleFilter !== undefined) updatePayload.role_filter = parsed.data.roleFilter ?? null;
+  if (parsed.data.daysWindow !== undefined) updatePayload.days_window = parsed.data.daysWindow;
+  if (parsed.data.frequency !== undefined) updatePayload.frequency = parsed.data.frequency;
+  if (parsed.data.nextRunAt !== undefined) updatePayload.next_run_at = parsed.data.nextRunAt;
+  if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
+  if (Object.keys(updatePayload).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+  const { data, error } = await supabaseAdmin
+    .from("report_delivery_schedules")
+    .update(updatePayload)
+    .eq("id", scheduleId)
+    .select("*")
+    .single();
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "reports.schedule.update",
+    entityType: "report_delivery_schedules",
+    entityId: String(scheduleId),
+    payload: updatePayload,
+  });
+  return res.json(data);
+});
+
+app.post("/api/reports/schedules/:id/run", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const scheduleId = Number(req.params.id);
+  if (Number.isNaN(scheduleId)) {
+    return res.status(400).json({ error: "Invalid schedule id" });
+  }
+  const { data: schedule, error } = await supabaseAdmin
+    .from("report_delivery_schedules")
+    .select("id,name,recipient_user_id,days_window,office_id,role_filter,frequency")
+    .eq("id", scheduleId)
+    .single();
+  if (error || !schedule) {
+    return res.status(404).json({ error: error?.message ?? "Schedule not found" });
+  }
+  try {
+    const session = (req as express.Request & { session: Session }).session;
+    const run = await runReportScheduleExecution(schedule, {
+      userId: session.profile.id,
+      role: session.profile.role,
+    });
+    return res.json(run);
+  } catch (runError) {
+    return res.status(500).json({ error: runError instanceof Error ? runError.message : "Failed to run schedule" });
+  }
+});
+
+app.get("/api/reports/runs", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const scheduleId = req.query.scheduleId ? Number(req.query.scheduleId) : undefined;
+  let query = supabaseAdmin
+    .from("report_delivery_runs")
+    .select("id,schedule_id,recipient_user_id,status,format,generated_at,file_name,rows_count")
+    .order("generated_at", { ascending: false })
+    .limit(100);
+  if (scheduleId && !Number.isNaN(scheduleId)) {
+    query = query.eq("schedule_id", scheduleId);
+  }
+  const { data, error } = await query;
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.get("/api/reports/runs/:id/download", requireAuth(), async (req, res) => {
+  const runId = Number(req.params.id);
+  if (Number.isNaN(runId)) {
+    return res.status(400).json({ error: "Invalid run id" });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  const { data, error } = await supabaseAdmin
+    .from("report_delivery_runs")
+    .select("id,recipient_user_id,file_name,payload_csv")
+    .eq("id", runId)
+    .single();
+  if (error || !data) {
+    return res.status(404).json({ error: error?.message ?? "Report run not found" });
+  }
+  if (data.recipient_user_id !== session.profile.id && !["admin", "director"].includes(session.profile.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename=\"${data.file_name ?? `report-${data.id}.csv`}\"`);
+  return res.status(200).send(data.payload_csv ?? "");
 });
 
 const createNewsSchema = z.object({
@@ -1076,6 +2995,183 @@ const createDocumentSchema = z.object({
   title: z.string().min(2),
   type: z.enum(["incoming", "outgoing", "internal"]).default("internal"),
   officeId: z.number().int().positive(),
+  body: z.string().optional(),
+  templateId: z.number().int().positive().optional(),
+  approvalRouteId: z.number().int().positive().optional(),
+});
+
+const createDocumentTemplateSchema = z.object({
+  name: z.string().min(2),
+  type: z.enum(["incoming", "outgoing", "internal"]).default("internal"),
+  titleTemplate: z.string().min(2),
+  bodyTemplate: z.string().optional(),
+  defaultRouteId: z.number().int().positive().optional(),
+  status: z.enum(["draft", "review", "approved", "rejected"]).default("draft"),
+});
+
+const createDocumentApprovalRouteSchema = z.object({
+  name: z.string().min(2),
+  description: z.string().optional(),
+  steps: z
+    .array(
+      z.object({
+        stepOrder: z.number().int().min(1),
+        requiredRole: z.enum(["operator", "office_head", "director", "admin"]),
+      }),
+    )
+    .min(1),
+});
+
+const createSlaPolicySchema = z.object({
+  name: z.string().min(2),
+  entityType: z.enum(["task", "document"]),
+  triggerStatus: z.string().min(2).max(64),
+  thresholdHours: z.number().int().min(0).max(24 * 365),
+  level: z.enum(["info", "warning", "critical"]).default("warning"),
+  targetRole: z.enum(["operator", "office_head", "director", "admin"]),
+  officeScoped: z.boolean().default(false),
+  messageTemplate: z.string().max(500).optional(),
+  isActive: z.boolean().default(true),
+});
+
+const updateSlaPolicySchema = z.object({
+  name: z.string().min(2).optional(),
+  entityType: z.enum(["task", "document"]).optional(),
+  triggerStatus: z.string().min(2).max(64).optional(),
+  thresholdHours: z.number().int().min(0).max(24 * 365).optional(),
+  level: z.enum(["info", "warning", "critical"]).optional(),
+  targetRole: z.enum(["operator", "office_head", "director", "admin"]).optional(),
+  officeScoped: z.boolean().optional(),
+  messageTemplate: z.string().max(500).optional(),
+  isActive: z.boolean().optional(),
+});
+
+async function getDocumentRouteSteps(routeId: number) {
+  const { data, error } = await supabaseAdmin
+    .from("document_approval_route_steps")
+    .select("id,route_id,step_order,required_role")
+    .eq("route_id", routeId)
+    .order("step_order", { ascending: true });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return data ?? [];
+}
+
+app.get("/api/document-templates", requireAuth(), async (req, res) => {
+  const session = (req as express.Request & { session: Session }).session;
+  const canManage = ["admin", "director"].includes(session.profile.role);
+
+  let query = supabaseAdmin
+    .from("document_templates")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (!canManage) {
+    query = query.eq("status", "approved");
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.post("/api/document-templates", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = createDocumentTemplateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    name: parsed.data.name,
+    type: parsed.data.type,
+    title_template: parsed.data.titleTemplate,
+    body_template: parsed.data.bodyTemplate ?? null,
+    default_route_id: parsed.data.defaultRouteId ?? null,
+    status: parsed.data.status,
+    created_by: session.profile.id,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("document_templates")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.status(201).json(data);
+});
+
+app.get("/api/document-approval-routes", requireAuth(), async (_req, res) => {
+  const { data: routes, error: routesError } = await supabaseAdmin
+    .from("document_approval_routes")
+    .select("*")
+    .order("name");
+  if (routesError) {
+    return res.status(400).json({ error: routesError.message });
+  }
+
+  const routeIds = (routes ?? []).map((route) => Number(route.id));
+  const { data: steps, error: stepsError } = routeIds.length
+    ? await supabaseAdmin
+        .from("document_approval_route_steps")
+        .select("*")
+        .in("route_id", routeIds)
+        .order("step_order", { ascending: true })
+    : { data: [], error: null };
+  if (stepsError) {
+    return res.status(400).json({ error: stepsError.message });
+  }
+
+  return res.json(
+    (routes ?? []).map((route) => ({
+      ...route,
+      steps: (steps ?? []).filter((step) => Number(step.route_id) === Number(route.id)),
+    })),
+  );
+});
+
+app.post("/api/document-approval-routes", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = createDocumentApprovalRouteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const { data: route, error: routeError } = await supabaseAdmin
+    .from("document_approval_routes")
+    .insert({
+      name: parsed.data.name,
+      description: parsed.data.description ?? null,
+      created_by: session.profile.id,
+    })
+    .select("*")
+    .single();
+  if (routeError || !route) {
+    return res.status(400).json({ error: routeError?.message ?? "Failed to create approval route" });
+  }
+
+  const uniqueSortedSteps = [...parsed.data.steps]
+    .sort((a, b) => a.stepOrder - b.stepOrder)
+    .filter((step, idx, arr) => idx === 0 || step.stepOrder !== arr[idx - 1]?.stepOrder);
+  const { error: stepsError } = await supabaseAdmin.from("document_approval_route_steps").insert(
+    uniqueSortedSteps.map((step) => ({
+      route_id: route.id,
+      step_order: step.stepOrder,
+      required_role: step.requiredRole,
+    })),
+  );
+  if (stepsError) {
+    return res.status(400).json({ error: stepsError.message });
+  }
+
+  const steps = await getDocumentRouteSteps(Number(route.id));
+  return res.status(201).json({ ...route, steps });
 });
 
 app.post(
@@ -1090,13 +3186,40 @@ app.post(
 
     const session = (req as express.Request & { session: { profile: Profile } }).session;
 
+    let title = parsed.data.title;
+    let type = parsed.data.type;
+    let body = parsed.data.body ?? null;
+    let templateId: number | null = parsed.data.templateId ?? null;
+    let approvalRouteId: number | null = parsed.data.approvalRouteId ?? null;
+
+    if (templateId) {
+      const { data: template, error: templateError } = await supabaseAdmin
+        .from("document_templates")
+        .select("id,title_template,body_template,type,default_route_id,status")
+        .eq("id", templateId)
+        .single();
+      if (templateError || !template) {
+        return res.status(400).json({ error: templateError?.message ?? "Document template not found" });
+      }
+
+      title = parsed.data.title || template.title_template;
+      type = template.type;
+      body = parsed.data.body ?? template.body_template ?? null;
+      approvalRouteId = parsed.data.approvalRouteId ?? template.default_route_id ?? null;
+    }
+
     const payload = {
-      title: parsed.data.title,
-      type: parsed.data.type,
+      title,
+      type,
       status: "draft",
       author: session.profile.full_name,
       date: new Date().toISOString().slice(0, 10),
       office_id: parsed.data.officeId,
+      body,
+      template_id: templateId,
+      approval_route_id: approvalRouteId,
+      current_approval_step: null,
+      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabaseAdmin
@@ -1128,9 +3251,24 @@ app.post("/api/documents/:id/submit", requireAuth(), requireRole(["director", "a
     return res.status(400).json({ error: "Invalid document id" });
   }
 
+  const { data: existingDocument, error: existingDocumentError } = await supabaseAdmin
+    .from("documents")
+    .select("id,approval_route_id")
+    .eq("id", documentId)
+    .single();
+  if (existingDocumentError || !existingDocument) {
+    return res.status(404).json({ error: existingDocumentError?.message ?? "Document not found" });
+  }
+
+  let nextStep: number | null = null;
+  if (existingDocument.approval_route_id) {
+    const steps = await getDocumentRouteSteps(Number(existingDocument.approval_route_id));
+    nextStep = steps.length > 0 ? Number(steps[0]?.step_order ?? 1) : null;
+  }
+
   const { data, error } = await supabaseAdmin
     .from("documents")
-    .update({ status: "review" })
+    .update({ status: "review", current_approval_step: nextStep, updated_at: new Date().toISOString() })
     .eq("id", documentId)
     .select("*")
     .single();
@@ -1170,9 +3308,45 @@ app.post("/api/documents/:id/approve", requireAuth(), requireRole(["director", "
     return res.status(400).json({ error: "Invalid document id" });
   }
 
+  const session = (req as express.Request & { session: Session }).session;
+  const { data: existingDocument, error: existingDocumentError } = await supabaseAdmin
+    .from("documents")
+    .select("id,status,approval_route_id,current_approval_step")
+    .eq("id", documentId)
+    .single();
+  if (existingDocumentError || !existingDocument) {
+    return res.status(404).json({ error: existingDocumentError?.message ?? "Document not found" });
+  }
+
+  let nextStatus: "review" | "approved" = "approved";
+  let nextStep: number | null = null;
+  if (existingDocument.approval_route_id) {
+    const steps = await getDocumentRouteSteps(Number(existingDocument.approval_route_id));
+    if (steps.length > 0) {
+      const currentStepOrder = Number(existingDocument.current_approval_step ?? steps[0]?.step_order);
+      const currentStep = steps.find((step) => Number(step.step_order) === currentStepOrder);
+      if (!currentStep) {
+        return res.status(400).json({ error: "Current approval step is not configured for this route" });
+      }
+      if (currentStep.required_role !== session.profile.role) {
+        return res.status(403).json({ error: "You are not allowed to approve this step" });
+      }
+
+      const currentIndex = steps.findIndex((step) => Number(step.step_order) === currentStepOrder);
+      const upcoming = currentIndex >= 0 ? steps[currentIndex + 1] : null;
+      if (upcoming) {
+        nextStatus = "review";
+        nextStep = Number(upcoming.step_order);
+      } else {
+        nextStatus = "approved";
+        nextStep = null;
+      }
+    }
+  }
+
   const { data, error } = await supabaseAdmin
     .from("documents")
-    .update({ status: "approved" })
+    .update({ status: nextStatus, current_approval_step: nextStep, updated_at: new Date().toISOString() })
     .eq("id", documentId)
     .select("*")
     .single();
@@ -1180,7 +3354,6 @@ app.post("/api/documents/:id/approve", requireAuth(), requireRole(["director", "
     return res.status(400).json({ error: error?.message ?? "Failed to approve document" });
   }
 
-  const session = (req as express.Request & { session: Session }).session;
   await supabaseAdmin.from("document_approvals").insert({
     document_id: documentId,
     actor_user_id: session.profile.id,
@@ -1214,7 +3387,7 @@ app.post("/api/documents/:id/reject", requireAuth(), requireRole(["director", "a
 
   const { data, error } = await supabaseAdmin
     .from("documents")
-    .update({ status: "rejected" })
+    .update({ status: "rejected", current_approval_step: null, updated_at: new Date().toISOString() })
     .eq("id", documentId)
     .select("*")
     .single();
@@ -1918,38 +4091,1450 @@ app.get("/api/courses/:id/attempts", requireAuth(), async (req, res) => {
   return res.json(data);
 });
 
-app.get("/api/tasks", requireAuth(), async (req, res) => {
-  const status = req.query.status;
-  let query = supabaseAdmin.from("tasks").select("*").order("id", { ascending: false });
+const createLmsCourseSchema = z.object({
+  title: z.string().min(2),
+  description: z.string().optional(),
+  status: z.enum(["draft", "published", "archived"]).default("draft"),
+});
 
-  if (typeof status === "string" && status.length > 0) {
-    query = query.eq("status", status);
+const updateLmsCourseSchema = z.object({
+  title: z.string().min(2).optional(),
+  description: z.string().optional(),
+  status: z.enum(["draft", "published", "archived"]).optional(),
+});
+
+const createLmsSectionSchema = z.object({
+  title: z.string().min(2),
+  sortOrder: z.number().int().positive().optional(),
+});
+
+const updateLmsSectionSchema = z.object({
+  title: z.string().min(2).optional(),
+  sortOrder: z.number().int().positive().optional(),
+});
+
+const createLmsSubsectionSchema = z.object({
+  title: z.string().min(2),
+  sortOrder: z.number().int().positive().optional(),
+  markdownContent: z.string().optional(),
+});
+
+const updateLmsSubsectionSchema = z.object({
+  title: z.string().min(2).optional(),
+  sortOrder: z.number().int().positive().optional(),
+  markdownContent: z.string().optional(),
+});
+
+const addLmsImageSchema = z.object({
+  dataBase64: z.string().min(20),
+  mimeType: z.string().min(3).default("image/png"),
+  caption: z.string().optional(),
+  sortOrder: z.number().int().positive().optional(),
+});
+
+const addLmsVideoSchema = z.object({
+  url: z.url(),
+  caption: z.string().optional(),
+  sortOrder: z.number().int().positive().optional(),
+});
+
+const importLmsMarkdownSchema = z.object({
+  title: z.string().min(2),
+  markdown: z.string().min(2),
+  courseId: z.number().int().positive().optional(),
+  status: z.enum(["draft", "published", "archived"]).default("draft"),
+});
+
+const lmsProgressQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+});
+
+const upsertLmsSubsectionProgressSchema = z.object({
+  userId: z.string().uuid().optional(),
+  completed: z.boolean().optional(),
+  progressPercent: z.number().int().min(0).max(100).optional(),
+});
+
+const assignLmsCourseSchema = z
+  .object({
+    userIds: z.array(z.string().uuid()).optional(),
+    role: z.enum(["operator", "office_head", "director", "admin"]).optional(),
+    officeId: z.number().int().positive().optional(),
+    dueDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+  })
+  .refine(
+    (value) =>
+      (value.userIds?.length ?? 0) > 0 || value.role !== undefined || value.officeId !== undefined,
+    { message: "Provide userIds and/or role/officeId for LMS assignment" },
+  );
+
+type ParsedSubsection = {
+  title: string;
+  markdownContent: string;
+  imageAssets: Array<{ base64: string; mimeType: string; caption?: string }>;
+  videoAssets: Array<{ url: string; caption?: string }>;
+};
+
+type ParsedSection = {
+  title: string;
+  subsections: ParsedSubsection[];
+};
+
+type LmsCourseTree = Awaited<ReturnType<typeof getLmsCourseTree>>;
+
+function parseLmsMarkdown(markdown: string): ParsedSection[] {
+  const lines = markdown.split(/\r?\n/);
+  const sections: ParsedSection[] = [];
+
+  let currentSection: ParsedSection | null = null;
+  let currentSubsection: ParsedSubsection | null = null;
+
+  const ensureSection = () => {
+    if (!currentSection) {
+      currentSection = { title: "Общий раздел", subsections: [] };
+      sections.push(currentSection);
+    }
+    return currentSection;
+  };
+
+  const ensureSubsection = () => {
+    const section = ensureSection();
+    if (!currentSubsection) {
+      currentSubsection = {
+        title: "Материал",
+        markdownContent: "",
+        imageAssets: [],
+        videoAssets: [],
+      };
+      section.subsections.push(currentSubsection);
+    }
+    return currentSubsection;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+
+    if (line.startsWith("## ")) {
+      currentSection = { title: line.replace(/^##\s+/, "").trim() || "Раздел", subsections: [] };
+      sections.push(currentSection);
+      currentSubsection = null;
+      continue;
+    }
+
+    if (line.startsWith("### ")) {
+      const section = ensureSection();
+      currentSubsection = {
+        title: line.replace(/^###\s+/, "").trim() || "Подраздел",
+        markdownContent: "",
+        imageAssets: [],
+        videoAssets: [],
+      };
+      section.subsections.push(currentSubsection);
+      continue;
+    }
+
+    const subsection = ensureSubsection();
+    subsection.markdownContent += `${line}\n`;
+
+    const imageMatches = [...line.matchAll(/!\[(.*?)\]\((.*?)\)/g)];
+    for (const match of imageMatches) {
+      const altText = match[1]?.trim();
+      const url = match[2]?.trim();
+      if (!url) continue;
+      const dataImage = url.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (dataImage) {
+        subsection.imageAssets.push({
+          mimeType: dataImage[1],
+          base64: dataImage[2],
+          caption: altText || undefined,
+        });
+      }
+    }
+
+    const linkMatches = [...line.matchAll(/\[(.*?)\]\((.*?)\)/g)];
+    for (const match of linkMatches) {
+      const text = match[1]?.trim();
+      const url = match[2]?.trim();
+      if (!url) continue;
+      if (/youtube\.com|youtu\.be|vimeo\.com|rutube\.ru|vkvideo|dzen\.ru\/video/i.test(url)) {
+        subsection.videoAssets.push({ url, caption: text || undefined });
+      }
+    }
+  }
+
+  return sections
+    .filter((section) => section.subsections.length > 0)
+    .map((section) => ({
+      ...section,
+      subsections: section.subsections.map((sub) => ({
+        ...sub,
+        markdownContent: sub.markdownContent.trim(),
+      })),
+    }));
+}
+
+async function getLmsCourseTree(courseId: number) {
+  const { data: course, error: courseError } = await supabaseAdmin
+    .from("lms_courses")
+    .select("*")
+    .eq("id", courseId)
+    .single();
+  if (courseError || !course) {
+    throw new Error(courseError?.message ?? "LMS course not found");
+  }
+
+  const { data: sections, error: sectionsError } = await supabaseAdmin
+    .from("lms_sections")
+    .select("*")
+    .eq("course_id", courseId)
+    .order("sort_order", { ascending: true });
+  if (sectionsError) throw new Error(sectionsError.message);
+
+  const sectionIds = (sections ?? []).map((s) => Number(s.id));
+  const { data: subsections, error: subsectionsError } = sectionIds.length
+    ? await supabaseAdmin
+        .from("lms_subsections")
+        .select("*")
+        .in("section_id", sectionIds)
+        .order("sort_order", { ascending: true })
+    : { data: [], error: null };
+  if (subsectionsError) throw new Error(subsectionsError.message);
+
+  const subsectionIds = (subsections ?? []).map((s) => Number(s.id));
+  const { data: media, error: mediaError } = subsectionIds.length
+    ? await supabaseAdmin
+        .from("lms_media")
+        .select("id,subsection_id,media_type,image_data_base64,image_mime_type,external_url,caption,sort_order,created_at")
+        .in("subsection_id", subsectionIds)
+        .order("sort_order", { ascending: true })
+    : { data: [], error: null };
+  if (mediaError) throw new Error(mediaError.message);
+
+  return {
+    ...course,
+    sections: (sections ?? []).map((section) => ({
+      ...section,
+      subsections: (subsections ?? [])
+        .filter((sub) => Number(sub.section_id) === Number(section.id))
+        .map((sub) => ({
+          ...sub,
+          media: (media ?? []).filter((m) => Number(m.subsection_id) === Number(sub.id)),
+        })),
+    })),
+  };
+}
+
+async function getLmsCourseIdBySectionId(sectionId: number) {
+  const { data, error } = await supabaseAdmin
+    .from("lms_sections")
+    .select("course_id")
+    .eq("id", sectionId)
+    .single();
+  if (error || !data) {
+    throw new Error(error?.message ?? "LMS section not found");
+  }
+  return Number(data.course_id);
+}
+
+async function getLmsCourseIdBySubsectionId(subsectionId: number) {
+  const { data: subsection, error: subsectionError } = await supabaseAdmin
+    .from("lms_subsections")
+    .select("section_id")
+    .eq("id", subsectionId)
+    .single();
+  if (subsectionError || !subsection) {
+    throw new Error(subsectionError?.message ?? "LMS subsection not found");
+  }
+
+  return getLmsCourseIdBySectionId(Number(subsection.section_id));
+}
+
+async function saveLmsCourseVersionSnapshot(input: {
+  courseId: number;
+  createdBy: string;
+  reason: string;
+  snapshot?: LmsCourseTree;
+}) {
+  const tree = input.snapshot ?? (await getLmsCourseTree(input.courseId));
+
+  const { data: latest, error: latestError } = await supabaseAdmin
+    .from("lms_course_versions")
+    .select("version")
+    .eq("course_id", input.courseId)
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestError) {
+    throw new Error(latestError.message);
+  }
+
+  const nextVersion = Number(latest?.version ?? 0) + 1;
+  const { error } = await supabaseAdmin.from("lms_course_versions").insert({
+    course_id: input.courseId,
+    version: nextVersion,
+    snapshot: tree,
+    created_by: input.createdBy,
+    reason: input.reason,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return nextVersion;
+}
+
+async function restoreLmsCourseFromSnapshot(courseId: number, snapshot: unknown) {
+  const tree = snapshot as LmsCourseTree;
+  if (!tree || !Array.isArray(tree.sections)) {
+    throw new Error("Invalid LMS snapshot format");
+  }
+
+  const { error: updateCourseError } = await supabaseAdmin
+    .from("lms_courses")
+    .update({
+      title: tree.title,
+      description: tree.description ?? null,
+      status: tree.status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", courseId);
+  if (updateCourseError) {
+    throw new Error(updateCourseError.message);
+  }
+
+  const { data: existingSections, error: existingSectionsError } = await supabaseAdmin
+    .from("lms_sections")
+    .select("id")
+    .eq("course_id", courseId);
+  if (existingSectionsError) {
+    throw new Error(existingSectionsError.message);
+  }
+
+  const existingSectionIds = (existingSections ?? []).map((row) => Number(row.id));
+  if (existingSectionIds.length > 0) {
+    const { error: deleteSectionsError } = await supabaseAdmin
+      .from("lms_sections")
+      .delete()
+      .in("id", existingSectionIds);
+    if (deleteSectionsError) {
+      throw new Error(deleteSectionsError.message);
+    }
+  }
+
+  for (const section of tree.sections) {
+    const { data: createdSection, error: createSectionError } = await supabaseAdmin
+      .from("lms_sections")
+      .insert({
+        course_id: courseId,
+        title: section.title,
+        sort_order: section.sort_order,
+      })
+      .select("id")
+      .single();
+    if (createSectionError || !createdSection) {
+      throw new Error(createSectionError?.message ?? "Failed to restore section");
+    }
+
+    for (const subsection of section.subsections ?? []) {
+      const { data: createdSubsection, error: createSubsectionError } = await supabaseAdmin
+        .from("lms_subsections")
+        .insert({
+          section_id: createdSection.id,
+          title: subsection.title,
+          sort_order: subsection.sort_order,
+          markdown_content: subsection.markdown_content ?? "",
+          updated_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (createSubsectionError || !createdSubsection) {
+        throw new Error(createSubsectionError?.message ?? "Failed to restore subsection");
+      }
+
+      for (const mediaItem of subsection.media ?? []) {
+        const payload =
+          mediaItem.media_type === "image"
+            ? {
+                subsection_id: createdSubsection.id,
+                media_type: "image" as const,
+                image_data_base64: mediaItem.image_data_base64 ?? null,
+                image_mime_type: mediaItem.image_mime_type ?? null,
+                caption: mediaItem.caption ?? null,
+                sort_order: mediaItem.sort_order ?? 1,
+              }
+            : {
+                subsection_id: createdSubsection.id,
+                media_type: "video" as const,
+                external_url: mediaItem.external_url ?? null,
+                caption: mediaItem.caption ?? null,
+                sort_order: mediaItem.sort_order ?? 1,
+              };
+
+        const { error: createMediaError } = await supabaseAdmin.from("lms_media").insert(payload);
+        if (createMediaError) {
+          throw new Error(createMediaError.message);
+        }
+      }
+    }
+  }
+}
+
+async function validateLmsCourseCanBePublished(courseId: number) {
+  const { data: sections, error: sectionsError } = await supabaseAdmin
+    .from("lms_sections")
+    .select("id")
+    .eq("course_id", courseId);
+  if (sectionsError) {
+    throw new Error(sectionsError.message);
+  }
+
+  const sectionIds = (sections ?? []).map((item) => Number(item.id));
+  if (sectionIds.length === 0) {
+    return { ok: false as const, reason: "Курс нельзя опубликовать: отсутствуют разделы." };
+  }
+
+  const { data: subsections, error: subsectionsError } = await supabaseAdmin
+    .from("lms_subsections")
+    .select("id,markdown_content")
+    .in("section_id", sectionIds);
+  if (subsectionsError) {
+    throw new Error(subsectionsError.message);
+  }
+
+  const subsectionRows = subsections ?? [];
+  if (subsectionRows.length === 0) {
+    return { ok: false as const, reason: "Курс нельзя опубликовать: отсутствуют подразделы." };
+  }
+
+  const subsectionIds = subsectionRows.map((item) => Number(item.id));
+  const { data: mediaRows, error: mediaError } = await supabaseAdmin
+    .from("lms_media")
+    .select("id,subsection_id")
+    .in("subsection_id", subsectionIds);
+  if (mediaError) {
+    throw new Error(mediaError.message);
+  }
+
+  const subsectionsWithMedia = new Set((mediaRows ?? []).map((item) => Number(item.subsection_id)));
+  const hasAnyContent = subsectionRows.some((item) => {
+    const markdown = String(item.markdown_content ?? "").trim();
+    return markdown.length > 0 || subsectionsWithMedia.has(Number(item.id));
+  });
+
+  if (!hasAnyContent) {
+    return {
+      ok: false as const,
+      reason:
+        "Курс нельзя опубликовать: в подразделах нет контента (markdown, фото или видео).",
+    };
+  }
+
+  return { ok: true as const };
+}
+
+async function getLmsCourseProgressTree(courseId: number, userId: string) {
+  const tree = await getLmsCourseTree(courseId);
+  const sections = (tree.sections ?? []) as Array<{
+    id: number | string;
+    subsections: Array<{ id: number | string }>;
+  }>;
+  const subsectionIds = sections.flatMap((section) =>
+    section.subsections.map((subsection: { id: number | string }) => Number(subsection.id)),
+  );
+
+  const { data: progressRows, error: progressError } = subsectionIds.length
+    ? await supabaseAdmin
+        .from("lms_subsection_progress")
+        .select("subsection_id,completed,progress_percent,updated_at,completed_at")
+        .eq("user_id", userId)
+        .in("subsection_id", subsectionIds)
+    : { data: [], error: null };
+
+  if (progressError) {
+    throw new Error(progressError.message);
+  }
+
+  const progressMap = new Map(
+    (progressRows ?? []).map((row: {
+      subsection_id: number | string;
+      completed: boolean;
+      progress_percent: number;
+      updated_at: string | null;
+      completed_at: string | null;
+    }) => [
+      Number(row.subsection_id),
+      {
+        completed: Boolean(row.completed),
+        progressPercent: Number(row.progress_percent ?? 0),
+        updatedAt: row.updated_at as string,
+        completedAt: (row.completed_at as string | null) ?? null,
+      },
+    ]),
+  );
+
+  const sectionProgress = sections.map((section: { id: number | string; subsections: Array<{ id: number | string }> }) => {
+    const subsectionProgress = section.subsections.map((subsection: { id: number | string }) => {
+      const progress = progressMap.get(Number(subsection.id)) ?? {
+        completed: false,
+        progressPercent: 0,
+        updatedAt: null,
+        completedAt: null,
+      };
+      return {
+        subsectionId: Number(subsection.id),
+        completed: progress.completed,
+        progressPercent: progress.progressPercent,
+        updatedAt: progress.updatedAt,
+        completedAt: progress.completedAt,
+      };
+    });
+
+    const total = subsectionProgress.length;
+    const completed = subsectionProgress.filter((sub: { completed: boolean }) => sub.completed).length;
+    const progressPercent =
+      total > 0
+        ? Math.round(
+            subsectionProgress.reduce(
+              (sum: number, sub: { progressPercent: number }) => sum + sub.progressPercent,
+              0,
+            ) / total,
+          )
+        : 0;
+
+    return {
+      sectionId: Number(section.id),
+      totalSubsections: total,
+      completedSubsections: completed,
+      completionPercent: total > 0 ? Math.round((completed / total) * 100) : 0,
+      progressPercent,
+      subsections: subsectionProgress,
+    };
+  });
+
+  const totalSubsections = sectionProgress.reduce(
+    (sum: number, section: { totalSubsections: number }) => sum + section.totalSubsections,
+    0,
+  );
+  const completedSubsections = sectionProgress.reduce(
+    (sum: number, section: { completedSubsections: number }) => sum + section.completedSubsections,
+    0,
+  );
+  const averageProgressPercent =
+    totalSubsections > 0
+      ? Math.round(
+          sectionProgress.reduce(
+            (sum: number, section: { progressPercent: number; totalSubsections: number }) =>
+              sum + section.progressPercent * section.totalSubsections,
+            0,
+          ) / totalSubsections,
+        )
+      : 0;
+
+  return {
+    courseId: Number(tree.id),
+    status: tree.status,
+    totalSubsections,
+    completedSubsections,
+    completionPercent: totalSubsections > 0 ? Math.round((completedSubsections / totalSubsections) * 100) : 0,
+    averageProgressPercent,
+    sections: sectionProgress,
+  };
+}
+
+app.get("/api/lms-builder/courses", requireAuth(), async (req, res) => {
+  const session = (req as express.Request & { session: Session }).session;
+  const includeDrafts = req.query.includeDrafts === "1" || req.query.includeDrafts === "true";
+  const canManage = ["admin", "director"].includes(session.profile.role);
+
+  let query = supabaseAdmin.from("lms_courses").select("*").order("updated_at", { ascending: false });
+  if (!canManage || !includeDrafts) {
+    query = query.eq("status", "published");
   }
 
   const { data, error } = await query;
-  if (error) {
-    return res.status(400).json({ error: error.message });
-  }
-
-  return res.json(data);
+  if (error) return res.status(400).json({ error: error.message });
+  return res.json(data ?? []);
 });
 
-app.get("/api/news", requireAuth(), async (_req, res) => {
-  const { data, error } = await supabaseAdmin.from("news").select("*").order("date", { ascending: false });
-  if (error) {
-    return res.status(400).json({ error: error.message });
+app.get("/api/lms-builder/courses/:id", requireAuth(), async (req, res) => {
+  const courseId = Number(req.params.id);
+  if (Number.isNaN(courseId)) return res.status(400).json({ error: "Invalid course id" });
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canManage = ["admin", "director"].includes(session.profile.role);
+
+  try {
+    const tree = await getLmsCourseTree(courseId);
+    if (tree.status !== "published" && !canManage) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    return res.json(tree);
+  } catch (error) {
+    return res.status(404).json({ error: error instanceof Error ? error.message : "LMS course not found" });
   }
-  return res.json(data);
 });
 
-app.get("/api/documents", requireAuth(), async (_req, res) => {
+app.post("/api/lms-builder/courses", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = createLmsCourseSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    title: parsed.data.title,
+    description: parsed.data.description ?? null,
+    status: parsed.data.status,
+    created_by: session.profile.id,
+  };
+
+  const { data, error } = await supabaseAdmin.from("lms_courses").insert(payload).select("*").single();
+  if (error || !data) return res.status(400).json({ error: error?.message ?? "Failed to create LMS course" });
+
+  try {
+    await saveLmsCourseVersionSnapshot({
+      courseId: Number(data.id),
+      createdBy: session.profile.id,
+      reason: "initial_create",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error:
+        snapshotError instanceof Error
+          ? snapshotError.message
+          : "Failed to create initial LMS course version",
+    });
+  }
+
+  return res.status(201).json(data);
+});
+
+app.patch("/api/lms-builder/courses/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = updateLmsCourseSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+
+  const courseId = Number(req.params.id);
+  if (Number.isNaN(courseId)) return res.status(400).json({ error: "Invalid course id" });
+
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (parsed.data.title !== undefined) payload.title = parsed.data.title;
+  if (parsed.data.description !== undefined) payload.description = parsed.data.description;
+  if (parsed.data.status !== undefined) payload.status = parsed.data.status;
+
+  if (parsed.data.status === "published") {
+    try {
+      const validation = await validateLmsCourseCanBePublished(courseId);
+      if (!validation.ok) {
+        return res.status(400).json({ error: validation.reason });
+      }
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to validate LMS course publication",
+      });
+    }
+  }
+
   const { data, error } = await supabaseAdmin
-    .from("documents")
+    .from("lms_courses")
+    .update(payload)
+    .eq("id", courseId)
     .select("*")
-    .order("id", { ascending: false });
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  const session = (req as express.Request & { session: Session }).session;
+  try {
+    await saveLmsCourseVersionSnapshot({
+      courseId,
+      createdBy: session.profile.id,
+      reason: "update_course",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error: snapshotError instanceof Error ? snapshotError.message : "Failed to save LMS course version",
+    });
+  }
+
+  return res.json(data);
+});
+
+app.post("/api/lms-builder/courses/:id/sections", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = createLmsSectionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+
+  const courseId = Number(req.params.id);
+  if (Number.isNaN(courseId)) return res.status(400).json({ error: "Invalid course id" });
+
+  const { count } = await supabaseAdmin
+    .from("lms_sections")
+    .select("*", { head: true, count: "exact" })
+    .eq("course_id", courseId);
+
+  const payload = {
+    course_id: courseId,
+    title: parsed.data.title,
+    sort_order: parsed.data.sortOrder ?? (count ?? 0) + 1,
+  };
+
+  const { data, error } = await supabaseAdmin.from("lms_sections").insert(payload).select("*").single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  const session = (req as express.Request & { session: Session }).session;
+  try {
+    await saveLmsCourseVersionSnapshot({
+      courseId,
+      createdBy: session.profile.id,
+      reason: "create_section",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error: snapshotError instanceof Error ? snapshotError.message : "Failed to save LMS course version",
+    });
+  }
+
+  return res.status(201).json(data);
+});
+
+app.patch("/api/lms-builder/sections/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = updateLmsSectionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+  const sectionId = Number(req.params.id);
+  if (Number.isNaN(sectionId)) return res.status(400).json({ error: "Invalid section id" });
+
+  const payload: Record<string, unknown> = {};
+  if (parsed.data.title !== undefined) payload.title = parsed.data.title;
+  if (parsed.data.sortOrder !== undefined) payload.sort_order = parsed.data.sortOrder;
+
+  const { data, error } = await supabaseAdmin
+    .from("lms_sections")
+    .update(payload)
+    .eq("id", sectionId)
+    .select("*")
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  const session = (req as express.Request & { session: Session }).session;
+  try {
+    const courseId = await getLmsCourseIdBySectionId(sectionId);
+    await saveLmsCourseVersionSnapshot({
+      courseId,
+      createdBy: session.profile.id,
+      reason: "update_section",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error: snapshotError instanceof Error ? snapshotError.message : "Failed to save LMS course version",
+    });
+  }
+
+  return res.json(data);
+});
+
+app.post("/api/lms-builder/sections/:id/subsections", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = createLmsSubsectionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+  const sectionId = Number(req.params.id);
+  if (Number.isNaN(sectionId)) return res.status(400).json({ error: "Invalid section id" });
+
+  const { count } = await supabaseAdmin
+    .from("lms_subsections")
+    .select("*", { head: true, count: "exact" })
+    .eq("section_id", sectionId);
+
+  const payload = {
+    section_id: sectionId,
+    title: parsed.data.title,
+    sort_order: parsed.data.sortOrder ?? (count ?? 0) + 1,
+    markdown_content: parsed.data.markdownContent ?? "",
+  };
+
+  const { data, error } = await supabaseAdmin.from("lms_subsections").insert(payload).select("*").single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  const session = (req as express.Request & { session: Session }).session;
+  try {
+    const courseId = await getLmsCourseIdBySectionId(sectionId);
+    await saveLmsCourseVersionSnapshot({
+      courseId,
+      createdBy: session.profile.id,
+      reason: "create_subsection",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error: snapshotError instanceof Error ? snapshotError.message : "Failed to save LMS course version",
+    });
+  }
+
+  return res.status(201).json(data);
+});
+
+app.patch("/api/lms-builder/subsections/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = updateLmsSubsectionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+  const subsectionId = Number(req.params.id);
+  if (Number.isNaN(subsectionId)) return res.status(400).json({ error: "Invalid subsection id" });
+
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (parsed.data.title !== undefined) payload.title = parsed.data.title;
+  if (parsed.data.sortOrder !== undefined) payload.sort_order = parsed.data.sortOrder;
+  if (parsed.data.markdownContent !== undefined) payload.markdown_content = parsed.data.markdownContent;
+
+  const { data, error } = await supabaseAdmin
+    .from("lms_subsections")
+    .update(payload)
+    .eq("id", subsectionId)
+    .select("*")
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  const session = (req as express.Request & { session: Session }).session;
+  try {
+    const courseId = await getLmsCourseIdBySubsectionId(subsectionId);
+    await saveLmsCourseVersionSnapshot({
+      courseId,
+      createdBy: session.profile.id,
+      reason: "update_subsection",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error: snapshotError instanceof Error ? snapshotError.message : "Failed to save LMS course version",
+    });
+  }
+
+  return res.json(data);
+});
+
+app.post("/api/lms-builder/subsections/:id/media/image", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = addLmsImageSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+  const subsectionId = Number(req.params.id);
+  if (Number.isNaN(subsectionId)) return res.status(400).json({ error: "Invalid subsection id" });
+
+  const base64 = parsed.data.dataBase64.replace(/^data:[^;]+;base64,/, "");
+  const { count } = await supabaseAdmin
+    .from("lms_media")
+    .select("*", { head: true, count: "exact" })
+    .eq("subsection_id", subsectionId);
+
+  const payload = {
+    subsection_id: subsectionId,
+    media_type: "image",
+    image_data_base64: base64,
+    image_mime_type: parsed.data.mimeType,
+    caption: parsed.data.caption ?? null,
+    sort_order: parsed.data.sortOrder ?? (count ?? 0) + 1,
+  };
+
+  const { data, error } = await supabaseAdmin.from("lms_media").insert(payload).select("*").single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  const session = (req as express.Request & { session: Session }).session;
+  try {
+    const courseId = await getLmsCourseIdBySubsectionId(subsectionId);
+    await saveLmsCourseVersionSnapshot({
+      courseId,
+      createdBy: session.profile.id,
+      reason: "add_media_image",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error: snapshotError instanceof Error ? snapshotError.message : "Failed to save LMS course version",
+    });
+  }
+
+  return res.status(201).json(data);
+});
+
+app.post("/api/lms-builder/subsections/:id/media/video", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = addLmsVideoSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+  const subsectionId = Number(req.params.id);
+  if (Number.isNaN(subsectionId)) return res.status(400).json({ error: "Invalid subsection id" });
+
+  const { count } = await supabaseAdmin
+    .from("lms_media")
+    .select("*", { head: true, count: "exact" })
+    .eq("subsection_id", subsectionId);
+
+  const payload = {
+    subsection_id: subsectionId,
+    media_type: "video",
+    external_url: parsed.data.url,
+    caption: parsed.data.caption ?? null,
+    sort_order: parsed.data.sortOrder ?? (count ?? 0) + 1,
+  };
+
+  const { data, error } = await supabaseAdmin.from("lms_media").insert(payload).select("*").single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  const session = (req as express.Request & { session: Session }).session;
+  try {
+    const courseId = await getLmsCourseIdBySubsectionId(subsectionId);
+    await saveLmsCourseVersionSnapshot({
+      courseId,
+      createdBy: session.profile.id,
+      reason: "add_media_video",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error: snapshotError instanceof Error ? snapshotError.message : "Failed to save LMS course version",
+    });
+  }
+
+  return res.status(201).json(data);
+});
+
+app.post("/api/lms-builder/import-markdown", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = importLmsMarkdownSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.format());
+
+  const session = (req as express.Request & { session: Session }).session;
+  const sections = parseLmsMarkdown(parsed.data.markdown);
+  if (sections.length === 0) {
+    return res.status(400).json({ error: "Markdown does not contain sections/subsections" });
+  }
+
+  let courseId = parsed.data.courseId;
+  if (!courseId) {
+    const { data: createdCourse, error: createCourseError } = await supabaseAdmin
+      .from("lms_courses")
+      .insert({
+        title: parsed.data.title,
+        description: null,
+        status: parsed.data.status,
+        created_by: session.profile.id,
+      })
+      .select("*")
+      .single();
+    if (createCourseError || !createdCourse) {
+      return res.status(400).json({ error: createCourseError?.message ?? "Failed to create course" });
+    }
+    courseId = Number(createdCourse.id);
+  }
+
+  for (let s = 0; s < sections.length; s += 1) {
+    const section = sections[s];
+    const { data: createdSection, error: sectionError } = await supabaseAdmin
+      .from("lms_sections")
+      .insert({
+        course_id: courseId,
+        title: section.title,
+        sort_order: s + 1,
+      })
+      .select("*")
+      .single();
+    if (sectionError || !createdSection) {
+      return res.status(400).json({ error: sectionError?.message ?? "Failed to create section" });
+    }
+
+    for (let ss = 0; ss < section.subsections.length; ss += 1) {
+      const subsection = section.subsections[ss];
+      const { data: createdSubsection, error: subsectionError } = await supabaseAdmin
+        .from("lms_subsections")
+        .insert({
+          section_id: createdSection.id,
+          title: subsection.title,
+          sort_order: ss + 1,
+          markdown_content: subsection.markdownContent,
+        })
+        .select("*")
+        .single();
+      if (subsectionError || !createdSubsection) {
+        return res.status(400).json({ error: subsectionError?.message ?? "Failed to create subsection" });
+      }
+
+      let mediaSort = 1;
+      for (const image of subsection.imageAssets) {
+        await supabaseAdmin.from("lms_media").insert({
+          subsection_id: createdSubsection.id,
+          media_type: "image",
+          image_data_base64: image.base64,
+          image_mime_type: image.mimeType,
+          caption: image.caption ?? null,
+          sort_order: mediaSort,
+        });
+        mediaSort += 1;
+      }
+      for (const video of subsection.videoAssets) {
+        await supabaseAdmin.from("lms_media").insert({
+          subsection_id: createdSubsection.id,
+          media_type: "video",
+          external_url: video.url,
+          caption: video.caption ?? null,
+          sort_order: mediaSort,
+        });
+        mediaSort += 1;
+      }
+    }
+  }
+
+  try {
+    await saveLmsCourseVersionSnapshot({
+      courseId,
+      createdBy: session.profile.id,
+      reason: "import_markdown",
+    });
+  } catch (snapshotError) {
+    return res.status(400).json({
+      error: snapshotError instanceof Error ? snapshotError.message : "Failed to save LMS course version",
+    });
+  }
+
+  const tree = await getLmsCourseTree(courseId);
+  return res.status(201).json(tree);
+});
+
+app.get(
+  "/api/lms-builder/courses/:id/versions",
+  requireAuth(),
+  requireRole(["admin", "director"]),
+  async (req, res) => {
+    const courseId = Number(req.params.id);
+    if (Number.isNaN(courseId)) {
+      return res.status(400).json({ error: "Invalid course id" });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("lms_course_versions")
+      .select("id,course_id,version,reason,created_by,created_at")
+      .eq("course_id", courseId)
+      .order("version", { ascending: false });
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    return res.json(data ?? []);
+  },
+);
+
+app.post(
+  "/api/lms-builder/courses/:id/rollback/:version",
+  requireAuth(),
+  requireRole(["admin", "director"]),
+  async (req, res) => {
+    const courseId = Number(req.params.id);
+    const version = Number(req.params.version);
+    if (Number.isNaN(courseId) || Number.isNaN(version)) {
+      return res.status(400).json({ error: "Invalid course id or version" });
+    }
+
+    const { data: versionRow, error: versionError } = await supabaseAdmin
+      .from("lms_course_versions")
+      .select("id,version,snapshot")
+      .eq("course_id", courseId)
+      .eq("version", version)
+      .single();
+    if (versionError || !versionRow) {
+      return res.status(404).json({ error: versionError?.message ?? "Version not found" });
+    }
+
+    const session = (req as express.Request & { session: Session }).session;
+    try {
+      await restoreLmsCourseFromSnapshot(courseId, versionRow.snapshot);
+      await saveLmsCourseVersionSnapshot({
+        courseId,
+        createdBy: session.profile.id,
+        reason: `rollback_to_v${version}`,
+      });
+    } catch (rollbackError) {
+      return res.status(400).json({
+        error: rollbackError instanceof Error ? rollbackError.message : "Failed to rollback LMS course",
+      });
+    }
+
+    const tree = await getLmsCourseTree(courseId);
+    return res.json(tree);
+  },
+);
+
+app.get(
+  "/api/lms-builder/courses/:id/assignments",
+  requireAuth(),
+  requireRole(["admin", "director"]),
+  async (req, res) => {
+    const courseId = Number(req.params.id);
+    if (Number.isNaN(courseId)) {
+      return res.status(400).json({ error: "Invalid course id" });
+    }
+
+    const { data: assignments, error: assignmentsError } = await supabaseAdmin
+      .from("lms_course_assignments")
+      .select("*")
+      .eq("course_id", courseId)
+      .order("created_at", { ascending: false });
+    if (assignmentsError) {
+      return res.status(400).json({ error: assignmentsError.message });
+    }
+
+    const userIds = [...new Set((assignments ?? []).map((item) => String(item.user_id)))];
+    const { data: profiles, error: profilesError } = userIds.length
+      ? await supabaseAdmin
+          .from("profiles")
+          .select("id,full_name,role,office_id,email")
+          .in("id", userIds)
+      : { data: [], error: null };
+    if (profilesError) {
+      return res.status(400).json({ error: profilesError.message });
+    }
+
+    const profileMap = new Map((profiles ?? []).map((profile) => [String(profile.id), profile]));
+    return res.json(
+      (assignments ?? []).map((assignment) => ({
+        ...assignment,
+        profile: profileMap.get(String(assignment.user_id)) ?? null,
+      })),
+    );
+  },
+);
+
+app.post(
+  "/api/lms-builder/courses/:id/assignments",
+  requireAuth(),
+  requireRole(["admin", "director"]),
+  async (req, res) => {
+    const parsed = assignLmsCourseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error.format());
+    }
+
+    const courseId = Number(req.params.id);
+    if (Number.isNaN(courseId)) {
+      return res.status(400).json({ error: "Invalid course id" });
+    }
+
+    const { data: course, error: courseError } = await supabaseAdmin
+      .from("lms_courses")
+      .select("id,title,status")
+      .eq("id", courseId)
+      .single();
+    if (courseError || !course) {
+      return res.status(404).json({ error: courseError?.message ?? "LMS course not found" });
+    }
+
+    const targetUserIds = new Set<string>(parsed.data.userIds ?? []);
+    if (parsed.data.role || parsed.data.officeId) {
+      let profilesQuery = supabaseAdmin.from("profiles").select("id");
+      if (parsed.data.role) {
+        profilesQuery = profilesQuery.eq("role", parsed.data.role);
+      }
+      if (parsed.data.officeId) {
+        profilesQuery = profilesQuery.eq("office_id", parsed.data.officeId);
+      }
+      const { data: filteredProfiles, error: filteredProfilesError } = await profilesQuery;
+      if (filteredProfilesError) {
+        return res.status(400).json({ error: filteredProfilesError.message });
+      }
+      for (const profile of filteredProfiles ?? []) {
+        targetUserIds.add(String(profile.id));
+      }
+    }
+
+    const users = [...targetUserIds];
+    if (users.length === 0) {
+      return res.status(400).json({ error: "No users matched assignment filters" });
+    }
+
+    const session = (req as express.Request & { session: Session }).session;
+    const rows = users.map((userId) => ({
+      course_id: courseId,
+      user_id: userId,
+      assigned_by: session.profile.id,
+      due_date: parsed.data.dueDate ?? null,
+      source_role: parsed.data.role ?? null,
+      source_office_id: parsed.data.officeId ?? null,
+    }));
+
+    const { error } = await supabaseAdmin.from("lms_course_assignments").upsert(rows, {
+      onConflict: "course_id,user_id",
+    });
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    await Promise.all(
+      users.map((userId) =>
+        createNotification({
+          recipientUserId: userId,
+          level: "info",
+          title: "Назначен LMS-курс",
+          body: parsed.data.dueDate
+            ? `Вам назначен курс "${course.title}" (срок: ${parsed.data.dueDate}).`
+            : `Вам назначен курс "${course.title}".`,
+          entityType: "lms_course_assignments",
+          entityId: String(courseId),
+          dedupeKey: `lms-builder-assignment:${courseId}:${userId}:${parsed.data.dueDate ?? "no-due"}`,
+        }),
+      ),
+    );
+
+    await writeAuditLog({
+      actorUserId: session.profile.id,
+      actorRole: session.profile.role,
+      action: "lms_builder.assignments.upsert",
+      entityType: "lms_course_assignments",
+      entityId: String(courseId),
+      payload: {
+        courseId,
+        userCount: users.length,
+        role: parsed.data.role ?? null,
+        officeId: parsed.data.officeId ?? null,
+        dueDate: parsed.data.dueDate ?? null,
+      },
+    });
+
+    const { count } = await supabaseAdmin
+      .from("lms_course_assignments")
+      .select("*", { count: "exact", head: true })
+      .eq("course_id", courseId);
+
+    return res.status(201).json({
+      courseId,
+      assignedUsers: users.length,
+      totalAssignments: count ?? users.length,
+    });
+  },
+);
+
+app.get("/api/lms-progress/courses/:id", requireAuth(), async (req, res) => {
+  const parsed = lmsProgressQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const courseId = Number(req.params.id);
+  if (Number.isNaN(courseId)) {
+    return res.status(400).json({ error: "Invalid course id" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canReadOtherUser = ["admin", "director", "office_head"].includes(session.profile.role);
+  const targetUserId = parsed.data.userId && canReadOtherUser ? parsed.data.userId : session.profile.id;
+
+  try {
+    const tree = await getLmsCourseTree(courseId);
+    if (tree.status !== "published" && !["admin", "director"].includes(session.profile.role)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const progress = await getLmsCourseProgressTree(courseId, targetUserId);
+    return res.json(progress);
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to get LMS progress",
+    });
+  }
+});
+
+app.post("/api/lms-progress/subsections/:id", requireAuth(), async (req, res) => {
+  const parsed = upsertLmsSubsectionProgressSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const subsectionId = Number(req.params.id);
+  if (Number.isNaN(subsectionId)) {
+    return res.status(400).json({ error: "Invalid subsection id" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canActForOthers = ["admin", "director", "office_head"].includes(session.profile.role);
+  const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
+
+  let courseId: number;
+  try {
+    courseId = await getLmsCourseIdBySubsectionId(subsectionId);
+    const tree = await getLmsCourseTree(courseId);
+    if (tree.status !== "published" && !["admin", "director"].includes(session.profile.role)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to resolve LMS subsection",
+    });
+  }
+
+  const completed = parsed.data.completed ?? false;
+  const progressPercent =
+    parsed.data.progressPercent !== undefined
+      ? parsed.data.progressPercent
+      : completed
+        ? 100
+        : 0;
+
+  const payload = {
+    user_id: targetUserId,
+    subsection_id: subsectionId,
+    completed,
+    progress_percent: progressPercent,
+    completed_at: completed ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("lms_subsection_progress")
+    .upsert(payload, { onConflict: "user_id,subsection_id" })
+    .select("*")
+    .single();
   if (error) {
     return res.status(400).json({ error: error.message });
   }
+
+  const progress = await getLmsCourseProgressTree(courseId, targetUserId);
+  return res.json({ item: data, courseProgress: progress });
+});
+
+const listPaginationQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  paginated: z.union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")]).optional(),
+});
+
+function isPaginatedQuery(flag?: "1" | "true" | "0" | "false") {
+  return flag === "1" || flag === "true";
+}
+
+function isDryRunQueryFlag(value: unknown) {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const normalized = value.toLowerCase();
+  return normalized === "1" || normalized === "true";
+}
+
+const tasksListQuerySchema = listPaginationQuerySchema.extend({
+  status: z.enum(["new", "in_progress", "done", "overdue"]).optional(),
+});
+
+app.get("/api/tasks", requireAuth(), async (req, res) => {
+  const parsed = tasksListQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const { status, limit, offset } = parsed.data;
+  const paginated = isPaginatedQuery(parsed.data.paginated);
+  const rangeEnd = offset + limit - 1;
+
+  // Smoke-only path: validates paginated response contract without external DB calls.
+  if (paginated && isSmokeBypassAuthorizedRequest(req)) {
+    return res.json({
+      items: [],
+      total: 0,
+      limit,
+      offset,
+      hasMore: false,
+    });
+  }
+
+  let query = supabaseAdmin
+    .from("tasks")
+    .select("*", paginated ? { count: "exact" } : undefined)
+    .order("id", { ascending: false });
+
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  if (paginated) {
+    query = query.range(offset, rangeEnd);
+  } else {
+    query = query.limit(1000);
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  if (paginated) {
+    return res.json({
+      items: data ?? [],
+      total: count ?? 0,
+      limit,
+      offset,
+      hasMore: offset + (data?.length ?? 0) < (count ?? 0),
+    });
+  }
+
+  return res.json(data);
+});
+
+app.get("/api/news", requireAuth(), async (req, res) => {
+  const parsed = listPaginationQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const { limit, offset } = parsed.data;
+  const paginated = isPaginatedQuery(parsed.data.paginated);
+  const rangeEnd = offset + limit - 1;
+
+  let query = supabaseAdmin
+    .from("news")
+    .select("*", paginated ? { count: "exact" } : undefined)
+    .order("date", { ascending: false });
+
+  if (paginated) {
+    query = query.range(offset, rangeEnd);
+  } else {
+    query = query.limit(1000);
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  if (paginated) {
+    return res.json({
+      items: data ?? [],
+      total: count ?? 0,
+      limit,
+      offset,
+      hasMore: offset + (data?.length ?? 0) < (count ?? 0),
+    });
+  }
+
+  return res.json(data);
+});
+
+app.get("/api/documents", requireAuth(), async (req, res) => {
+  const parsed = listPaginationQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const { limit, offset } = parsed.data;
+  const paginated = isPaginatedQuery(parsed.data.paginated);
+  const rangeEnd = offset + limit - 1;
+
+  let query = supabaseAdmin
+    .from("documents")
+    .select("*", paginated ? { count: "exact" } : undefined)
+    .order("id", { ascending: false });
+
+  if (paginated) {
+    query = query.range(offset, rangeEnd);
+  } else {
+    query = query.limit(1000);
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  if (paginated) {
+    return res.json({
+      items: data ?? [],
+      total: count ?? 0,
+      limit,
+      offset,
+      hasMore: offset + (data?.length ?? 0) < (count ?? 0),
+    });
+  }
+
   return res.json(data);
 });
 
@@ -2009,6 +5594,14 @@ app.post("/api/notifications/:id/read", requireAuth(), async (req, res) => {
 
 app.post("/api/notifications/read-all", requireAuth(), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
+  if (
+    env.SMOKE_AUTH_BYPASS_ENABLED
+    && session.user.id === smokeBypassUserId
+    && isDryRunQueryFlag(req.query.dryRun)
+  ) {
+    return res.status(200).json({ ok: true, dryRun: true, updated: 0 });
+  }
+
   const { error } = await supabaseAdmin
     .from("notifications")
     .update({ is_read: true, read_at: new Date().toISOString() })
@@ -2022,8 +5615,175 @@ app.post("/api/notifications/read-all", requireAuth(), async (req, res) => {
   return res.status(204).send();
 });
 
+const adminSloStatusQuerySchema = z.object({
+  windowMinutes: z.coerce.number().int().min(5).max(1440).optional(),
+});
+
+app.get("/api/admin/ops/slo-status", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = adminSloStatusQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  if (env.SMOKE_AUTH_BYPASS_ENABLED && session.user.id === smokeBypassUserId) {
+    const windowMinutes = parsed.data.windowMinutes ?? env.SLO_WINDOW_MINUTES;
+    return res.json({
+      ok: true,
+      windowMinutes,
+      generatedAt: new Date().toISOString(),
+      metrics: {
+        api: {
+          totalRequests: 0,
+          errorRequests: 0,
+          errorRatePercent: 0,
+          p95LatencyMs: 0,
+        },
+        notifications: {
+          totalDeliveries: 0,
+          failedDeliveries: 0,
+          failureRatePercent: 0,
+        },
+      },
+      thresholds: {
+        apiErrorRatePercent: env.SLO_API_ERROR_RATE_THRESHOLD_PERCENT,
+        apiLatencyP95Ms: env.SLO_API_LATENCY_P95_THRESHOLD_MS,
+        notificationFailureRatePercent: env.SLO_NOTIFICATION_FAILURE_RATE_THRESHOLD_PERCENT,
+      },
+      breaches: [],
+    });
+  }
+
+  try {
+    const status = await evaluateSloStatus(parsed.data.windowMinutes ?? env.SLO_WINDOW_MINUTES);
+    return res.json(status);
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : "Failed to calculate SLO status" });
+  }
+});
+
+app.post("/api/ops/slo-check", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = adminSloStatusQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  try {
+    const result = await runSloAlertCheck({
+      actorUserId: session.profile.id,
+      actorRole: session.profile.role,
+      windowMinutes: parsed.data.windowMinutes,
+    });
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to run SLO alert check",
+    });
+  }
+});
+
+app.get("/api/ops/sla-matrix", requireAuth(), requireRole(["admin", "director"]), async (_req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("sla_escalation_matrix")
+    .select("*")
+    .order("entity_type", { ascending: true })
+    .order("trigger_status", { ascending: true })
+    .order("threshold_hours", { ascending: true });
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.post("/api/ops/sla-matrix", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = createSlaPolicySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    name: parsed.data.name,
+    entity_type: parsed.data.entityType,
+    trigger_status: parsed.data.triggerStatus,
+    threshold_hours: parsed.data.thresholdHours,
+    level: parsed.data.level,
+    target_role: parsed.data.targetRole,
+    office_scoped: parsed.data.officeScoped,
+    message_template: parsed.data.messageTemplate ?? null,
+    is_active: parsed.data.isActive,
+    created_by: session.profile.id,
+  };
+  const { data, error } = await supabaseAdmin.from("sla_escalation_matrix").insert(payload).select("*").single();
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "ops.sla.create_policy",
+    entityType: "sla_escalation_matrix",
+    entityId: String(data.id),
+    payload,
+  });
+  return res.status(201).json(data);
+});
+
+app.patch("/api/ops/sla-matrix/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = updateSlaPolicySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const policyId = Number(req.params.id);
+  if (Number.isNaN(policyId)) {
+    return res.status(400).json({ error: "Invalid policy id" });
+  }
+  const updatePayload: Record<string, unknown> = {};
+  if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+  if (parsed.data.entityType !== undefined) updatePayload.entity_type = parsed.data.entityType;
+  if (parsed.data.triggerStatus !== undefined) updatePayload.trigger_status = parsed.data.triggerStatus;
+  if (parsed.data.thresholdHours !== undefined) updatePayload.threshold_hours = parsed.data.thresholdHours;
+  if (parsed.data.level !== undefined) updatePayload.level = parsed.data.level;
+  if (parsed.data.targetRole !== undefined) updatePayload.target_role = parsed.data.targetRole;
+  if (parsed.data.officeScoped !== undefined) updatePayload.office_scoped = parsed.data.officeScoped;
+  if (parsed.data.messageTemplate !== undefined) updatePayload.message_template = parsed.data.messageTemplate ?? null;
+  if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
+
+  if (Object.keys(updatePayload).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("sla_escalation_matrix")
+    .update(updatePayload)
+    .eq("id", policyId)
+    .select("*")
+    .single();
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "ops.sla.update_policy",
+    entityType: "sla_escalation_matrix",
+    entityId: String(policyId),
+    payload: updatePayload,
+  });
+  return res.json(data);
+});
+
 app.post("/api/ops/reminders/run", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
+  if (
+    env.SMOKE_AUTH_BYPASS_ENABLED
+    && session.user.id === smokeBypassUserId
+    && isDryRunQueryFlag(req.query.dryRun)
+  ) {
+    return res.json({ ok: true, dryRun: true, taskReminders: 0, lmsReminders: 0 });
+  }
   try {
     const result = await runDueReminders();
     await writeAuditLog({
@@ -2045,6 +5805,21 @@ app.post("/api/ops/reminders/run", requireAuth(), requireRole(["admin", "directo
 
 app.post("/api/ops/escalations/run", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
+  if (
+    env.SMOKE_AUTH_BYPASS_ENABLED
+    && session.user.id === smokeBypassUserId
+    && isDryRunQueryFlag(req.query.dryRun)
+  ) {
+    return res.json({
+      ok: true,
+      dryRun: true,
+      updatedCount: 0,
+      updatedIds: [],
+      taskEscalationNotifications: 0,
+      documentEscalationNotifications: 0,
+      appliedPolicyCount: 0,
+    });
+  }
   try {
     const result = await runTaskOverdueEscalation({
       actorUserId: session.profile.id,
@@ -2057,7 +5832,13 @@ app.post("/api/ops/escalations/run", requireAuth(), requireRole(["admin", "direc
       action: "ops.escalations.run",
       entityType: "tasks",
       entityId: "batch",
-      payload: { updatedCount: result.updatedCount, updatedIds: result.updatedIds },
+      payload: {
+        updatedCount: result.updatedCount,
+        updatedIds: result.updatedIds,
+        taskEscalationNotifications: result.taskEscalationNotifications,
+        documentEscalationNotifications: result.documentEscalationNotifications,
+        appliedPolicyCount: result.appliedPolicyCount,
+      },
     });
 
     return res.json({ ok: true, ...result });
@@ -2066,6 +5847,47 @@ app.post("/api/ops/escalations/run", requireAuth(), requireRole(["admin", "direc
       error: error instanceof Error ? error.message : "Failed to run escalation job",
     });
   }
+});
+
+app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const requestId = (req as express.Request & { requestId?: string }).requestId ?? "unknown";
+  const message = error instanceof Error ? error.message : "Unexpected server error";
+
+  console.error(
+    JSON.stringify({
+      type: "error",
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+    }),
+  );
+
+  if (res.headersSent) {
+    return;
+  }
+  res.status(500).json({ error: "Internal Server Error", requestId });
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error(
+    JSON.stringify({
+      type: "unhandledRejection",
+      reason: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    }),
+  );
+});
+
+process.on("uncaughtException", (error) => {
+  console.error(
+    JSON.stringify({
+      type: "uncaughtException",
+      message: error.message,
+      stack: error.stack,
+    }),
+  );
 });
 
 app.listen(env.PORT, "0.0.0.0", () => {
@@ -2119,6 +5941,60 @@ app.listen(env.PORT, "0.0.0.0", () => {
     }, intervalMs);
     console.log(
       `[auto-reminders] enabled, interval ${env.AUTO_REMINDERS_INTERVAL_MINUTES} min`,
+    );
+  }
+  if (env.AUTO_REPORT_DELIVERY_ENABLED) {
+    const run = async () => {
+      try {
+        const result = await runScheduledReportDeliveries({
+          actorUserId: env.AUTO_REPORT_DELIVERY_SYSTEM_ACTOR_USER_ID,
+          actorRole: env.AUTO_REPORT_DELIVERY_SYSTEM_ACTOR_USER_ID ? "admin" : undefined,
+        });
+        if (result.delivered > 0) {
+          console.log(`[auto-report-delivery] delivered schedules: ${result.delivered}`);
+        }
+      } catch (error) {
+        console.error(
+          `[auto-report-delivery] failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    };
+
+    void run();
+    const intervalMs = env.AUTO_REPORT_DELIVERY_INTERVAL_MINUTES * 60 * 1000;
+    setInterval(() => {
+      void run();
+    }, intervalMs);
+    console.log(
+      `[auto-report-delivery] enabled, interval ${env.AUTO_REPORT_DELIVERY_INTERVAL_MINUTES} min`,
+    );
+  }
+  if (env.AUTO_SLO_ALERTS_ENABLED) {
+    const run = async () => {
+      try {
+        const result = await runSloAlertCheck({
+          actorUserId: env.AUTO_SLO_ALERTS_SYSTEM_ACTOR_USER_ID,
+          actorRole: env.AUTO_SLO_ALERTS_SYSTEM_ACTOR_USER_ID ? "admin" : undefined,
+        });
+        if (result.alerted) {
+          console.log(
+            `[auto-slo-alerts] breaches=${result.status.breaches.join(",")} recipients=${result.recipients} webhookSent=${result.webhookSent}`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          `[auto-slo-alerts] failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    };
+
+    void run();
+    const intervalMs = env.AUTO_SLO_ALERTS_INTERVAL_MINUTES * 60 * 1000;
+    setInterval(() => {
+      void run();
+    }, intervalMs);
+    console.log(
+      `[auto-slo-alerts] enabled, interval ${env.AUTO_SLO_ALERTS_INTERVAL_MINUTES} min`,
     );
   }
 });

@@ -117,6 +117,9 @@ export interface CreateDocumentInput {
   title: string;
   type: "incoming" | "outgoing" | "internal";
   officeId: number;
+  body?: string;
+  templateId?: number;
+  approvalRouteId?: number;
 }
 
 export interface DocumentDecisionInput {
@@ -219,6 +222,180 @@ export interface AdminAuditList {
   hasMore: boolean;
 }
 
+export interface UnifiedSearchResult {
+  query: string;
+  documents: Array<{
+    id: number;
+    title: string;
+    excerpt: string;
+    status: "draft" | "review" | "approved" | "rejected";
+    author: string;
+    date: string;
+    officeId: number;
+    updatedAt: string;
+    href: string;
+  }>;
+  kb: Array<{
+    id: number;
+    title: string;
+    excerpt: string;
+    status: "draft" | "review" | "published" | "archived";
+    category: string;
+    date: string;
+    updatedAt: string;
+    href: string;
+  }>;
+  lms: Array<{
+    id: string;
+    title: string;
+    excerpt: string;
+    status: "draft" | "published" | "archived";
+    kind: "course" | "subsection";
+    sectionTitle?: string;
+    courseTitle?: string;
+    updatedAt: string;
+    href: string;
+  }>;
+}
+
+export interface KpiReport {
+  fromDate: string;
+  toDate: string;
+  totals: {
+    tasksTotal: number;
+    tasksDone: number;
+    tasksOverdue: number;
+    taskCompletionRate: number;
+    docsReview: number;
+    docsFinalized: number;
+    approvalsThroughputPerDay: number;
+    approvalsAvgHours: number;
+    lmsAssigned: number;
+    lmsPassed: number;
+    lmsCompletionRate: number;
+  };
+  byOffice: Array<{
+    officeId: number;
+    office: string;
+    tasksTotal: number;
+    tasksDone: number;
+    tasksOverdue: number;
+    taskCompletionRate: number;
+    docsReview: number;
+    docsFinalized: number;
+    lmsAssigned: number;
+    lmsPassed: number;
+    lmsCompletionRate: number;
+  }>;
+}
+
+export interface ReportsDrilldown {
+  fromDate: string;
+  toDate: string;
+  officeId: number | null;
+  role: "operator" | "office_head" | "director" | "admin" | null;
+  totals: {
+    usersCount: number;
+    tasksTotal: number;
+    tasksOverdue: number;
+    lmsAssigned: number;
+    lmsPassed: number;
+    docsAuthored: number;
+    approvalsHandled: number;
+  };
+  byRole: Array<{
+    role: "operator" | "office_head" | "director" | "admin";
+    usersCount: number;
+    tasksTotal: number;
+    tasksDone: number;
+    tasksOverdue: number;
+    lmsAssigned: number;
+    lmsPassed: number;
+    docsAuthored: number;
+    approvalsHandled: number;
+    taskCompletionRate: number;
+    lmsCompletionRate: number;
+  }>;
+  byUser: Array<{
+    userId: string;
+    fullName: string;
+    role: "operator" | "office_head" | "director" | "admin";
+    officeId: number | null;
+    tasksTotal: number;
+    tasksDone: number;
+    tasksOverdue: number;
+    lmsAssigned: number;
+    lmsPassed: number;
+    docsAuthored: number;
+    approvalsHandled: number;
+  }>;
+  availableRoles: Array<"operator" | "office_head" | "director" | "admin">;
+}
+
+export interface ReportDeliverySchedule {
+  id: number;
+  name: string;
+  recipientUserId: string;
+  officeId: number | null;
+  roleFilter: "operator" | "office_head" | "director" | "admin" | null;
+  daysWindow: number;
+  frequency: "daily" | "weekly" | "monthly";
+  nextRunAt: string;
+  lastRunAt: string | null;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ReportDeliveryRun {
+  id: number;
+  scheduleId: number;
+  recipientUserId: string;
+  status: string;
+  format: string;
+  generatedAt: string;
+  fileName: string | null;
+  rowsCount: number;
+}
+
+export interface AdminSloStatus {
+  ok: boolean;
+  windowMinutes: number;
+  generatedAt: string;
+  metrics: {
+    api: {
+      totalRequests: number;
+      errorRequests: number;
+      errorRatePercent: number;
+      p95LatencyMs: number;
+    };
+    notifications: {
+      totalDeliveries: number;
+      failedDeliveries: number;
+      failureRatePercent: number;
+    };
+  };
+  thresholds: {
+    apiErrorRatePercent: number;
+    apiLatencyP95Ms: number;
+    notificationFailureRatePercent: number;
+  };
+  breaches: string[];
+}
+
+export interface SloRoutingPolicy {
+  id: number;
+  name: string;
+  breachType: "any" | "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+  severity: "any" | "warning" | "critical";
+  channels: Array<"webhook" | "email" | "messenger">;
+  priority: number;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 function transformPortalData(raw: Awaited<ReturnType<typeof backendApi.getBootstrap>>): PortalData {
   return {
     offices: raw.offices.map((office) => ({
@@ -313,6 +490,10 @@ function transformPortalData(raw: Awaited<ReturnType<typeof backendApi.getBootst
       author: doc.author,
       date: doc.date,
       officeId: doc.office_id,
+      body: doc.body ?? undefined,
+      templateId: doc.template_id ?? null,
+      approvalRouteId: doc.approval_route_id ?? null,
+      currentApprovalStep: doc.current_approval_step ?? null,
     })),
     documentApprovals: raw.documentApprovals.map((item) => ({
       id: Number(item.id),
@@ -529,12 +710,166 @@ export const portalRepository = {
     return backendApi.exportAdminAudit(input);
   },
 
-  async runOpsEscalations(): Promise<{ ok: boolean; updatedCount: number; updatedIds: string[] }> {
+  async runOpsEscalations(): Promise<{
+    ok: boolean;
+    updatedCount: number;
+    updatedIds: string[];
+    taskEscalationNotifications: number;
+    documentEscalationNotifications: number;
+    appliedPolicyCount: number;
+  }> {
     return backendApi.runOpsEscalations();
   },
 
   async runOpsReminders(): Promise<{ ok: boolean; taskReminders: number; lmsReminders: number }> {
     return backendApi.runOpsReminders();
+  },
+
+  async getAdminSloStatus(windowMinutes?: number): Promise<AdminSloStatus> {
+    return backendApi.getAdminSloStatus(windowMinutes);
+  },
+
+  async runOpsSloCheck(windowMinutes?: number): Promise<{
+    ok: boolean;
+    alerted: boolean;
+    recipients: number;
+    webhookSent: boolean;
+    routedChannels?: Array<"webhook" | "email" | "messenger">;
+    severity?: "warning" | "critical";
+    breachSeverities?: Partial<Record<"api_error_rate" | "api_latency_p95" | "notification_failure_rate", "warning" | "critical">>;
+    status: AdminSloStatus;
+  }> {
+    return backendApi.runOpsSloCheck(windowMinutes);
+  },
+
+  async getSloRoutingPolicies(): Promise<SloRoutingPolicy[]> {
+    const rows = await backendApi.getSloRoutingPolicies();
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      breachType: row.breach_type,
+      severity: row.severity,
+      channels: row.channels ?? [],
+      priority: Number(row.priority),
+      isActive: row.is_active,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  },
+
+  async createSloRoutingPolicy(input: {
+    name: string;
+    breachType: "any" | "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+    severity: "any" | "warning" | "critical";
+    channels: Array<"webhook" | "email" | "messenger">;
+    priority?: number;
+    isActive?: boolean;
+  }): Promise<void> {
+    await backendApi.createSloRoutingPolicy(input);
+  },
+
+  async updateSloRoutingPolicy(
+    id: number,
+    input: {
+      name?: string;
+      breachType?: "any" | "api_error_rate" | "api_latency_p95" | "notification_failure_rate";
+      severity?: "any" | "warning" | "critical";
+      channels?: Array<"webhook" | "email" | "messenger">;
+      priority?: number;
+      isActive?: boolean;
+    },
+  ): Promise<void> {
+    await backendApi.updateSloRoutingPolicy(id, input);
+  },
+
+  async deleteSloRoutingPolicy(id: number): Promise<void> {
+    await backendApi.deleteSloRoutingPolicy(id);
+  },
+
+  async searchUnified(input: { q: string; limit?: number }): Promise<UnifiedSearchResult> {
+    return backendApi.searchUnified(input);
+  },
+
+  async getKpiReport(input?: { days?: number; officeId?: number }): Promise<KpiReport> {
+    return backendApi.getKpiReport(input);
+  },
+
+  async getReportsDrilldown(input?: {
+    days?: number;
+    officeId?: number;
+    role?: "operator" | "office_head" | "director" | "admin";
+  }): Promise<ReportsDrilldown> {
+    return backendApi.getReportsDrilldown(input);
+  },
+
+  async getReportSchedules(): Promise<ReportDeliverySchedule[]> {
+    const rows = await backendApi.getReportSchedules();
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      recipientUserId: row.recipient_user_id,
+      officeId: row.office_id,
+      roleFilter: row.role_filter,
+      daysWindow: row.days_window,
+      frequency: row.frequency,
+      nextRunAt: row.next_run_at,
+      lastRunAt: row.last_run_at,
+      isActive: row.is_active,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+    }));
+  },
+
+  async createReportSchedule(input: {
+    name: string;
+    recipientUserId: string;
+    officeId?: number;
+    roleFilter?: "operator" | "office_head" | "director" | "admin";
+    daysWindow?: number;
+    frequency?: "daily" | "weekly" | "monthly";
+    nextRunAt?: string;
+    isActive?: boolean;
+  }) {
+    await backendApi.createReportSchedule(input);
+  },
+
+  async updateReportSchedule(
+    id: number,
+    input: {
+      name?: string;
+      recipientUserId?: string;
+      officeId?: number;
+      roleFilter?: "operator" | "office_head" | "director" | "admin";
+      daysWindow?: number;
+      frequency?: "daily" | "weekly" | "monthly";
+      nextRunAt?: string;
+      isActive?: boolean;
+    },
+  ) {
+    await backendApi.updateReportSchedule(id, input);
+  },
+
+  async runReportSchedule(id: number) {
+    await backendApi.runReportSchedule(id);
+  },
+
+  async getReportRuns(input?: { scheduleId?: number }): Promise<ReportDeliveryRun[]> {
+    const rows = await backendApi.getReportRuns(input);
+    return rows.map((row) => ({
+      id: Number(row.id),
+      scheduleId: Number(row.schedule_id),
+      recipientUserId: row.recipient_user_id,
+      status: row.status,
+      format: row.format,
+      generatedAt: row.generated_at,
+      fileName: row.file_name,
+      rowsCount: row.rows_count,
+    }));
+  },
+
+  async downloadReportRun(id: number): Promise<Blob> {
+    return backendApi.downloadReportRun(id);
   },
 
   async getNotifications(input?: { limit?: number; unreadOnly?: boolean }) {

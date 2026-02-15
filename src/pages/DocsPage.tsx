@@ -1,3 +1,4 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -11,8 +12,10 @@ import {
 } from "../hooks/usePortalData";
 import { canCreateDocument, canReviewDocument } from "../lib/permissions";
 import { statusColors, statusLabels, typeLabels } from "../lib/uiMaps";
+import { backendApi } from "../services/apiClient";
 
 export function DocsPage() {
+  const queryClient = useQueryClient();
   const { data } = usePortalData();
   const createDocument = useCreateDocumentMutation();
   const submitDocument = useSubmitDocumentMutation();
@@ -21,8 +24,69 @@ export function DocsPage() {
   const { user } = useAuth();
 
   const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [templateId, setTemplateId] = useState<number | "">("");
+  const [approvalRouteId, setApprovalRouteId] = useState<number | "">("");
   const [activeId, setActiveId] = useState<number | null>(null);
   const [comment, setComment] = useState("");
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateTitle, setNewTemplateTitle] = useState("");
+  const [newTemplateBody, setNewTemplateBody] = useState("");
+  const [newRouteName, setNewRouteName] = useState("");
+  const [newRouteDescription, setNewRouteDescription] = useState("");
+  const [newRouteSteps, setNewRouteSteps] = useState("office_head,director");
+
+  const templatesQuery = useQuery({
+    queryKey: ["document-templates"],
+    queryFn: () => backendApi.getDocumentTemplates(),
+  });
+
+  const routesQuery = useQuery({
+    queryKey: ["document-approval-routes"],
+    queryFn: () => backendApi.getDocumentApprovalRoutes(),
+  });
+
+  const createTemplateMutation = useMutation({
+    mutationFn: () =>
+      backendApi.createDocumentTemplate({
+        name: newTemplateName,
+        type: "internal",
+        titleTemplate: newTemplateTitle,
+        bodyTemplate: newTemplateBody || undefined,
+        defaultRouteId: approvalRouteId === "" ? undefined : Number(approvalRouteId),
+        status: "approved",
+      }),
+    onSuccess: async () => {
+      setNewTemplateName("");
+      setNewTemplateTitle("");
+      setNewTemplateBody("");
+      await queryClient.invalidateQueries({ queryKey: ["document-templates"] });
+    },
+  });
+
+  const createRouteMutation = useMutation({
+    mutationFn: () => {
+      const steps = newRouteSteps
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((role, idx) => ({
+          stepOrder: idx + 1,
+          requiredRole: role as "operator" | "office_head" | "director" | "admin",
+        }));
+      return backendApi.createDocumentApprovalRoute({
+        name: newRouteName,
+        description: newRouteDescription || undefined,
+        steps,
+      });
+    },
+    onSuccess: async () => {
+      setNewRouteName("");
+      setNewRouteDescription("");
+      setNewRouteSteps("office_head,director");
+      await queryClient.invalidateQueries({ queryKey: ["document-approval-routes"] });
+    },
+  });
 
   const approvalsMap = useMemo(() => {
     if (!data) {
@@ -59,12 +123,58 @@ export function DocsPage() {
       {canCreate ? (
         <Card className="p-4">
           <h2 className="mb-3 font-semibold">Новый документ</h2>
-          <div className="flex gap-2">
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <select
+                value={templateId}
+                onChange={(event) => {
+                  const value = event.target.value ? Number(event.target.value) : "";
+                  setTemplateId(value);
+                  if (value !== "") {
+                    const template = (templatesQuery.data ?? []).find((item) => Number(item.id) === value);
+                    if (template) {
+                      setTitle(template.title_template);
+                      setBody(template.body_template ?? "");
+                      if (template.default_route_id) {
+                        setApprovalRouteId(Number(template.default_route_id));
+                      }
+                    }
+                  }
+                }}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">Без шаблона</option>
+                {(templatesQuery.data ?? []).map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={approvalRouteId}
+                onChange={(event) => setApprovalRouteId(event.target.value ? Number(event.target.value) : "")}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">Маршрут по умолчанию</option>
+                {(routesQuery.data ?? []).map((route) => (
+                  <option key={route.id} value={route.id}>
+                    {route.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Название документа"
               className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              placeholder="Текст документа"
+              rows={4}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
             <button
               onClick={() => {
@@ -75,13 +185,84 @@ export function DocsPage() {
                   title: title.trim(),
                   officeId: user.officeId,
                   type: "internal",
+                  body: body.trim() || undefined,
+                  templateId: templateId === "" ? undefined : Number(templateId),
+                  approvalRouteId: approvalRouteId === "" ? undefined : Number(approvalRouteId),
                 });
                 setTitle("");
+                setBody("");
+                setTemplateId("");
+                setApprovalRouteId("");
               }}
               className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
             >
               Создать
             </button>
+          </div>
+        </Card>
+      ) : null}
+
+      {(user.role === "admin" || user.role === "director") ? (
+        <Card className="space-y-4 p-4">
+          <h2 className="font-semibold">Конфигурация шаблонов и маршрутов</h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-2 rounded-lg border border-gray-200 p-3">
+              <p className="text-sm font-medium">Новый маршрут согласования</p>
+              <input
+                value={newRouteName}
+                onChange={(event) => setNewRouteName(event.target.value)}
+                placeholder="Название маршрута"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={newRouteDescription}
+                onChange={(event) => setNewRouteDescription(event.target.value)}
+                placeholder="Описание"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={newRouteSteps}
+                onChange={(event) => setNewRouteSteps(event.target.value)}
+                placeholder="office_head,director"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <button
+                onClick={() => createRouteMutation.mutate()}
+                disabled={!newRouteName.trim() || !newRouteSteps.trim() || createRouteMutation.isPending}
+                className="rounded-lg bg-slate-700 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+              >
+                Создать маршрут
+              </button>
+            </div>
+            <div className="space-y-2 rounded-lg border border-gray-200 p-3">
+              <p className="text-sm font-medium">Новый шаблон документа</p>
+              <input
+                value={newTemplateName}
+                onChange={(event) => setNewTemplateName(event.target.value)}
+                placeholder="Название шаблона"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={newTemplateTitle}
+                onChange={(event) => setNewTemplateTitle(event.target.value)}
+                placeholder="Шаблон заголовка"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <textarea
+                value={newTemplateBody}
+                onChange={(event) => setNewTemplateBody(event.target.value)}
+                placeholder="Шаблон содержимого"
+                rows={3}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <button
+                onClick={() => createTemplateMutation.mutate()}
+                disabled={!newTemplateName.trim() || !newTemplateTitle.trim() || createTemplateMutation.isPending}
+                className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+              >
+                Создать шаблон
+              </button>
+            </div>
           </div>
         </Card>
       ) : null}

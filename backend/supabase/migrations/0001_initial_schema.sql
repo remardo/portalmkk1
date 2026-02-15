@@ -1,7 +1,5 @@
 -- Run in Supabase SQL Editor
--- schema_snapshot_migration: 0010
 create extension if not exists pgcrypto;
-create extension if not exists pg_trgm;
 
 do $$
 begin
@@ -40,15 +38,6 @@ begin
   end if;
   if not exists (select 1 from pg_type where typname = 'lms_media_type' and typnamespace = 'public'::regnamespace) then
     create type public.lms_media_type as enum ('image', 'video');
-  end if;
-  if not exists (select 1 from pg_type where typname = 'sla_entity_type' and typnamespace = 'public'::regnamespace) then
-    create type public.sla_entity_type as enum ('task', 'document');
-  end if;
-  if not exists (select 1 from pg_type where typname = 'report_frequency' and typnamespace = 'public'::regnamespace) then
-    create type public.report_frequency as enum ('daily', 'weekly', 'monthly');
-  end if;
-  if not exists (select 1 from pg_type where typname = 'notification_channel' and typnamespace = 'public'::regnamespace) then
-    create type public.notification_channel as enum ('webhook', 'email', 'messenger');
   end if;
 end
 $$;
@@ -174,40 +163,6 @@ create table if not exists public.documents (
   office_id bigint not null references public.offices(id) on delete restrict,
   created_at timestamptz not null default now()
 );
-create table if not exists public.document_approval_routes (
-  id bigint generated always as identity primary key,
-  name text not null unique,
-  description text null,
-  created_by uuid not null references public.profiles(id) on delete restrict,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.document_approval_route_steps (
-  id bigint generated always as identity primary key,
-  route_id bigint not null references public.document_approval_routes(id) on delete cascade,
-  step_order int not null,
-  required_role public.user_role not null,
-  created_at timestamptz not null default now(),
-  unique (route_id, step_order)
-);
-
-create table if not exists public.document_templates (
-  id bigint generated always as identity primary key,
-  name text not null unique,
-  type public.document_type not null default 'internal',
-  title_template text not null,
-  body_template text null,
-  default_route_id bigint null references public.document_approval_routes(id) on delete set null,
-  status public.document_status not null default 'draft',
-  created_by uuid not null references public.profiles(id) on delete restrict,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-alter table public.documents add column if not exists body text null;
-alter table public.documents add column if not exists template_id bigint null references public.document_templates(id) on delete set null;
-alter table public.documents add column if not exists approval_route_id bigint null references public.document_approval_routes(id) on delete set null;
-alter table public.documents add column if not exists current_approval_step int null;
-alter table public.documents add column if not exists updated_at timestamptz not null default now();
 
 create table if not exists public.audit_log (
   id bigint generated always as identity primary key,
@@ -314,121 +269,6 @@ create table if not exists public.lms_media (
   )
 );
 
-create table if not exists public.lms_course_versions (
-  id bigint generated always as identity primary key,
-  course_id bigint not null references public.lms_courses(id) on delete cascade,
-  version int not null,
-  snapshot jsonb not null,
-  reason text not null default 'manual',
-  created_by uuid not null references public.profiles(id) on delete restrict,
-  created_at timestamptz not null default now(),
-  unique (course_id, version)
-);
-
-create table if not exists public.lms_subsection_progress (
-  id bigint generated always as identity primary key,
-  user_id uuid not null references public.profiles(id) on delete cascade,
-  subsection_id bigint not null references public.lms_subsections(id) on delete cascade,
-  completed boolean not null default false,
-  progress_percent int not null default 0 check (progress_percent >= 0 and progress_percent <= 100),
-  started_at timestamptz not null default now(),
-  completed_at timestamptz null,
-  updated_at timestamptz not null default now(),
-  unique (user_id, subsection_id)
-);
-
-create table if not exists public.lms_course_assignments (
-  id bigint generated always as identity primary key,
-  course_id bigint not null references public.lms_courses(id) on delete cascade,
-  user_id uuid not null references public.profiles(id) on delete cascade,
-  assigned_by uuid not null references public.profiles(id) on delete restrict,
-  due_date date null,
-  source_role public.user_role null,
-  source_office_id bigint null references public.offices(id) on delete set null,
-  created_at timestamptz not null default now(),
-  unique (course_id, user_id)
-);
-
-create table if not exists public.sla_escalation_matrix (
-  id bigint generated always as identity primary key,
-  name text not null unique,
-  entity_type public.sla_entity_type not null,
-  trigger_status text not null,
-  threshold_hours int not null check (threshold_hours >= 0),
-  level public.notification_level not null default 'warning',
-  target_role public.user_role not null,
-  office_scoped boolean not null default false,
-  message_template text null,
-  is_active boolean not null default true,
-  created_by uuid not null references public.profiles(id) on delete restrict,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.report_delivery_schedules (
-  id bigint generated always as identity primary key,
-  name text not null,
-  recipient_user_id uuid not null references public.profiles(id) on delete cascade,
-  office_id bigint null references public.offices(id) on delete set null,
-  role_filter public.user_role null,
-  days_window int not null default 30 check (days_window >= 1 and days_window <= 365),
-  frequency public.report_frequency not null default 'weekly',
-  next_run_at timestamptz not null default now(),
-  last_run_at timestamptz null,
-  is_active boolean not null default true,
-  created_by uuid not null references public.profiles(id) on delete restrict,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.report_delivery_runs (
-  id bigint generated always as identity primary key,
-  schedule_id bigint not null references public.report_delivery_schedules(id) on delete cascade,
-  recipient_user_id uuid not null references public.profiles(id) on delete cascade,
-  status text not null default 'ready',
-  format text not null default 'csv',
-  generated_at timestamptz not null default now(),
-  file_name text null,
-  payload_csv text null,
-  rows_count int not null default 0,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.notification_integrations (
-  id bigint generated always as identity primary key,
-  name text not null unique,
-  channel public.notification_channel not null,
-  endpoint_url text not null,
-  secret text null,
-  is_active boolean not null default true,
-  created_by uuid not null references public.profiles(id) on delete restrict,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.notification_delivery_log (
-  id bigint generated always as identity primary key,
-  notification_id bigint null references public.notifications(id) on delete set null,
-  integration_id bigint null references public.notification_integrations(id) on delete set null,
-  channel public.notification_channel not null,
-  destination text not null,
-  status text not null,
-  response_code int null,
-  error_text text null,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.slo_alert_routing_policies (
-  id bigint generated always as identity primary key,
-  name text not null unique,
-  breach_type text not null check (breach_type in ('any', 'api_error_rate', 'api_latency_p95', 'notification_failure_rate')),
-  severity text not null check (severity in ('any', 'warning', 'critical')),
-  channels public.notification_channel[] not null check (cardinality(channels) >= 1),
-  priority int not null default 100 check (priority >= 0 and priority <= 1000),
-  is_active boolean not null default true,
-  created_by uuid not null references public.profiles(id) on delete restrict,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 create table if not exists public.document_approvals (
   id bigint generated always as identity primary key,
   document_id bigint not null references public.documents(id) on delete cascade,
@@ -453,37 +293,6 @@ create table if not exists public.notifications (
   read_at timestamptz null
 );
 create unique index if not exists notifications_dedupe_key_uniq on public.notifications(dedupe_key) where dedupe_key is not null;
-create index if not exists tasks_status_due_date_idx on public.tasks(status, due_date);
-create index if not exists tasks_assignee_status_idx on public.tasks(assignee_id, status);
-create index if not exists tasks_office_status_idx on public.tasks(office_id, status);
-create index if not exists tasks_created_date_idx on public.tasks(created_date desc);
-create index if not exists documents_office_status_date_idx on public.documents(office_id, status, date desc);
-create index if not exists documents_author_date_idx on public.documents(author, date desc);
-create index if not exists documents_updated_at_idx on public.documents(updated_at desc);
-create index if not exists news_status_date_idx on public.news(status, date desc);
-create index if not exists news_updated_at_idx on public.news(updated_at desc);
-create index if not exists kb_articles_status_updated_at_idx on public.kb_articles(status, updated_at desc);
-create index if not exists courses_status_updated_at_idx on public.courses(status, updated_at desc);
-create index if not exists course_assignments_user_created_idx on public.course_assignments(user_id, created_at desc);
-create index if not exists course_attempts_user_created_idx on public.course_attempts(user_id, created_at desc);
-create index if not exists document_approvals_document_created_idx on public.document_approvals(document_id, created_at desc);
-create index if not exists notifications_recipient_created_idx on public.notifications(recipient_user_id, created_at desc);
-create index if not exists notifications_recipient_unread_idx on public.notifications(recipient_user_id, is_read, created_at desc);
-create index if not exists lms_courses_status_updated_at_idx on public.lms_courses(status, updated_at desc);
-create index if not exists lms_subsection_progress_user_updated_idx on public.lms_subsection_progress(user_id, updated_at desc);
-create index if not exists lms_course_assignments_user_created_idx on public.lms_course_assignments(user_id, created_at desc);
-create index if not exists audit_log_actor_created_idx on public.audit_log(actor_user_id, created_at desc);
-create index if not exists audit_log_entity_created_idx on public.audit_log(entity_type, created_at desc);
-create index if not exists report_delivery_schedules_active_next_run_idx on public.report_delivery_schedules(is_active, next_run_at);
-create index if not exists report_delivery_runs_recipient_generated_idx on public.report_delivery_runs(recipient_user_id, generated_at desc);
-create index if not exists slo_alert_routing_policies_active_priority_idx on public.slo_alert_routing_policies(is_active, priority, created_at);
-create index if not exists documents_title_trgm_idx on public.documents using gin (title gin_trgm_ops);
-create index if not exists documents_body_trgm_idx on public.documents using gin (coalesce(body, '') gin_trgm_ops);
-create index if not exists kb_articles_title_trgm_idx on public.kb_articles using gin (title gin_trgm_ops);
-create index if not exists kb_articles_content_trgm_idx on public.kb_articles using gin (content gin_trgm_ops);
-create index if not exists lms_courses_title_trgm_idx on public.lms_courses using gin (title gin_trgm_ops);
-create index if not exists lms_courses_description_trgm_idx on public.lms_courses using gin (coalesce(description, '') gin_trgm_ops);
-create index if not exists lms_subsections_markdown_trgm_idx on public.lms_subsections using gin (markdown_content gin_trgm_ops);
 
 alter table public.offices enable row level security;
 alter table public.profiles enable row level security;
@@ -493,9 +302,6 @@ alter table public.courses enable row level security;
 alter table public.attestations enable row level security;
 alter table public.tasks enable row level security;
 alter table public.documents enable row level security;
-alter table public.document_templates enable row level security;
-alter table public.document_approval_routes enable row level security;
-alter table public.document_approval_route_steps enable row level security;
 alter table public.audit_log enable row level security;
 alter table public.kb_article_versions enable row level security;
 alter table public.course_assignments enable row level security;
@@ -505,15 +311,6 @@ alter table public.lms_courses enable row level security;
 alter table public.lms_sections enable row level security;
 alter table public.lms_subsections enable row level security;
 alter table public.lms_media enable row level security;
-alter table public.lms_course_versions enable row level security;
-alter table public.lms_subsection_progress enable row level security;
-alter table public.lms_course_assignments enable row level security;
-alter table public.sla_escalation_matrix enable row level security;
-alter table public.report_delivery_schedules enable row level security;
-alter table public.report_delivery_runs enable row level security;
-alter table public.notification_integrations enable row level security;
-alter table public.notification_delivery_log enable row level security;
-alter table public.slo_alert_routing_policies enable row level security;
 alter table public.document_approvals enable row level security;
 alter table public.notifications enable row level security;
 
@@ -605,12 +402,6 @@ drop policy if exists "read admin tasks" on public.tasks;
 drop policy if exists "read own documents" on public.documents;
 drop policy if exists "read office documents" on public.documents;
 drop policy if exists "read admin documents" on public.documents;
-drop policy if exists "read published document templates" on public.document_templates;
-drop policy if exists "read admin document templates" on public.document_templates;
-drop policy if exists "read document routes" on public.document_approval_routes;
-drop policy if exists "read document route steps" on public.document_approval_route_steps;
-drop policy if exists "read admin document routes" on public.document_approval_routes;
-drop policy if exists "read admin document route steps" on public.document_approval_route_steps;
 drop policy if exists "read admin audit only" on public.audit_log;
 drop policy if exists "read admin kb versions only" on public.kb_article_versions;
 drop policy if exists "read own course assignments" on public.course_assignments;
@@ -727,22 +518,6 @@ create policy "read admin documents" on public.documents
 for select to authenticated
 using (public.is_admin_or_director());
 
-create policy "read published document templates" on public.document_templates
-for select to authenticated
-using (status = 'approved');
-
-create policy "read admin document templates" on public.document_templates
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read document routes" on public.document_approval_routes
-for select to authenticated
-using (true);
-
-create policy "read document route steps" on public.document_approval_route_steps
-for select to authenticated
-using (true);
-
 create policy "read admin audit only" on public.audit_log
 for select to authenticated
 using (public.is_admin_or_director());
@@ -850,20 +625,6 @@ drop policy if exists "read published lms subsections" on public.lms_subsections
 drop policy if exists "read admin lms subsections" on public.lms_subsections;
 drop policy if exists "read published lms media" on public.lms_media;
 drop policy if exists "read admin lms media" on public.lms_media;
-drop policy if exists "read admin lms versions" on public.lms_course_versions;
-drop policy if exists "read own lms progress" on public.lms_subsection_progress;
-drop policy if exists "read admin lms progress" on public.lms_subsection_progress;
-drop policy if exists "write own lms progress" on public.lms_subsection_progress;
-drop policy if exists "read own lms assignments" on public.lms_course_assignments;
-drop policy if exists "read office lms assignments" on public.lms_course_assignments;
-drop policy if exists "read admin lms assignments" on public.lms_course_assignments;
-drop policy if exists "read admin sla matrix" on public.sla_escalation_matrix;
-drop policy if exists "read admin report schedules" on public.report_delivery_schedules;
-drop policy if exists "read own report runs" on public.report_delivery_runs;
-drop policy if exists "read admin report runs" on public.report_delivery_runs;
-drop policy if exists "read admin notification integrations" on public.notification_integrations;
-drop policy if exists "read admin notification delivery logs" on public.notification_delivery_log;
-drop policy if exists "read admin slo routing policies" on public.slo_alert_routing_policies;
 
 create policy "read published lms courses" on public.lms_courses
 for select to authenticated
@@ -918,70 +679,5 @@ using (
 );
 
 create policy "read admin lms media" on public.lms_media
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read admin lms versions" on public.lms_course_versions
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read own lms progress" on public.lms_subsection_progress
-for select to authenticated
-using (user_id = auth.uid());
-
-create policy "read admin lms progress" on public.lms_subsection_progress
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "write own lms progress" on public.lms_subsection_progress
-for all to authenticated
-using (user_id = auth.uid())
-with check (user_id = auth.uid());
-
-create policy "read own lms assignments" on public.lms_course_assignments
-for select to authenticated
-using (user_id = auth.uid());
-
-create policy "read office lms assignments" on public.lms_course_assignments
-for select to authenticated
-using (
-  public.current_profile_role() = 'office_head'
-  and exists (
-    select 1
-    from public.profiles p
-    where p.id = public.lms_course_assignments.user_id
-      and p.office_id = public.current_profile_office_id()
-  )
-);
-
-create policy "read admin lms assignments" on public.lms_course_assignments
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read admin sla matrix" on public.sla_escalation_matrix
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read admin report schedules" on public.report_delivery_schedules
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read own report runs" on public.report_delivery_runs
-for select to authenticated
-using (recipient_user_id = auth.uid());
-
-create policy "read admin report runs" on public.report_delivery_runs
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read admin notification integrations" on public.notification_integrations
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read admin notification delivery logs" on public.notification_delivery_log
-for select to authenticated
-using (public.is_admin_or_director());
-
-create policy "read admin slo routing policies" on public.slo_alert_routing_policies
 for select to authenticated
 using (public.is_admin_or_director());

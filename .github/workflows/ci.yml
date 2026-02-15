@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  check:
+  frontend-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +19,42 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
+  backend-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run check:migrations
+      - run: npm run check:schema-sync
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+      - run: npm run smoke:api
+        env:
+          SMOKE_SUMMARY_PATH: .logs/smoke-api-summary.json
+      - run: npm run print:smoke-summary
+        if: always()
+        env:
+          SMOKE_SUMMARY_PATH: .logs/smoke-api-summary.json
+      - run: npm run check:smoke-summary
+        env:
+          SMOKE_SUMMARY_PATH: .logs/smoke-api-summary.json
+          SMOKE_MAX_STARTUP_MS: 5000
+          SMOKE_MAX_TOTAL_MS: 15000
+          SMOKE_MAX_CHECK_MS: 5000
+      - name: Upload smoke summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-smoke-summary
+          path: backend/.logs/smoke-api-summary.json
+          if-no-files-found: warn

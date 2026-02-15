@@ -14,16 +14,21 @@ import { AdminPage } from "../pages/AdminPage";
 import { OpsCenterPage } from "../pages/OpsCenterPage";
 import { NotificationsPage } from "../pages/NotificationsPage";
 import { ReportsPage } from "../pages/ReportsPage";
+import { LMSBuilderPage } from "../pages/LMSBuilderPage";
+import { RouteErrorPage } from "../pages/RouteErrorPage";
+import { SearchPage } from "../pages/SearchPage";
 import { ProtectedRoute } from "./ProtectedRoute";
 
 export const router = createBrowserRouter([
-  { path: "/login", element: <LoginPage /> },
+  { path: "/login", element: <LoginPage />, errorElement: <RouteErrorPage /> },
   {
     path: "/",
     element: <ProtectedRoute />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         element: <AppLayout />,
+        errorElement: <RouteErrorPage />,
         children: [
           { index: true, element: <DashboardPage /> },
           { path: "news", element: <NewsPage /> },
@@ -32,11 +37,13 @@ export const router = createBrowserRouter([
           { path: "lms", element: <LMSPage /> },
           { path: "lms/courses/:courseId", element: <LMSPage /> },
           { path: "lms/users/:userId", element: <LMSPage /> },
+          { path: "lms-builder", element: <LMSBuilderPage /> },
           { path: "docs", element: <DocsPage /> },
           { path: "tasks", element: <TasksPage /> },
           { path: "tasks/:taskId", element: <TasksPage /> },
           { path: "ops", element: <OpsCenterPage /> },
           { path: "notifications", element: <NotificationsPage /> },
+          { path: "search", element: <SearchPage /> },
           { path: "reports", element: <ReportsPage /> },
           { path: "org", element: <OrgPage /> },
           { path: "ratings", element: <RatingsPage /> },

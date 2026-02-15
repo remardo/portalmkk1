@@ -1,0 +1,43 @@
+name: backup-restore-drill
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 0"
+
+jobs:
+  backup_restore_drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Run backup/restore drill (if secrets are configured)
+        if: ${{ secrets.SOURCE_DB_URL != '' && secrets.TARGET_DB_URL != '' }}
+        env:
+          SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
+          TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
+          TARGET_API_URL: ${{ secrets.TARGET_API_URL }}
+          API_BEARER_TOKEN: ${{ secrets.API_BEARER_TOKEN }}
+          BACKUP_DIR: ./.drills/backup
+        run: |
+          bash ./scripts/ops/backup-restore-drill.sh
+
+      - name: Skip message when secrets are missing
+        if: ${{ secrets.SOURCE_DB_URL == '' || secrets.TARGET_DB_URL == '' }}
+        run: |
+          echo "Skipping backup/restore drill: SOURCE_DB_URL or TARGET_DB_URL secret is not set."
+
+      - name: Upload drill artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-restore-drill-artifacts
+          path: ./.drills/backup/**
+          if-no-files-found: ignore

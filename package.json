@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:migrations": "npm --prefix backend run check:migrations",
+    "check:schema-sync": "npm --prefix backend run check:schema-sync",
+    "check:backend-guardrails": "npm run check:migrations && npm run check:schema-sync",
     "format": "prettier --check .",
     "format:write": "prettier --write ."
   },
