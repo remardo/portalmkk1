@@ -194,6 +194,8 @@ export interface AdminCreateUserInput {
 
 export interface AdminUpdateUserInput {
   id: string;
+  email?: string;
+  password?: string;
   role?: "operator" | "office_head" | "director" | "admin";
   officeId?: number | null;
   fullName?: string;
@@ -201,6 +203,15 @@ export interface AdminUpdateUserInput {
   position?: string;
   points?: number;
   avatar?: string;
+}
+
+export interface AdminUpdateOfficeInput {
+  id: number;
+  name?: string;
+  city?: string;
+  address?: string;
+  headId?: string | null;
+  rating?: number;
 }
 
 export interface AdminAuditRecord {
@@ -661,6 +672,8 @@ export const portalRepository = {
 
   async adminUpdateUser(input: AdminUpdateUserInput): Promise<void> {
     await backendApi.adminUpdateUser(input.id, {
+      email: input.email,
+      password: input.password,
       role: input.role,
       officeId: input.officeId,
       fullName: input.fullName,
@@ -668,6 +681,16 @@ export const portalRepository = {
       position: input.position,
       points: input.points,
       avatar: input.avatar,
+    });
+  },
+
+  async adminUpdateOffice(input: AdminUpdateOfficeInput): Promise<void> {
+    await backendApi.adminUpdateOffice(input.id, {
+      name: input.name,
+      city: input.city,
+      address: input.address,
+      headId: input.headId,
+      rating: input.rating,
     });
   },
 

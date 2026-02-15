@@ -4,6 +4,7 @@ import {
   type AdminAuditList,
   type AdminCreateUserInput,
   type AdminSloStatus,
+  type AdminUpdateOfficeInput,
   type AdminUpdateUserInput,
   type KpiReport,
   portalRepository,
@@ -215,6 +216,14 @@ export function useAdminUpdateUserMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AdminUpdateUserInput) => portalRepository.adminUpdateUser(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useAdminUpdateOfficeMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AdminUpdateOfficeInput) => portalRepository.adminUpdateOffice(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
   });
 }

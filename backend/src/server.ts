@@ -1218,6 +1218,8 @@ app.post("/api/admin/users", requireAuth(), requireRole(["admin", "director"]), 
 
 const adminUpdateUserSchema = z.object({
   fullName: z.string().min(2).optional(),
+  email: z.email().optional(),
+  password: z.string().min(8).optional(),
   role: z.enum(["operator", "office_head", "director", "admin"]).optional(),
   officeId: z.number().int().positive().nullable().optional(),
   phone: z.string().optional(),
@@ -1232,7 +1234,8 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
     return res.status(400).json(parsed.error.format());
   }
 
-  const userId = req.params.id;
+  const rawUserId = req.params.id;
+  const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
   if (!userId) {
     return res.status(400).json({ error: "Invalid user id" });
   }
@@ -1240,7 +1243,7 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
   const session = (req as express.Request & { session: Session }).session;
   const { data: currentUser, error: currentUserError } = await supabaseAdmin
     .from("profiles")
-    .select("id,role,full_name,office_id,phone,position,points,avatar")
+    .select("id,role,full_name,office_id,email,phone,position,points,avatar")
     .eq("id", userId)
     .single();
 
@@ -1267,9 +1270,45 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
     return res.status(400).json({ error: "Admin cannot downgrade own role" });
   }
 
+  const authPatch: {
+    email?: string;
+    password?: string;
+    user_metadata?: {
+      full_name: string;
+      role: Profile["role"];
+      office_id: number | null;
+    };
+  } = {};
+  if (parsed.data.email !== undefined) {
+    authPatch.email = parsed.data.email;
+  }
+  if (parsed.data.password !== undefined) {
+    authPatch.password = parsed.data.password;
+  }
+  if (
+    parsed.data.fullName !== undefined
+    || parsed.data.role !== undefined
+    || parsed.data.officeId !== undefined
+  ) {
+    authPatch.user_metadata = {
+      full_name: parsed.data.fullName ?? currentUser.full_name,
+      role: (parsed.data.role ?? currentUser.role) as Profile["role"],
+      office_id: parsed.data.officeId !== undefined ? parsed.data.officeId : currentUser.office_id,
+    };
+  }
+  if (Object.keys(authPatch).length > 0) {
+    const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(userId, authPatch);
+    if (authUpdateError) {
+      return res.status(400).json({ error: authUpdateError.message });
+    }
+  }
+
   const updatePayload: Record<string, unknown> = {};
   if (parsed.data.fullName !== undefined) {
     updatePayload.full_name = parsed.data.fullName;
+  }
+  if (parsed.data.email !== undefined) {
+    updatePayload.email = parsed.data.email;
   }
   if (parsed.data.role !== undefined) {
     updatePayload.role = parsed.data.role;
@@ -1290,12 +1329,26 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
     updatePayload.avatar = parsed.data.avatar;
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("profiles")
-    .update(updatePayload)
-    .eq("id", userId)
-    .select("id,full_name,role,office_id,email,phone,points,position,avatar")
-    .single();
+  let data: Record<string, unknown> | null = null;
+  let error: { message: string } | null = null;
+  if (Object.keys(updatePayload).length > 0) {
+    const response = await supabaseAdmin
+      .from("profiles")
+      .update(updatePayload)
+      .eq("id", userId)
+      .select("id,full_name,role,office_id,email,phone,points,position,avatar")
+      .single();
+    data = response.data;
+    error = response.error;
+  } else {
+    const response = await supabaseAdmin
+      .from("profiles")
+      .select("id,full_name,role,office_id,email,phone,points,position,avatar")
+      .eq("id", userId)
+      .single();
+    data = response.data;
+    error = response.error;
+  }
 
   if (error) {
     return res.status(400).json({ error: error.message });
@@ -1312,6 +1365,60 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
       patch: parsed.data,
       after: data,
     },
+  });
+
+  return res.json(data);
+});
+
+const adminUpdateOfficeSchema = z.object({
+  name: z.string().min(2).optional(),
+  city: z.string().min(2).optional(),
+  address: z.string().min(3).optional(),
+  headId: z.string().uuid().nullable().optional(),
+  rating: z.number().int().min(0).optional(),
+});
+
+app.patch("/api/admin/offices/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+  const parsed = adminUpdateOfficeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const officeId = Number(req.params.id);
+  if (Number.isNaN(officeId)) {
+    return res.status(400).json({ error: "Invalid office id" });
+  }
+
+  const updatePayload: Record<string, unknown> = {};
+  if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+  if (parsed.data.city !== undefined) updatePayload.city = parsed.data.city;
+  if (parsed.data.address !== undefined) updatePayload.address = parsed.data.address;
+  if (parsed.data.headId !== undefined) updatePayload.head_id = parsed.data.headId;
+  if (parsed.data.rating !== undefined) updatePayload.rating = parsed.data.rating;
+
+  if (Object.keys(updatePayload).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("offices")
+    .update(updatePayload)
+    .eq("id", officeId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to update office" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "admin.offices.update",
+    entityType: "offices",
+    entityId: String(officeId),
+    payload: updatePayload,
   });
 
   return res.json(data);

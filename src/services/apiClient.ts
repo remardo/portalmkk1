@@ -736,6 +736,8 @@ export const backendApi = {
     id: string,
     input: {
       fullName?: string;
+      email?: string;
+      password?: string;
       role?: "operator" | "office_head" | "director" | "admin";
       officeId?: number | null;
       phone?: string;
@@ -744,6 +746,17 @@ export const backendApi = {
       avatar?: string;
     },
   ) => apiRequest(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  adminUpdateOffice: (
+    id: number,
+    input: {
+      name?: string;
+      city?: string;
+      address?: string;
+      headId?: string | null;
+      rating?: number;
+    },
+  ) => apiRequest(`/api/admin/offices/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
 
   getAdminAudit: (input?: {
     limit?: number;

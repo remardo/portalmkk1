@@ -122,6 +122,73 @@ test("PATCH /api/admin/notification-integrations/:id returns 400 for invalid id"
   }
 });
 
+test("PATCH /api/admin/offices/:id returns 401 without token", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/offices/1`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Office 1" }),
+    });
+    assert.equal(response.status, 401);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("PATCH /api/admin/offices/:id returns 403 for operator role", async () => {
+  const server = await startTestServer({ role: "operator", token: "smoke-operator-admin-office-patch" });
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/offices/1`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "Office 1" }),
+    });
+    assert.equal(response.status, 403);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("PATCH /api/admin/offices/:id returns 400 for invalid office id", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/offices/abc`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "Office 1" }),
+    });
+    assert.equal(response.status, 400);
+    const data = await response.json();
+    assert.match(String(data?.error ?? ""), /Invalid office id/i);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("PATCH /api/admin/offices/:id returns 400 for invalid payload schema", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/offices/1`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "x" }),
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("GET /api/ops/slo-routing-policies returns 401 without token", async () => {
   const server = await startTestServer();
   try {
