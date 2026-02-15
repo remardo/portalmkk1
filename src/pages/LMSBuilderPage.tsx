@@ -8,6 +8,7 @@ import { backendApi } from "../services/apiClient";
 
 type LmsStatus = "draft" | "published" | "archived";
 type UserRole = "operator" | "office_head" | "director" | "admin";
+type BuilderTab = "catalog" | "structure" | "content" | "access" | "publish" | "analytics";
 
 function MarkdownPreview({ markdown }: { markdown: string }) {
   const lines = markdown.split(/\r?\n/);
@@ -49,6 +50,9 @@ export function LMSBuilderPage() {
   const [assignmentOfficeId, setAssignmentOfficeId] = useState<number | "">("");
   const [assignmentDueDate, setAssignmentDueDate] = useState("");
   const [assignmentUserIds, setAssignmentUserIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<BuilderTab>("catalog");
+  const [courseSearch, setCourseSearch] = useState("");
+  const [courseStatusFilter, setCourseStatusFilter] = useState<"all" | LmsStatus>("all");
 
   const [editingSectionId, setEditingSectionId] = useState<number | null>(null);
   const [editingSectionTitle, setEditingSectionTitle] = useState("");
@@ -259,6 +263,20 @@ export function LMSBuilderPage() {
     ? subsectionProgressMap.get(Number(selectedSubsectionId))
     : undefined;
 
+  const filteredCourses = useMemo(() => {
+    return (coursesQuery.data ?? []).filter((course) => {
+      if (courseStatusFilter !== "all" && course.status !== courseStatusFilter) {
+        return false;
+      }
+      const search = courseSearch.trim().toLowerCase();
+      if (!search) return true;
+      return (
+        course.title.toLowerCase().includes(search)
+        || (course.description ?? "").toLowerCase().includes(search)
+      );
+    });
+  }, [coursesQuery.data, courseSearch, courseStatusFilter]);
+
   const assignmentCandidates = useMemo(() => {
     return (adminUsersQuery.data ?? []).filter((candidate) => {
       if (assignmentRole && candidate.role !== assignmentRole) {
@@ -270,6 +288,24 @@ export function LMSBuilderPage() {
       return true;
     });
   }, [adminUsersQuery.data, assignmentRole, assignmentOfficeId]);
+
+  const courses = coursesQuery.data ?? [];
+  const draftCount = courses.filter((course) => course.status === "draft").length;
+  const publishedCount = courses.filter((course) => course.status === "published").length;
+  const archivedCount = courses.filter((course) => course.status === "archived").length;
+  const selectedCourseSections = courseTreeQuery.data?.sections ?? [];
+  const selectedCourseSubsections = selectedCourseSections.reduce(
+    (sum, section) => sum + section.subsections.length,
+    0,
+  );
+  const hasRequiredTest = selectedCourseSubsections > 0;
+  const publishChecklist = [
+    { label: "Есть название курса", ok: Boolean(selectedCourse?.title?.trim()) },
+    { label: "Есть описание курса", ok: Boolean(selectedCourse?.description?.trim()) },
+    { label: "Есть хотя бы 1 раздел", ok: selectedCourseSections.length > 0 },
+    { label: "Есть хотя бы 1 урок", ok: selectedCourseSubsections > 0 },
+    { label: "Итоговый тест (MVP placeholder)", ok: hasRequiredTest },
+  ];
 
   const reorderSections = async (targetSectionId: number) => {
     if (!draggedSectionId || !courseTreeQuery.data) return;
@@ -313,8 +349,51 @@ export function LMSBuilderPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">LMS Конструктор</h1>
+      <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-white via-indigo-50/60 to-white p-5">
+        <h1 className="text-2xl font-bold text-gray-900">LMS Конструктор</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Единое рабочее место для управления курсами, уроками, доступом и публикацией.
+        </p>
+      </div>
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Опубликовано</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-700">{publishedCount}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Черновики</p>
+          <p className="mt-1 text-2xl font-semibold text-amber-700">{draftCount}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">В архиве</p>
+          <p className="mt-1 text-2xl font-semibold text-gray-700">{archivedCount}</p>
+        </Card>
+      </div>
+
+      <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white p-2">
+        {[
+          { id: "catalog" as const, label: "Каталог" },
+          { id: "structure" as const, label: "Структура" },
+          { id: "content" as const, label: "Контент" },
+          { id: "access" as const, label: "Доступ" },
+          { id: "publish" as const, label: "Публикация" },
+          { id: "analytics" as const, label: "Аналитика" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              activeTab === tab.id
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {activeTab === "catalog" ? (
       <Card className="space-y-3 p-4">
         <h2 className="font-semibold">Создать курс</h2>
         <input
@@ -347,7 +426,9 @@ export function LMSBuilderPage() {
           Создать курс
         </button>
       </Card>
+      ) : null}
 
+      {activeTab === "catalog" ? (
       <Card className="space-y-3 p-4">
         <h2 className="font-semibold">Импорт из Markdown</h2>
         <input
@@ -371,18 +452,39 @@ export function LMSBuilderPage() {
           Импортировать
         </button>
       </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {activeTab === "catalog" ? (
         <Card className="space-y-3 p-4">
           <h2 className="font-semibold">Курсы</h2>
+          <div className="flex flex-col gap-2 md:flex-row">
+            <input
+              value={courseSearch}
+              onChange={(e) => setCourseSearch(e.target.value)}
+              placeholder="Поиск по названию и описанию..."
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <select
+              value={courseStatusFilter}
+              onChange={(e) => setCourseStatusFilter(e.target.value as "all" | LmsStatus)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="all">Все статусы</option>
+              <option value="draft">draft</option>
+              <option value="published">published</option>
+              <option value="archived">archived</option>
+            </select>
+          </div>
           <div className="space-y-2">
-            {(coursesQuery.data ?? []).map((course) => (
+            {filteredCourses.map((course) => (
               <div
                 key={course.id}
                 className={`rounded-lg border p-3 ${selectedCourseId === Number(course.id) ? "border-indigo-400 bg-indigo-50" : "border-gray-200"}`}
               >
                 <button onClick={() => setSelectedCourseId(Number(course.id))} className="w-full text-left">
                   <p className="font-medium">{course.title}</p>
+                  <p className="text-xs text-gray-500">{course.description ?? "Без описания"}</p>
                   <Badge className="mt-1 bg-purple-100 text-purple-700">{course.status}</Badge>
                 </button>
                 <div className="mt-2 flex items-center gap-2">
@@ -400,9 +502,14 @@ export function LMSBuilderPage() {
                 </div>
               </div>
             ))}
+            {filteredCourses.length === 0 ? (
+              <p className="text-sm text-gray-500">Курсы не найдены.</p>
+            ) : null}
           </div>
         </Card>
+        ) : null}
 
+        {activeTab === "structure" ? (
         <Card className="space-y-3 p-4">
           <h2 className="font-semibold">Структура курса</h2>
           {!selectedCourseId || !selectedCourse ? (
@@ -664,9 +771,105 @@ export function LMSBuilderPage() {
             </div>
           )}
         </Card>
+        ) : null}
       </div>
 
-      {selectedSectionId ? (
+      {activeTab === "access" ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="font-semibold">Доступ и назначения</h2>
+          {!selectedCourseId || !selectedCourse ? (
+            <p className="text-sm text-gray-500">Сначала выберите курс на вкладке «Каталог».</p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600">{selectedCourse.title}</p>
+              <p className="text-xs text-gray-500">
+                Управление назначениями вынесено в отдельную вкладку для сокращения шума в редакторе.
+              </p>
+              <div className="max-h-56 space-y-2 overflow-auto rounded border border-gray-100 p-2">
+                {(courseAssignmentsQuery.data ?? []).map((assignment) => (
+                  <div key={assignment.id} className="rounded border border-gray-100 p-2 text-xs">
+                    <p className="font-medium">{assignment.profile?.full_name ?? assignment.user_id}</p>
+                    <p className="text-gray-500">
+                      срок: {assignment.due_date ?? "не задан"} • роль: {assignment.profile?.role ?? "-"} •
+                      офис: {assignment.profile?.office_id ?? "-"}
+                    </p>
+                  </div>
+                ))}
+                {courseAssignmentsQuery.data && courseAssignmentsQuery.data.length === 0 ? (
+                  <p className="text-xs text-gray-500">Назначений пока нет.</p>
+                ) : null}
+              </div>
+            </>
+          )}
+        </Card>
+      ) : null}
+
+      {activeTab === "publish" ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="font-semibold">Публикация и версии</h2>
+          {!selectedCourseId || !selectedCourse ? (
+            <p className="text-sm text-gray-500">Сначала выберите курс на вкладке «Каталог».</p>
+          ) : (
+            <>
+              <div className="rounded-lg border border-gray-200 p-3">
+                <p className="mb-2 text-sm font-semibold">Чек-лист готовности</p>
+                <div className="space-y-1 text-sm">
+                  {publishChecklist.map((item) => (
+                    <p key={item.label} className={item.ok ? "text-emerald-700" : "text-amber-700"}>
+                      {item.ok ? "✓" : "•"} {item.label}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-200 p-3">
+                <p className="mb-2 text-sm font-semibold">Версии курса</p>
+                <div className="max-h-52 space-y-2 overflow-auto">
+                  {(courseVersionsQuery.data ?? []).slice(0, 20).map((versionItem) => (
+                    <div key={versionItem.id} className="flex items-center justify-between gap-2 rounded border border-gray-100 p-2 text-xs">
+                      <div>
+                        <p className="font-medium">v{versionItem.version}</p>
+                        <p className="text-gray-500">{versionItem.reason}</p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          rollbackVersionMutation.mutate({
+                            courseId: Number(selectedCourse.id),
+                            version: Number(versionItem.version),
+                          })
+                        }
+                        disabled={rollbackVersionMutation.isPending}
+                        className="rounded bg-amber-600 px-2 py-1 text-white hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        Откатить
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </Card>
+      ) : null}
+
+      {activeTab === "analytics" ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="font-semibold">Аналитика курса</h2>
+          {!selectedCourseId || !selectedCourse ? (
+            <p className="text-sm text-gray-500">Сначала выберите курс на вкладке «Каталог».</p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600">{selectedCourse.title}</p>
+              <p className="text-sm text-gray-500">
+                Прогресс: {courseProgressQuery.data?.completionPercent ?? 0}% •
+                Изучено подразделов: {courseProgressQuery.data?.completedSubsections ?? 0}/
+                {courseProgressQuery.data?.totalSubsections ?? 0}
+              </p>
+            </>
+          )}
+        </Card>
+      ) : null}
+
+      {activeTab === "content" && selectedSectionId ? (
         <Card className="space-y-3 p-4">
           <h2 className="font-semibold">Добавить подраздел</h2>
           <input
@@ -692,7 +895,7 @@ export function LMSBuilderPage() {
         </Card>
       ) : null}
 
-      {selectedSubsectionId && selectedSubsection ? (
+      {activeTab === "content" && selectedSubsectionId && selectedSubsection ? (
         <>
           <Card className="space-y-3 p-4">
             <h2 className="font-semibold">Медиа подраздела</h2>
