@@ -3,6 +3,7 @@ import { AppLayout } from "../components/layout/AppLayout";
 import { DashboardPage } from "../pages/DashboardPage";
 import { DocsPage } from "../pages/DocsPage";
 import { KBPage } from "../pages/KBPage";
+import { LessonPage } from "../pages/LessonPage";
 import { LMSPage } from "../pages/LMSPage";
 import { LoginPage } from "../pages/LoginPage";
 import { NewsPage } from "../pages/NewsPage";
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
           { path: "kb/:articleId", element: <KBPage /> },
           { path: "lms", element: <LMSPage /> },
           { path: "lms/courses/:courseId", element: <LMSPage /> },
+          { path: "lms/courses/:courseId/lessons/:lessonId", element: <LessonPage /> },
           { path: "lms/users/:userId", element: <LMSPage /> },
           { path: "lms-builder", element: <LMSBuilderPage /> },
           { path: "docs", element: <DocsPage /> },

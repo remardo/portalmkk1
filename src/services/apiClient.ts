@@ -1178,4 +1178,169 @@ export const backendApi = {
 
   readNotification: (id: number) => apiRequest(`/api/notifications/${id}/read`, { method: "POST" }),
   readAllNotifications: () => apiRequest(`/api/notifications/read-all`, { method: "POST" }),
+
+  // LMS Quiz API methods
+  getLmsQuizzes: (subsectionId: number) =>
+    apiRequest<
+      Array<{
+        id: number;
+        title: string;
+        description: string | null;
+        quiz_type: "quiz" | "survey" | "exam";
+        subsection_id: number | null;
+        course_id: number;
+        passing_score: number;
+        max_attempts: number | null;
+        time_limit_minutes: number | null;
+        shuffle_questions: boolean;
+        shuffle_options: boolean;
+        show_correct_answers: boolean;
+        show_explanations: boolean;
+        is_required: boolean;
+        sort_order: number;
+        status: "draft" | "published" | "archived";
+      }>
+    >(`/api/lms-quizzes?subsectionId=${subsectionId}`),
+
+  getLmsQuiz: (quizId: number) =>
+    apiRequest<{
+      id: number;
+      title: string;
+      description: string | null;
+      quiz_type: "quiz" | "survey" | "exam";
+      subsection_id: number | null;
+      course_id: number;
+      passing_score: number;
+      max_attempts: number | null;
+      time_limit_minutes: number | null;
+      shuffle_questions: boolean;
+      shuffle_options: boolean;
+      show_correct_answers: boolean;
+      show_explanations: boolean;
+      is_required: boolean;
+      sort_order: number;
+      status: "draft" | "published" | "archived";
+      questions: Array<{
+        id: number;
+        quiz_id: number;
+        question_type: "single_choice" | "multiple_choice" | "text_answer" | "matching" | "ordering";
+        question_text: string;
+        hint: string | null;
+        explanation: string | null;
+        image_url: string | null;
+        points: number;
+        sort_order: number;
+        options: Array<{
+          id: number;
+          question_id: number;
+          option_text: string;
+          is_correct: boolean;
+          sort_order: number;
+        }>;
+        matching_pairs: Array<{
+          id: number;
+          question_id: number;
+          left_text: string;
+          right_text: string;
+          sort_order: number;
+        }>;
+      }>;
+    }>(`/api/lms-quizzes/${quizId}`),
+
+  getLmsQuizAttempts: (quizId: number, userId?: string) =>
+    apiRequest<
+      Array<{
+        id: number;
+        quiz_id: number;
+        user_id: string;
+        attempt_no: number;
+        score: number;
+        max_score: number;
+        score_percent: number;
+        passed: boolean;
+        started_at: string;
+        submitted_at: string | null;
+        time_spent_seconds: number | null;
+        answers: Array<{
+          questionId: number;
+          selectedOptions?: number[];
+          textAnswer?: string;
+          matchingAnswers?: Array<{ leftId: number; rightId: number }>;
+          isCorrect?: boolean;
+          points?: number;
+        }>;
+        created_at: string;
+      }>
+    >(`/api/lms-quizzes/${quizId}/attempts${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`),
+
+  startLmsQuizAttempt: (quizId: number) =>
+    apiRequest<{
+      id: number;
+      quiz_id: number;
+      user_id: string;
+      attempt_no: number;
+      started_at: string;
+    }>(`/api/lms-quizzes/${quizId}/attempts`, { method: "POST" }),
+
+  submitLmsQuizAttempt: (
+    quizId: number,
+    input: {
+      answers: Array<{
+        questionId: number;
+        selectedOptions?: number[];
+        textAnswer?: string;
+        matchingAnswers?: Array<{ leftId: number; rightId: number }>;
+      }>;
+    }
+  ) =>
+    apiRequest<{
+      attemptId: number;
+      score: number;
+      maxScore: number;
+      scorePercent: number;
+      passed: boolean;
+      attemptNo: number;
+    }>(`/api/lms-quizzes/${quizId}/submit`, { method: "POST", body: JSON.stringify(input) }),
+
+  getLmsQuizProgress: (quizId: number) =>
+    apiRequest<{
+      id: number;
+      quiz_id: number;
+      user_id: string;
+      current_question_index: number;
+      answers: Array<{
+        questionId: number;
+        selectedOptions?: number[];
+        textAnswer?: string;
+        matchingAnswers?: Array<{ leftId: number; rightId: number }>;
+      }>;
+      started_at: string;
+      updated_at: string;
+    } | null>(`/api/lms-quizzes/${quizId}/progress`),
+
+  saveLmsQuizProgress: (
+    quizId: number,
+    input: {
+      currentQuestionIndex: number;
+      answers: Array<{
+        questionId: number;
+        selectedOptions?: number[];
+        textAnswer?: string;
+        matchingAnswers?: Array<{ leftId: number; rightId: number }>;
+      }>;
+    }
+  ) =>
+    apiRequest<{
+      id: number;
+      quiz_id: number;
+      user_id: string;
+      current_question_index: number;
+      answers: Array<{
+        questionId: number;
+        selectedOptions?: number[];
+        textAnswer?: string;
+        matchingAnswers?: Array<{ leftId: number; rightId: number }>;
+      }>;
+      updated_at: string;
+    }>(`/api/lms-quizzes/${quizId}/progress`, { method: "POST", body: JSON.stringify(input) }),
 };

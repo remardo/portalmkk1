@@ -5690,6 +5690,497 @@ app.post("/api/lms-progress/subsections/:id", requireAuth(), async (req, res) =>
   return res.json({ item: data, courseProgress: progress });
 });
 
+// ============================================
+// LMS Quiz API Endpoints
+// ============================================
+
+const lmsQuizQuerySchema = z.object({
+  subsection_id: z.coerce.number().int().positive().optional(),
+});
+
+const startLmsQuizAttemptSchema = z.object({
+  userId: z.string().uuid().optional(),
+});
+
+const submitLmsQuizAttemptSchema = z.object({
+  answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+  userId: z.string().uuid().optional(),
+});
+
+const saveLmsQuizProgressSchema = z.object({
+  answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+  currentQuestionIndex: z.number().int().min(0).optional(),
+  userId: z.string().uuid().optional(),
+});
+
+// GET /api/lms-quizzes - Get quizzes by subsection
+app.get("/api/lms-quizzes", requireAuth(), async (req, res) => {
+  const parsed = lmsQuizQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  if (!parsed.data.subsection_id) {
+    return res.status(400).json({ error: "subsection_id is required" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("lms_quizzes")
+    .select("*")
+    .eq("subsection_id", parsed.data.subsection_id)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  return res.json(data ?? []);
+});
+
+// GET /api/lms-quizzes/:id - Get quiz with questions and options
+app.get("/api/lms-quizzes/:id", requireAuth(), async (req, res) => {
+  const quizId = Number(req.params.id);
+  if (Number.isNaN(quizId)) {
+    return res.status(400).json({ error: "Invalid quiz id" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canViewAnswers = ["admin", "director"].includes(session.profile.role);
+
+  const { data: quiz, error: quizError } = await supabaseAdmin
+    .from("lms_quizzes")
+    .select("*")
+    .eq("id", quizId)
+    .single();
+
+  if (quizError || !quiz) {
+    return res.status(404).json({ error: quizError?.message ?? "Quiz not found" });
+  }
+
+  const { data: questions, error: questionsError } = await supabaseAdmin
+    .from("lms_quiz_questions")
+    .select("*")
+    .eq("quiz_id", quizId)
+    .order("sort_order", { ascending: true });
+
+  if (questionsError) {
+    return res.status(400).json({ error: questionsError.message });
+  }
+
+  const questionIds = (questions ?? []).map((q) => Number(q.id));
+
+  const { data: options, error: optionsError } = questionIds.length > 0
+    ? await supabaseAdmin
+        .from("lms_quiz_options")
+        .select("*")
+        .in("question_id", questionIds)
+        .order("sort_order", { ascending: true })
+    : { data: [], error: null };
+
+  if (optionsError) {
+    return res.status(400).json({ error: optionsError.message });
+  }
+
+  const { data: matchingPairs, error: matchingError } = questionIds.length > 0
+    ? await supabaseAdmin
+        .from("lms_quiz_matching_pairs")
+        .select("*")
+        .in("question_id", questionIds)
+        .order("id", { ascending: true })
+    : { data: [], error: null };
+
+  if (matchingError) {
+    return res.status(400).json({ error: matchingError.message });
+  }
+
+  const questionsWithOptions = (questions ?? []).map((q) => {
+    const questionOptions = (options ?? []).filter((o) => Number(o.question_id) === Number(q.id));
+    const questionMatchingPairs = (matchingPairs ?? []).filter((mp) => Number(mp.question_id) === Number(q.id));
+
+    return {
+      id: Number(q.id),
+      quizId: Number(q.quiz_id),
+      questionType: q.question_type,
+      questionText: q.question_text,
+      sortOrder: q.sort_order,
+      points: q.points,
+      explanation: canViewAnswers ? q.explanation : null,
+      options: questionOptions.map((o) => ({
+        id: Number(o.id),
+        questionId: Number(o.question_id),
+        optionText: o.option_text,
+        sortOrder: o.sort_order,
+        isCorrect: canViewAnswers ? o.is_correct : null,
+      })),
+      matchingPairs: questionMatchingPairs.map((mp) => ({
+        id: Number(mp.id),
+        questionId: Number(mp.question_id),
+        leftItem: mp.left_item,
+        rightItem: canViewAnswers ? mp.right_item : null,
+        sortOrder: mp.sort_order,
+      })),
+    };
+  });
+
+  return res.json({
+    id: Number(quiz.id),
+    subsectionId: Number(quiz.subsection_id),
+    title: quiz.title,
+    description: quiz.description,
+    quizType: quiz.quiz_type,
+    timeLimitMinutes: quiz.time_limit_minutes,
+    maxAttempts: quiz.max_attempts,
+    passingScore: quiz.passing_score,
+    shuffleQuestions: quiz.shuffle_questions,
+    shuffleOptions: quiz.shuffle_options,
+    showResults: quiz.show_results,
+    showCorrectAnswers: quiz.show_correct_answers,
+    createdAt: quiz.created_at,
+    updatedAt: quiz.updated_at,
+    questions: questionsWithOptions,
+  });
+});
+
+// GET /api/lms-quizzes/:id/attempts - Get quiz attempts for current user
+app.get("/api/lms-quizzes/:id/attempts", requireAuth(), async (req, res) => {
+  const quizId = Number(req.params.id);
+  if (Number.isNaN(quizId)) {
+    return res.status(400).json({ error: "Invalid quiz id" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canViewAll = ["admin", "director"].includes(session.profile.role);
+  const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
+  const targetUserId = canViewAll && userId ? userId : session.profile.id;
+
+  const { data, error } = await supabaseAdmin
+    .from("lms_quiz_attempts")
+    .select("*")
+    .eq("quiz_id", quizId)
+    .eq("user_id", targetUserId)
+    .order("started_at", { ascending: false });
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  return res.json(data ?? []);
+});
+
+// POST /api/lms-quizzes/:id/attempts - Start a new quiz attempt
+app.post("/api/lms-quizzes/:id/attempts", requireAuth(), async (req, res) => {
+  const quizId = Number(req.params.id);
+  if (Number.isNaN(quizId)) {
+    return res.status(400).json({ error: "Invalid quiz id" });
+  }
+
+  const parsed = startLmsQuizAttemptSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canActForOthers = ["admin", "director"].includes(session.profile.role);
+  const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
+
+  const { data: quiz, error: quizError } = await supabaseAdmin
+    .from("lms_quizzes")
+    .select("id,max_attempts")
+    .eq("id", quizId)
+    .single();
+
+  if (quizError || !quiz) {
+    return res.status(404).json({ error: quizError?.message ?? "Quiz not found" });
+  }
+
+  // Check attempt count if max_attempts is set
+  if (quiz.max_attempts && quiz.max_attempts > 0) {
+    const { count, error: countError } = await supabaseAdmin
+      .from("lms_quiz_attempts")
+      .select("*", { count: "exact", head: true })
+      .eq("quiz_id", quizId)
+      .eq("user_id", targetUserId);
+
+    if (countError) {
+      return res.status(400).json({ error: countError.message });
+    }
+
+    if ((count ?? 0) >= quiz.max_attempts) {
+      return res.status(400).json({ error: "Maximum attempts reached" });
+    }
+  }
+
+  const { data: attempt, error: attemptError } = await supabaseAdmin
+    .from("lms_quiz_attempts")
+    .insert({
+      quiz_id: quizId,
+      user_id: targetUserId,
+      status: "in_progress",
+      started_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+
+  if (attemptError || !attempt) {
+    return res.status(400).json({ error: attemptError?.message ?? "Failed to create attempt" });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "lms_quiz.attempt.start",
+    entityType: "lms_quiz_attempts",
+    entityId: String(attempt.id),
+    payload: { quizId, userId: targetUserId },
+  });
+
+  return res.status(201).json(attempt);
+});
+
+// POST /api/lms-quizzes/:id/submit - Submit quiz answers
+app.post("/api/lms-quizzes/:id/submit", requireAuth(), async (req, res) => {
+  const quizId = Number(req.params.id);
+  if (Number.isNaN(quizId)) {
+    return res.status(400).json({ error: "Invalid quiz id" });
+  }
+
+  const parsed = submitLmsQuizAttemptSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canActForOthers = ["admin", "director"].includes(session.profile.role);
+  const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
+
+  // Get the current in-progress attempt
+  const { data: attempt, error: attemptError } = await supabaseAdmin
+    .from("lms_quiz_attempts")
+    .select("*")
+    .eq("quiz_id", quizId)
+    .eq("user_id", targetUserId)
+    .eq("status", "in_progress")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (attemptError) {
+    return res.status(400).json({ error: attemptError.message });
+  }
+
+  if (!attempt) {
+    return res.status(400).json({ error: "No in-progress attempt found" });
+  }
+
+  // Get quiz and questions
+  const { data: quiz, error: quizError } = await supabaseAdmin
+    .from("lms_quizzes")
+    .select("id,passing_score")
+    .eq("id", quizId)
+    .single();
+
+  if (quizError || !quiz) {
+    return res.status(404).json({ error: quizError?.message ?? "Quiz not found" });
+  }
+
+  const { data: questions, error: questionsError } = await supabaseAdmin
+    .from("lms_quiz_questions")
+    .select("id,question_type,points")
+    .eq("quiz_id", quizId);
+
+  if (questionsError) {
+    return res.status(400).json({ error: questionsError.message });
+  }
+
+  const questionIds = (questions ?? []).map((q) => Number(q.id));
+
+  const { data: options, error: optionsError } = questionIds.length > 0
+    ? await supabaseAdmin
+        .from("lms_quiz_options")
+        .select("id,question_id,is_correct")
+        .in("question_id", questionIds)
+    : { data: [], error: null };
+
+  if (optionsError) {
+    return res.status(400).json({ error: optionsError.message });
+  }
+
+  const { data: matchingPairs, error: matchingError } = questionIds.length > 0
+    ? await supabaseAdmin
+        .from("lms_quiz_matching_pairs")
+        .select("id,question_id,right_item")
+        .in("question_id", questionIds)
+    : { data: [], error: null };
+
+  if (matchingError) {
+    return res.status(400).json({ error: matchingError.message });
+  }
+
+  // Calculate score
+  let totalPoints = 0;
+  let earnedPoints = 0;
+
+  for (const question of questions ?? []) {
+    const qId = String(question.id);
+    const qPoints = question.points ?? 1;
+    totalPoints += qPoints;
+
+    const userAnswer = parsed.data.answers[qId];
+    if (!userAnswer) continue;
+
+    if (question.question_type === "single_choice") {
+      const correctOption = (options ?? []).find(
+        (o) => Number(o.question_id) === Number(question.id) && o.is_correct
+      );
+      if (correctOption && String(userAnswer) === String(correctOption.id)) {
+        earnedPoints += qPoints;
+      }
+    } else if (question.question_type === "multiple_choice") {
+      const correctOptions = (options ?? [])
+        .filter((o) => Number(o.question_id) === Number(question.id) && o.is_correct)
+        .map((o) => String(o.id));
+      const userOptions = Array.isArray(userAnswer) ? userAnswer.map(String) : [String(userAnswer)];
+      const allCorrect = correctOptions.length > 0 &&
+        correctOptions.every((co) => userOptions.includes(co)) &&
+        userOptions.every((uo) => correctOptions.includes(uo));
+      if (allCorrect) {
+        earnedPoints += qPoints;
+      }
+    } else if (question.question_type === "matching") {
+      const pairs = (matchingPairs ?? []).filter((mp) => Number(mp.question_id) === Number(question.id));
+      const userMatches = Array.isArray(userAnswer) ? userAnswer : [String(userAnswer)];
+      // For matching, we expect answers in format "pairId:rightItem"
+      let correctMatches = 0;
+      for (const pair of pairs) {
+        const expectedAnswer = `${pair.id}:${pair.right_item}`;
+        if (userMatches.includes(expectedAnswer)) {
+          correctMatches++;
+        }
+      }
+      if (pairs.length > 0 && correctMatches === pairs.length) {
+        earnedPoints += qPoints;
+      }
+    } else if (question.question_type === "text_answer") {
+      // Text answers need manual grading, so we don't auto-score
+      // Just mark as submitted
+    } else if (question.question_type === "ordering") {
+      // For ordering, check if the order is correct
+      const userOrder = Array.isArray(userAnswer) ? userAnswer : [String(userAnswer)];
+      // Expected order is the correct sequence of option IDs
+      const correctOrder = (options ?? [])
+        .filter((o) => Number(o.question_id) === Number(question.id))
+        .sort((a, b) => Number(a.sort_order) - Number(b.sort_order))
+        .map((o) => String(o.id));
+      const isCorrect = JSON.stringify(userOrder) === JSON.stringify(correctOrder);
+      if (isCorrect) {
+        earnedPoints += qPoints;
+      }
+    }
+  }
+
+  const scorePercent = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+  const passed = scorePercent >= (quiz.passing_score ?? 0);
+
+  // Update attempt
+  const { data: updatedAttempt, error: updateError } = await supabaseAdmin
+    .from("lms_quiz_attempts")
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      score: scorePercent,
+      passed,
+      answers: parsed.data.answers,
+    })
+    .eq("id", attempt.id)
+    .select("*")
+    .single();
+
+  if (updateError) {
+    return res.status(400).json({ error: updateError.message });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "lms_quiz.attempt.submit",
+    entityType: "lms_quiz_attempts",
+    entityId: String(attempt.id),
+    payload: { quizId, userId: targetUserId, score: scorePercent, passed },
+  });
+
+  return res.json({
+    attemptId: attempt.id,
+    score: scorePercent,
+    passed,
+    totalPoints,
+    earnedPoints,
+  });
+});
+
+// GET /api/lms-quizzes/:id/progress - Get saved quiz progress
+app.get("/api/lms-quizzes/:id/progress", requireAuth(), async (req, res) => {
+  const quizId = Number(req.params.id);
+  if (Number.isNaN(quizId)) {
+    return res.status(400).json({ error: "Invalid quiz id" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canViewAll = ["admin", "director"].includes(session.profile.role);
+  const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
+  const targetUserId = canViewAll && userId ? userId : session.profile.id;
+
+  const { data, error } = await supabaseAdmin
+    .from("lms_quiz_progress")
+    .select("*")
+    .eq("quiz_id", quizId)
+    .eq("user_id", targetUserId)
+    .maybeSingle();
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  return res.json(data ?? null);
+});
+
+// POST /api/lms-quizzes/:id/progress - Save quiz progress
+app.post("/api/lms-quizzes/:id/progress", requireAuth(), async (req, res) => {
+  const quizId = Number(req.params.id);
+  if (Number.isNaN(quizId)) {
+    return res.status(400).json({ error: "Invalid quiz id" });
+  }
+
+  const parsed = saveLmsQuizProgressSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const canActForOthers = ["admin", "director"].includes(session.profile.role);
+  const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
+
+  const { data, error } = await supabaseAdmin
+    .from("lms_quiz_progress")
+    .upsert(
+      {
+        quiz_id: quizId,
+        user_id: targetUserId,
+        answers: parsed.data.answers,
+        current_question_index: parsed.data.currentQuestionIndex ?? 0,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "quiz_id,user_id" }
+    )
+    .select("*")
+    .single();
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  return res.json(data);
+});
+
 const listPaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),

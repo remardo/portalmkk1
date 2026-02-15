@@ -247,5 +247,113 @@ begin
 - полноту клиентских реквизитов
 - корректность статусов договоров
 - отсутствие незакрытых технических операций');
+
+  -- Add quizzes for the courses
+  declare
+    v_subsection_mfo_1 bigint;
+    v_subsection_mfo_2 bigint;
+    v_subsection_1c_1 bigint;
+    v_quiz_mfo_1 bigint;
+    v_quiz_mfo_2 bigint;
+    v_quiz_1c_1 bigint;
+  begin
+    -- Get subsection IDs for quizzes
+    select ss.id into v_subsection_mfo_1
+    from public.lms_subsections ss
+    join public.lms_sections s on s.id = ss.section_id
+    where s.course_id = v_course_mfo and ss.title = 'KYC и базовый комплаенс';
+
+    select ss.id into v_subsection_mfo_2
+    from public.lms_subsections ss
+    join public.lms_sections s on s.id = ss.section_id
+    where s.course_id = v_course_mfo and ss.title = 'Оформление и выдача займа';
+
+    select ss.id into v_subsection_1c_1
+    from public.lms_subsections ss
+    join public.lms_sections s on s.id = ss.section_id
+    where s.course_id = v_course_1c and ss.title = 'Карточка клиента';
+
+    -- Quiz 1: KYC and Compliance
+    if v_subsection_mfo_1 is not null then
+      insert into public.lms_quizzes (title, description, quiz_type, subsection_id, course_id, passing_score, max_attempts, show_correct_answers, show_explanations, is_required, status, created_by)
+      values ('Тест по KYC и комплаенсу', 'Проверка знаний по идентификации клиентов и базовым требованиям комплаенса', 'quiz', v_subsection_mfo_1, v_course_mfo, 70, 3, true, true, true, 'published', v_creator)
+      returning id into v_quiz_mfo_1;
+
+      -- Questions for KYC quiz
+      insert into public.lms_quiz_questions (quiz_id, question_type, question_text, hint, explanation, points, sort_order)
+      values
+        (v_quiz_mfo_1, 'single_choice', 'Какой документ является основным для идентификации клиента?', null, 'Паспорт гражданина РФ является основным документом для идентификации физического лица.', 1, 1),
+        (v_quiz_mfo_1, 'single_choice', 'Что необходимо проверить перед выдачей займа?', null, 'Все перечисленные проверки обязательны перед выдачей займа.', 1, 2),
+        (v_quiz_mfo_1, 'multiple_choice', 'Какие действия входят в процесс KYC?', null, 'KYC включает проверку документа, сверку данных и проверку по стоп-листам.', 1, 3);
+
+      -- Options for question 1
+      insert into public.lms_quiz_options (question_id, option_text, is_correct, sort_order)
+      values
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 1), 'Паспорт гражданина РФ', true, 1),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 1), 'Загранпаспорт', false, 2),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 1), 'Водительское удостоверение', false, 3),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 1), 'СНИЛС', false, 4);
+
+      -- Options for question 2
+      insert into public.lms_quiz_options (question_id, option_text, is_correct, sort_order)
+      values
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 2), 'Документ, удостоверяющий личность', false, 1),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 2), 'Контактные данные клиента', false, 2),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 2), 'Стоп-листы и ограничения', false, 3),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 2), 'Все вышеперечисленное', true, 4);
+
+      -- Options for question 3
+      insert into public.lms_quiz_options (question_id, option_text, is_correct, sort_order)
+      values
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 3), 'Проверка документа личности', true, 1),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 3), 'Сверка контактных данных', true, 2),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 3), 'Проверка по стоп-листам', true, 3),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_1 and sort_order = 3), 'Оформление кредита', false, 4);
+    end if;
+
+    -- Quiz 2: Loan Processing
+    if v_subsection_mfo_2 is not null then
+      insert into public.lms_quizzes (title, description, quiz_type, subsection_id, course_id, passing_score, max_attempts, show_correct_answers, show_explanations, is_required, status, created_by)
+      values ('Тест по оформлению займа', 'Проверка знаний по процессу оформления и выдачи займа', 'quiz', v_subsection_mfo_2, v_course_mfo, 70, 3, true, true, true, 'published', v_creator)
+      returning id into v_quiz_mfo_2;
+
+      insert into public.lms_quiz_questions (quiz_id, question_type, question_text, hint, explanation, points, sort_order)
+      values
+        (v_quiz_mfo_2, 'single_choice', 'Какой первый шаг в процессе оформления займа?', null, 'Прием заявки - первый этап процесса оформления займа.', 1, 1),
+        (v_quiz_mfo_2, 'single_choice', 'Что должен получить клиент после подписания договора?', null, 'Клиент обязан получить свой экземпляр договора и всех документов.', 1, 2);
+
+      insert into public.lms_quiz_options (question_id, option_text, is_correct, sort_order)
+      values
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_2 and sort_order = 1), 'Прием заявки', true, 1),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_2 and sort_order = 1), 'Скоринг', false, 2),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_2 and sort_order = 1), 'Выдача средств', false, 3),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_2 and sort_order = 1), 'Подписание документов', false, 4);
+
+      insert into public.lms_quiz_options (question_id, option_text, is_correct, sort_order)
+      values
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_2 and sort_order = 2), 'Только расписку', false, 1),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_2 and sort_order = 2), 'Экземпляр договора и документов', true, 2),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_2 and sort_order = 2), 'Только график платежей', false, 3),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_mfo_2 and sort_order = 2), 'Ничего не обязан получать', false, 4);
+    end if;
+
+    -- Quiz 3: 1C Client Card
+    if v_subsection_1c_1 is not null then
+      insert into public.lms_quizzes (title, description, quiz_type, subsection_id, course_id, passing_score, max_attempts, show_correct_answers, show_explanations, is_required, status, created_by)
+      values ('Тест по карточке клиента в 1С', 'Проверка знаний по работе с карточкой клиента', 'quiz', v_subsection_1c_1, v_course_1c, 70, 3, true, true, true, 'published', v_creator)
+      returning id into v_quiz_1c_1;
+
+      insert into public.lms_quiz_questions (quiz_id, question_type, question_text, hint, explanation, points, sort_order)
+      values
+        (v_quiz_1c_1, 'multiple_choice', 'Какие данные хранятся в карточке клиента?', null, 'В карточке клиента хранятся персональные данные, история заявок и договоров, контакты и комментарии.', 1, 1);
+
+      insert into public.lms_quiz_options (question_id, option_text, is_correct, sort_order)
+      values
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_1c_1 and sort_order = 1), 'Персональные данные', true, 1),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_1c_1 and sort_order = 1), 'История заявок и договоров', true, 2),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_1c_1 and sort_order = 1), 'Контакты и комментарии', true, 3),
+        ((select id from public.lms_quiz_questions where quiz_id = v_quiz_1c_1 and sort_order = 1), 'Данные других клиентов', false, 4);
+    end if;
+  end;
 end
 $$;

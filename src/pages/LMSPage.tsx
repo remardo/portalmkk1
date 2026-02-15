@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Award, BookOpen, ChevronLeft, Clock, Play, Users } from "lucide-react";
+import { Award, BookOpen, ChevronLeft, ChevronRight, Clock, Play, Users, CheckCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
@@ -116,6 +116,23 @@ export function LMSPage() {
 
     const course = lmsCourseQuery.data;
 
+    // Fetch course progress
+    const courseProgressQuery = useQuery({
+      queryKey: ["lms-progress", courseId],
+      queryFn: () => backendApi.getLmsCourseProgress(Number(courseId)),
+      enabled: Boolean(courseId && !Number.isNaN(courseId)),
+    });
+
+    // Calculate total lessons
+    const totalLessons = (course.sections ?? []).reduce(
+      (acc, section) => acc + (section.subsections ?? []).length,
+      0
+    );
+
+    // Calculate completed lessons
+    const completedLessons = courseProgressQuery.data?.completedSubsections ?? 0;
+    const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
     return (
       <div className="mx-auto max-w-4xl space-y-6">
         {/* Back link */}
@@ -135,74 +152,95 @@ export function LMSPage() {
             </Badge>
             <h1 className="text-2xl font-bold">{course.title}</h1>
             {course.description && <p className="mt-2 text-indigo-100">{course.description}</p>}
+            
+            {/* Progress bar */}
+            {totalLessons > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-sm text-indigo-100">
+                  <span>Прогресс курса</span>
+                  <span>{completedLessons} из {totalLessons} уроков ({progressPercent}%)</span>
+                </div>
+                <div className="mt-2 h-2 w-full rounded-full bg-white/20">
+                  <div
+                    className="h-2 rounded-full bg-white transition-all"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </Card>
 
-        {/* Course sections */}
-        {(course.sections ?? []).map((section, sectionIndex) => (
-          <Card key={section.id} className="overflow-hidden">
-            <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-sm font-bold text-indigo-600">
-                  {section.sort_order || sectionIndex + 1}
-                </div>
-                <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
-              </div>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {(section.subsections ?? []).map((subsection, subIndex) => (
-                <div key={subsection.id} className="p-5">
-                  <div className="mb-4 flex items-start gap-3">
-                    <div className="flex h-6 w-6 items-center justify-center rounded bg-gray-100 text-xs font-medium text-gray-600">
-                      {subsection.sort_order || subIndex + 1}
-                    </div>
-                    <h3 className="flex-1 font-semibold text-gray-900">{subsection.title}</h3>
-                  </div>
-                  <div className="ml-9">
-                    <MarkdownPreview markdown={subsection.markdown_content ?? ""} />
+        {/* Course sections with clickable lessons */}
+        {(course.sections ?? []).map((section, sectionIndex) => {
+          // Calculate section progress
+          const sectionSubsectionIds = (section.subsections ?? []).map((s) => s.id);
+          const sectionCompleted = courseProgressQuery.data?.sections
+            .find((s) => s.sectionId === section.id)?.completedSubsections ?? 0;
+          const sectionTotal = section.subsections?.length ?? 0;
+          const sectionProgress = sectionTotal > 0 ? Math.round((sectionCompleted / sectionTotal) * 100) : 0;
 
-                    {/* Media */}
-                    {(subsection.media ?? []).length > 0 && (
-                      <div className="mt-4 space-y-3">
-                        {subsection.media.map((item) => (
-                          <div
-                            key={item.id}
-                            className="overflow-hidden rounded-xl border border-gray-100 bg-gray-50"
-                          >
-                            {item.media_type === "image" && item.image_data_base64 ? (
-                              <img
-                                src={`data:${item.image_mime_type ?? "image/png"};base64,${item.image_data_base64}`}
-                                alt={item.caption ?? "image"}
-                                className="max-h-80 w-auto rounded-t-xl"
-                              />
-                            ) : item.media_type === "video" && item.external_url ? (
-                              <a
-                                href={item.external_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center gap-3 p-4 text-indigo-600 transition-colors hover:bg-indigo-50"
-                              >
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100">
-                                  <Play className="h-5 w-5" />
-                                </div>
-                                <span className="font-medium">{item.external_url}</span>
-                              </a>
-                            ) : null}
-                            {item.caption && (
-                              <p className="border-t border-gray-100 bg-white px-4 py-2 text-sm text-gray-500">
-                                {item.caption}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+          return (
+            <Card key={section.id} className="overflow-hidden">
+              <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-sm font-bold text-indigo-600">
+                      {section.sort_order || sectionIndex + 1}
+                    </div>
+                    <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
                   </div>
+                  {sectionTotal > 0 && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>{sectionCompleted}/{sectionTotal}</span>
+                      <div className="h-2 w-16 rounded-full bg-gray-200">
+                        <div
+                          className="h-2 rounded-full bg-indigo-600"
+                          style={{ width: `${sectionProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          </Card>
-        ))}
+              </div>
+              <div className="divide-y divide-gray-50">
+                {(section.subsections ?? []).map((subsection, subIndex) => {
+                  // Check if this lesson is completed
+                  const isCompleted = courseProgressQuery.data?.sections
+                    .find((s) => s.sectionId === section.id)
+                    ?.subsections.find((sub) => sub.subsectionId === subsection.id)?.completed ?? false;
+
+                  return (
+                    <Link
+                      key={subsection.id}
+                      to={`/lms/courses/${courseId}/lessons/${subsection.id}`}
+                      className="flex items-center gap-4 p-4 transition-colors hover:bg-indigo-50"
+                    >
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                        isCompleted 
+                          ? "bg-green-100 text-green-600" 
+                          : "bg-gray-100 text-gray-600"
+                      } text-sm font-medium`}>
+                        {isCompleted ? (
+                          <CheckCircle className="h-4 w-4" />
+                        ) : (
+                          subsection.sort_order || subIndex + 1
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{subsection.title}</p>
+                        <p className="text-xs text-gray-500 line-clamp-1">
+                          {subsection.markdown_content?.slice(0, 100) || "Нет описания"}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                    </Link>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })}
 
         {(course.sections ?? []).length === 0 && (
           <Card className="p-8 text-center">
