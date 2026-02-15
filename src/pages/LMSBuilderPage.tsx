@@ -135,10 +135,13 @@ export function LMSBuilderPage() {
         description: newCourseDescription || undefined,
         status: newCourseStatus,
       }),
-    onSuccess: async () => {
+    onSuccess: async (createdCourse) => {
       setNewCourseTitle("");
       setNewCourseDescription("");
       setNewCourseStatus("draft");
+      setCourseSearch("");
+      setCourseStatusFilter("all");
+      setSelectedCourseId(Number((createdCourse as { id: number | string }).id));
       await refresh();
     },
   });
@@ -264,17 +267,19 @@ export function LMSBuilderPage() {
     : undefined;
 
   const filteredCourses = useMemo(() => {
-    return (coursesQuery.data ?? []).filter((course) => {
-      if (courseStatusFilter !== "all" && course.status !== courseStatusFilter) {
-        return false;
-      }
-      const search = courseSearch.trim().toLowerCase();
-      if (!search) return true;
-      return (
-        course.title.toLowerCase().includes(search)
-        || (course.description ?? "").toLowerCase().includes(search)
-      );
-    });
+    return (coursesQuery.data ?? [])
+      .filter((course) => {
+        if (courseStatusFilter !== "all" && course.status !== courseStatusFilter) {
+          return false;
+        }
+        const search = courseSearch.trim().toLowerCase();
+        if (!search) return true;
+        return (
+          course.title.toLowerCase().includes(search)
+          || (course.description ?? "").toLowerCase().includes(search)
+        );
+      })
+      .sort((a, b) => Number(b.id) - Number(a.id));
   }, [coursesQuery.data, courseSearch, courseStatusFilter]);
 
   const assignmentCandidates = useMemo(() => {
@@ -393,67 +398,6 @@ export function LMSBuilderPage() {
           </button>
         ))}
       </div>
-      {activeTab === "catalog" ? (
-      <Card className="space-y-3 p-4">
-        <h2 className="font-semibold">Создать курс</h2>
-        <input
-          value={newCourseTitle}
-          onChange={(e) => setNewCourseTitle(e.target.value)}
-          placeholder="Название курса"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-        <textarea
-          value={newCourseDescription}
-          onChange={(e) => setNewCourseDescription(e.target.value)}
-          placeholder="Описание курса"
-          rows={3}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-        <select
-          value={newCourseStatus}
-          onChange={(e) => setNewCourseStatus(e.target.value as LmsStatus)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        >
-          <option value="draft">draft</option>
-          <option value="published">published</option>
-          <option value="archived">archived</option>
-        </select>
-        <button
-          onClick={() => createCourseMutation.mutate()}
-          disabled={!newCourseTitle.trim() || createCourseMutation.isPending}
-          className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-        >
-          Создать курс
-        </button>
-      </Card>
-      ) : null}
-
-      {activeTab === "catalog" ? (
-      <Card className="space-y-3 p-4">
-        <h2 className="font-semibold">Импорт из Markdown</h2>
-        <input
-          value={mdImportTitle}
-          onChange={(e) => setMdImportTitle(e.target.value)}
-          placeholder="Название курса для импорта"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-        <textarea
-          value={mdImportText}
-          onChange={(e) => setMdImportText(e.target.value)}
-          placeholder="## Раздел, ### Подраздел. Видео - обычная ссылка. Фото - data:image/...;base64,..."
-          rows={8}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-        />
-        <button
-          onClick={() => importMarkdownMutation.mutate()}
-          disabled={!mdImportTitle.trim() || !mdImportText.trim() || importMarkdownMutation.isPending}
-          className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-        >
-          Импортировать
-        </button>
-      </Card>
-      ) : null}
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {activeTab === "catalog" ? (
         <Card className="space-y-3 p-4">
@@ -773,6 +717,72 @@ export function LMSBuilderPage() {
         </Card>
         ) : null}
       </div>
+
+      {activeTab === "catalog" ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="font-semibold">Создать курс</h2>
+          <input
+            value={newCourseTitle}
+            onChange={(e) => setNewCourseTitle(e.target.value)}
+            placeholder="Название курса"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          <textarea
+            value={newCourseDescription}
+            onChange={(e) => setNewCourseDescription(e.target.value)}
+            placeholder="Описание курса"
+            rows={3}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          <select
+            value={newCourseStatus}
+            onChange={(e) => setNewCourseStatus(e.target.value as LmsStatus)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="draft">draft</option>
+            <option value="published">published</option>
+            <option value="archived">archived</option>
+          </select>
+          {createCourseMutation.error ? (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              Не удалось создать курс: {createCourseMutation.error.message}
+            </p>
+          ) : null}
+          <button
+            onClick={() => createCourseMutation.mutate()}
+            disabled={!newCourseTitle.trim() || createCourseMutation.isPending}
+            className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+          >
+            {createCourseMutation.isPending ? "Создание..." : "Создать курс"}
+          </button>
+        </Card>
+      ) : null}
+
+      {activeTab === "catalog" ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="font-semibold">Импорт из Markdown</h2>
+          <input
+            value={mdImportTitle}
+            onChange={(e) => setMdImportTitle(e.target.value)}
+            placeholder="Название курса для импорта"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          <textarea
+            value={mdImportText}
+            onChange={(e) => setMdImportText(e.target.value)}
+            placeholder="## Раздел, ### Подраздел. Видео - обычная ссылка. Фото - data:image/...;base64,..."
+            rows={8}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+          />
+          <button
+            onClick={() => importMarkdownMutation.mutate()}
+            disabled={!mdImportTitle.trim() || !mdImportText.trim() || importMarkdownMutation.isPending}
+            className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+          >
+            Импортировать
+          </button>
+        </Card>
+      ) : null}
 
       {activeTab === "access" ? (
         <Card className="space-y-3 p-4">
