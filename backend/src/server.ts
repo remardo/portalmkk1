@@ -608,7 +608,13 @@ async function canSessionAccessDocument(session: Session, document: { office_id:
     }
     return false;
   }
-  return document.author === session.profile.full_name;
+  if (session.profile.role === "operator") {
+    if (session.profile.office_id && Number(document.office_id) === Number(session.profile.office_id)) {
+      return true;
+    }
+    return document.author === session.profile.full_name;
+  }
+  return false;
 }
 
 function isSmokeBypassAuthorizedRequest(req: express.Request) {
@@ -2026,6 +2032,24 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     }
     return true;
   });
+  const scopedDocuments = (documents.data ?? []).filter((document) => {
+    if (session.profile.role === "operator") {
+      if (session.profile.office_id && Number(document.office_id) === Number(session.profile.office_id)) {
+        return true;
+      }
+      return document.author === session.profile.full_name;
+    }
+    if (session.profile.role === "office_head") {
+      if (officeHeadOfficeIds.length > 0) {
+        return officeHeadOfficeIds.includes(Number(document.office_id));
+      }
+      if (session.profile.office_id) {
+        return Number(document.office_id) === Number(session.profile.office_id);
+      }
+      return false;
+    }
+    return true;
+  });
 
   const documentFileByDocumentId = new Map(
     (documentFiles.data ?? []).map((row) => [Number(row.document_id), row]),
@@ -2042,7 +2066,7 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     courseAttempts: courseAttempts.data,
     attestations: attestations.data,
     tasks: scopedTasks,
-    documents: (documents.data ?? []).map((document) => {
+    documents: scopedDocuments.map((document) => {
       const file = documentFileByDocumentId.get(Number(document.id));
       return {
         ...document,

@@ -220,6 +220,8 @@ create table if not exists public.document_templates (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.document_templates add column if not exists folder text not null default 'Общее';
+alter table public.document_templates add column if not exists instruction text null;
 alter table public.documents add column if not exists body text null;
 alter table public.documents add column if not exists template_id bigint null references public.document_templates(id) on delete set null;
 alter table public.documents add column if not exists approval_route_id bigint null references public.document_approval_routes(id) on delete set null;
