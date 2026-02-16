@@ -1150,7 +1150,7 @@ const adminCreateUserSchema = z.object({
   officeId: z.number().int().positive().nullable().optional(),
 });
 
-app.get("/api/admin/users", requireAuth(), requireRole(["admin", "director"]), async (_req, res) => {
+app.get("/api/admin/users", requireAuth(), requireRole(["admin", "director", "office_head"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin
     .from("profiles")
     .select("id,full_name,role,office_id,email,phone,points,position,avatar")
@@ -1228,7 +1228,7 @@ const adminUpdateUserSchema = z.object({
   avatar: z.string().optional(),
 });
 
-app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
   const parsed = adminUpdateUserSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json(parsed.error.format());
@@ -1378,7 +1378,7 @@ const adminUpdateOfficeSchema = z.object({
   rating: z.number().int().min(0).optional(),
 });
 
-app.patch("/api/admin/offices/:id", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+app.patch("/api/admin/offices/:id", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
   const parsed = adminUpdateOfficeSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json(parsed.error.format());
@@ -2857,7 +2857,7 @@ const createNewsSchema = z.object({
   pinned: z.boolean().default(false),
 });
 
-app.post("/api/news", requireAuth(), requireRole(["director", "admin"]), async (req, res) => {
+app.post("/api/news", requireAuth(), requireRole(["director", "admin", "office_head"]), async (req, res) => {
   const parsed = createNewsSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json(parsed.error.format());
@@ -2965,7 +2965,7 @@ app.delete("/api/news/:id", requireAuth(), requireRole(["director", "admin"]), a
 const createTaskSchema = z.object({
   title: z.string().min(2),
   description: z.string().min(2),
-  officeId: z.number().int().positive(),
+  officeId: z.number().int().positive().optional(),
   assigneeId: z.string().uuid(),
   type: z.enum(["order", "checklist", "auto"]),
   priority: z.enum(["low", "medium", "high"]),
@@ -2978,10 +2978,32 @@ app.post("/api/tasks", requireAuth(), requireRole(["director", "admin", "office_
     return res.status(400).json(parsed.error.format());
   }
 
+  const session = (req as express.Request & { session: Session }).session;
+  let resolvedOfficeId = parsed.data.officeId;
+  if (resolvedOfficeId === undefined) {
+    const { data: assignee, error: assigneeError } = await supabaseAdmin
+      .from("profiles")
+      .select("office_id")
+      .eq("id", parsed.data.assigneeId)
+      .single();
+    if (assigneeError) {
+      return res.status(400).json({ error: assigneeError.message });
+    }
+
+    const assigneeOfficeId = assignee?.office_id ?? null;
+    resolvedOfficeId = assigneeOfficeId ?? session.profile.office_id ?? undefined;
+  }
+
+  if (resolvedOfficeId === undefined || resolvedOfficeId === null) {
+    return res.status(400).json({
+      error: "Cannot determine office for task. Provide officeId or assign user with linked office.",
+    });
+  }
+
   const payload = {
     title: parsed.data.title,
     description: parsed.data.description,
-    office_id: parsed.data.officeId,
+    office_id: resolvedOfficeId,
     assignee_id: parsed.data.assigneeId,
     status: "new",
     type: parsed.data.type,
@@ -3004,7 +3026,6 @@ app.post("/api/tasks", requireAuth(), requireRole(["director", "admin", "office_
     entityId: String(data.id),
   });
 
-  const session = (req as express.Request & { session: Session }).session;
   await writeAuditLog({
     actorUserId: session.profile.id,
     actorRole: session.profile.role,

@@ -189,6 +189,57 @@ test("PATCH /api/admin/offices/:id returns 400 for invalid payload schema", asyn
   }
 });
 
+test("PATCH /api/admin/offices/:id returns 400 for office_head role with invalid payload schema", async () => {
+  const server = await startTestServer({ role: "office_head", token: "smoke-office-head-admin-office-patch-invalid" });
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/offices/1`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "x" }),
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("PATCH /api/admin/users/:id returns 400 for office_head role with invalid payload schema", async () => {
+  const server = await startTestServer({ role: "office_head", token: "smoke-office-head-admin-user-patch-invalid" });
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/users/00000000-0000-0000-0000-000000000001`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ fullName: "x" }),
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("POST /api/news returns 400 for office_head role with invalid payload schema", async () => {
+  const server = await startTestServer({ role: "office_head", token: "smoke-office-head-news-create-invalid" });
+  try {
+    const response = await fetch(`${server.baseUrl}/api/news`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ title: "x", body: "x" }),
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("GET /api/ops/slo-routing-policies returns 401 without token", async () => {
   const server = await startTestServer();
   try {
