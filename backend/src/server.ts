@@ -547,6 +547,14 @@ function isMissingCreatedByColumnError(error: unknown) {
   return typeof maybeMessage === "string" && /created_by/i.test(maybeMessage) && /column/i.test(maybeMessage);
 }
 
+function isCreatedByForeignKeyError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const maybeMessage = "message" in error ? (error as { message?: unknown }).message : undefined;
+  return typeof maybeMessage === "string" && /tasks_created_by_fkey/i.test(maybeMessage);
+}
+
 function isSmokeBypassAuthorizedRequest(req: express.Request) {
   if (!env.SMOKE_AUTH_BYPASS_ENABLED) {
     return false;
@@ -3094,7 +3102,10 @@ app.post("/api/tasks", requireAuth(), requireRole(["director", "admin", "office_
   };
 
   let createResponse = await supabaseAdmin.from("tasks").insert(payload).select("*").single();
-  if (createResponse.error && isMissingCreatedByColumnError(createResponse.error)) {
+  if (
+    createResponse.error
+    && (isMissingCreatedByColumnError(createResponse.error) || isCreatedByForeignKeyError(createResponse.error))
+  ) {
     const { created_by: _createdBy, ...legacyPayload } = payload;
     createResponse = await supabaseAdmin.from("tasks").insert(legacyPayload).select("*").single();
   }

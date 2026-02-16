@@ -56,7 +56,6 @@ export function TasksPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("Новая задача");
-  const [officeId, setOfficeId] = useState<string>("");
   const [assigneeId, setAssigneeId] = useState<string>("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [type, setType] = useState<"order" | "checklist" | "auto">("order");
@@ -89,9 +88,7 @@ export function TasksPage() {
     }
     const roleScopedTasks = user.role === "operator"
       ? data.tasks.filter((task) => String(task.assigneeId) === String(user.id))
-      : user.role === "office_head"
-        ? data.tasks.filter((task) => managedOfficeIds.includes(Number(task.officeId)))
-        : data.tasks;
+      : data.tasks;
     return roleScopedTasks.filter((task) => !statusFilter || task.status === statusFilter);
   }, [data, managedOfficeIds, statusFilter, user]);
 
@@ -105,13 +102,23 @@ export function TasksPage() {
 
   const availableOffices =
     user.role === "office_head"
-      ? data.offices.filter((office) => managedOfficeIds.includes(Number(office.id)))
+      ? managedOfficeIds.length > 0
+        ? data.offices.filter((office) => managedOfficeIds.includes(Number(office.id)))
+        : data.offices
       : data.offices;
 
-  const selectedOfficeId = officeId ? Number(officeId) : availableOffices[0]?.id;
-  const availableAssignees = data.users.filter((u) =>
-    selectedOfficeId ? u.officeId === selectedOfficeId : true
-  );
+  const availableAssignees = data.users.filter((u) => {
+    if (u.role === "admin" || u.role === "director") {
+      return false;
+    }
+    if (user.role === "office_head") {
+      if (managedOfficeIds.length > 0) {
+        return managedOfficeIds.includes(Number(u.officeId));
+      }
+      return user.officeId ? Number(u.officeId) === Number(user.officeId) : true;
+    }
+    return true;
+  });
 
   const selectedEditOfficeId = editOfficeId ? Number(editOfficeId) : undefined;
   const editAssignees = data.users.filter((u) =>
@@ -388,21 +395,7 @@ export function TasksPage() {
               placeholder="Описание"
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <select
-                value={officeId}
-                onChange={(event) => {
-                  setOfficeId(event.target.value);
-                  setAssigneeId("");
-                }}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              >
-                {availableOffices.map((office) => (
-                  <option key={office.id} value={office.id}>
-                    {office.name}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <select
                 value={assigneeId}
                 onChange={(event) => setAssigneeId(event.target.value)}
@@ -439,12 +432,10 @@ export function TasksPage() {
                 if (!title.trim() || !assigneeId) {
                   return;
                 }
-                const candidateOfficeId = Number(officeId || availableOffices[0]?.id);
                 createTask.mutate({
                   title: title.trim(),
                   description: description.trim() || "Без описания",
                   assigneeId,
-                  ...(Number.isFinite(candidateOfficeId) ? { officeId: candidateOfficeId } : {}),
                   dueDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10),
                   priority,
                   type,
