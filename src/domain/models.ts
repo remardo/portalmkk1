@@ -118,6 +118,9 @@ export interface ShopProduct {
   pricePoints: number;
   stockQty: number | null;
   isActive: boolean;
+  imageUrl: string | null;
+  imageDataBase64: string | null;
+  imageMimeType: string | null;
   imageEmoji: string | null;
   createdAt: string;
   updatedAt: string;

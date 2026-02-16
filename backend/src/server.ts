@@ -564,6 +564,13 @@ const allowedDocumentFileMimeTypes = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 const maxDocumentFileBytes = 10 * 1024 * 1024;
+const allowedShopProductImageMimeTypes = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
+const maxShopProductImageBytes = 3 * 1024 * 1024;
 const shopOrderStatuses = ["new", "processing", "shipped", "delivered", "cancelled"] as const;
 
 function getFileExtension(fileName: string) {
@@ -593,6 +600,27 @@ function validateDocumentFile(input: { fileName: string; mimeType: string; fileD
     return { ok: false as const, error: "File exceeds size limit 10MB" };
   }
   return { ok: true as const, buffer };
+}
+
+function validateShopProductImage(input: { mimeType: string; imageDataBase64: string }) {
+  if (!allowedShopProductImageMimeTypes.has(input.mimeType)) {
+    return { ok: false as const, error: "Unsupported image MIME type" };
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(input.imageDataBase64, "base64");
+  } catch {
+    return { ok: false as const, error: "Invalid base64 image payload" };
+  }
+
+  if (!buffer.length) {
+    return { ok: false as const, error: "Image payload is empty" };
+  }
+  if (buffer.length > maxShopProductImageBytes) {
+    return { ok: false as const, error: `Image is too large. Max ${maxShopProductImageBytes} bytes` };
+  }
+  return { ok: true as const, sizeBytes: buffer.length };
 }
 
 async function canSessionAccessDocument(session: Session, document: { office_id: number; author: string }) {
@@ -3502,6 +3530,34 @@ const updateShopOrderStatusSchema = z.object({
   status: z.enum(shopOrderStatuses),
 });
 
+const createAdminShopProductSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  description: z.string().trim().max(1000).optional(),
+  category: z.string().trim().min(1).max(120),
+  isMaterial: z.boolean().default(true),
+  pricePoints: z.number().int().min(1).max(1_000_000),
+  stockQty: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  isActive: z.boolean().default(true),
+  imageUrl: z.string().trim().url().max(1000).optional(),
+  imageDataBase64: z.string().min(20).max(8_000_000).optional(),
+  imageMimeType: z.string().trim().min(3).max(120).optional(),
+  imageEmoji: z.string().trim().max(32).optional(),
+});
+
+const updateAdminShopProductSchema = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  description: z.string().trim().max(1000).nullable().optional(),
+  category: z.string().trim().min(1).max(120).optional(),
+  isMaterial: z.boolean().optional(),
+  pricePoints: z.number().int().min(1).max(1_000_000).optional(),
+  stockQty: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  isActive: z.boolean().optional(),
+  imageUrl: z.string().trim().url().max(1000).nullable().optional(),
+  imageDataBase64: z.string().min(20).max(8_000_000).nullable().optional(),
+  imageMimeType: z.string().trim().min(3).max(120).nullable().optional(),
+  imageEmoji: z.string().trim().max(32).nullable().optional(),
+});
+
 app.get("/api/shop/products", requireAuth(), async (_req, res) => {
   const { data, error } = await supabaseAdmin
     .from("shop_products")
@@ -3512,6 +3568,137 @@ app.get("/api/shop/products", requireAuth(), async (_req, res) => {
     return res.status(400).json({ error: error.message });
   }
   return res.json(data ?? []);
+});
+
+app.get("/api/admin/shop/products", requireAuth(), requireRole(["office_head", "director", "admin"]), async (_req, res) => {
+  const { data, error } = await supabaseAdmin.from("shop_products").select("*").order("name");
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.post("/api/admin/shop/products", requireAuth(), requireRole(["office_head", "director", "admin"]), async (req, res) => {
+  const parsed = createAdminShopProductSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  if ((parsed.data.imageDataBase64 && !parsed.data.imageMimeType) || (!parsed.data.imageDataBase64 && parsed.data.imageMimeType)) {
+    return res.status(400).json({ error: "imageDataBase64 and imageMimeType must be provided together" });
+  }
+  if (parsed.data.imageDataBase64 && parsed.data.imageMimeType) {
+    const validatedImage = validateShopProductImage({
+      imageDataBase64: parsed.data.imageDataBase64,
+      mimeType: parsed.data.imageMimeType,
+    });
+    if (!validatedImage.ok) {
+      return res.status(400).json({ error: validatedImage.error });
+    }
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    name: parsed.data.name,
+    description: parsed.data.description?.trim() || null,
+    category: parsed.data.category,
+    is_material: parsed.data.isMaterial,
+    price_points: parsed.data.pricePoints,
+    stock_qty: parsed.data.stockQty ?? null,
+    is_active: parsed.data.isActive,
+    image_url: parsed.data.imageUrl?.trim() || null,
+    image_data_base64: parsed.data.imageDataBase64 ?? null,
+    image_mime_type: parsed.data.imageMimeType ?? null,
+    image_emoji: parsed.data.imageEmoji?.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin.from("shop_products").insert(payload).select("*").single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to create shop product" });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "shop_products.create",
+    entityType: "shop_products",
+    entityId: String(data.id),
+    payload,
+  });
+
+  return res.status(201).json(data);
+});
+
+app.patch("/api/admin/shop/products/:id", requireAuth(), requireRole(["office_head", "director", "admin"]), async (req, res) => {
+  const parsed = updateAdminShopProductSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const productId = Number(req.params.id);
+  if (Number.isNaN(productId)) {
+    return res.status(400).json({ error: "Invalid product id" });
+  }
+
+  if ((parsed.data.imageDataBase64 !== undefined) !== (parsed.data.imageMimeType !== undefined)) {
+    return res.status(400).json({ error: "imageDataBase64 and imageMimeType must be provided together" });
+  }
+  if (parsed.data.imageDataBase64 !== undefined && parsed.data.imageMimeType !== undefined) {
+    if ((parsed.data.imageDataBase64 === null) !== (parsed.data.imageMimeType === null)) {
+      return res.status(400).json({ error: "imageDataBase64 and imageMimeType must be both null or both non-null" });
+    }
+    if (parsed.data.imageDataBase64 && parsed.data.imageMimeType) {
+      const validatedImage = validateShopProductImage({
+        imageDataBase64: parsed.data.imageDataBase64,
+        mimeType: parsed.data.imageMimeType,
+      });
+      if (!validatedImage.ok) {
+        return res.status(400).json({ error: validatedImage.error });
+      }
+    }
+  }
+
+  const updatePayload: Record<string, unknown> = {};
+  if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+  if (parsed.data.description !== undefined) updatePayload.description = parsed.data.description?.trim() || null;
+  if (parsed.data.category !== undefined) updatePayload.category = parsed.data.category;
+  if (parsed.data.isMaterial !== undefined) updatePayload.is_material = parsed.data.isMaterial;
+  if (parsed.data.pricePoints !== undefined) updatePayload.price_points = parsed.data.pricePoints;
+  if (parsed.data.stockQty !== undefined) updatePayload.stock_qty = parsed.data.stockQty;
+  if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
+  if (parsed.data.imageUrl !== undefined) updatePayload.image_url = parsed.data.imageUrl?.trim() || null;
+  if (parsed.data.imageDataBase64 !== undefined) updatePayload.image_data_base64 = parsed.data.imageDataBase64;
+  if (parsed.data.imageMimeType !== undefined) updatePayload.image_mime_type = parsed.data.imageMimeType;
+  if (parsed.data.imageEmoji !== undefined) updatePayload.image_emoji = parsed.data.imageEmoji?.trim() || null;
+
+  if (Object.keys(updatePayload).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  updatePayload.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("shop_products")
+    .update(updatePayload)
+    .eq("id", productId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to update shop product" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "shop_products.update",
+    entityType: "shop_products",
+    entityId: String(productId),
+    payload: updatePayload,
+  });
+
+  return res.json(data);
 });
 
 app.get("/api/shop/orders", requireAuth(), async (req, res) => {

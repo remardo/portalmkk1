@@ -21,6 +21,17 @@ export function ShopPage() {
   const [comment, setComment] = useState("");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const productsByCategory = useMemo(() => {
+    const grouped = new Map<string, NonNullable<typeof data>["shopProducts"]>();
+    for (const product of data?.shopProducts ?? []) {
+      const key = product.category || "Разное";
+      const current = grouped.get(key) ?? [];
+      current.push(product);
+      grouped.set(key, current);
+    }
+    return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0], "ru"));
+  }, [data?.shopProducts]);
+
   if (!user || !data) {
     return null;
   }
@@ -31,17 +42,6 @@ export function ShopPage() {
     .filter((row): row is { product: (typeof data.shopProducts)[number]; quantity: number } => Boolean(row.product) && row.quantity > 0);
 
   const totalPoints = cartRows.reduce((sum, row) => sum + row.product.pricePoints * row.quantity, 0);
-
-  const productsByCategory = useMemo(() => {
-    const grouped = new Map<string, typeof data.shopProducts>();
-    for (const product of data.shopProducts) {
-      const key = product.category || "Разное";
-      const current = grouped.get(key) ?? [];
-      current.push(product);
-      grouped.set(key, current);
-    }
-    return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0], "ru"));
-  }, [data.shopProducts]);
 
   const myOrders = data.shopOrders.filter((order) => String(order.buyerUserId) === String(user.id));
 
@@ -106,6 +106,18 @@ export function ShopPage() {
                       {product.imageEmoji ? `${product.imageEmoji} ` : ""}
                       {product.name}
                     </p>
+                    {product.imageDataBase64 || product.imageUrl ? (
+                      <img
+                        src={
+                          product.imageDataBase64
+                            ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
+                            : (product.imageUrl ?? "")
+                        }
+                        alt={product.name}
+                        className="mt-2 h-28 w-full rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    ) : null}
                     <p className="mt-1 text-xs text-gray-500">{product.description ?? "Без описания"}</p>
                     <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
                       <span>{product.isMaterial ? "Материальный" : "Нематериальный"}</span>
@@ -113,21 +125,12 @@ export function ShopPage() {
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <p className="text-sm font-bold text-indigo-700">{product.pricePoints} баллов</p>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => decrement(product.id)}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
-                        >
-                          -
-                        </button>
-                        <span className="min-w-6 text-center text-xs">{cart[product.id] ?? 0}</span>
-                        <button
-                          onClick={() => increment(product.id)}
-                          className="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700"
-                        >
-                          +
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => increment(product.id)}
+                        className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                      >
+                        Купить
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -141,10 +144,20 @@ export function ShopPage() {
           <div className="mt-3 space-y-2">
             {cartRows.map((row) => (
               <div key={row.product.id} className="rounded-lg border border-gray-200 p-2">
-                <p className="text-sm font-medium text-gray-900">{row.product.name}</p>
-                <p className="text-xs text-gray-500">
-                  {row.quantity} × {row.product.pricePoints} = {row.quantity * row.product.pricePoints} баллов
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{row.product.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {row.quantity} × {row.product.pricePoints} = {row.quantity * row.product.pricePoints} баллов
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => decrement(row.product.id)}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+                  >
+                    -1
+                  </button>
+                </div>
               </div>
             ))}
             {cartRows.length === 0 ? (

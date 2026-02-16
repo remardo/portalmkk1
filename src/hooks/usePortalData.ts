@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Task } from "../domain/models";
 import {
+  type AdminCreateShopProductInput,
+  type AdminUpdateShopProductInput,
   type AdminAuditList,
   type AdminCreateUserInput,
   type AdminSloStatus,
@@ -117,6 +119,36 @@ export function useUpdateShopOrderStatusMutation() {
   return useMutation({
     mutationFn: (input: UpdateShopOrderStatusInput) => portalRepository.updateShopOrderStatus(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useAdminShopProductsQuery(enabled = true) {
+  return useQuery({
+    queryKey: ["admin-shop-products"],
+    queryFn: () => portalRepository.adminGetShopProducts(),
+    enabled,
+  });
+}
+
+export function useAdminCreateShopProductMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AdminCreateShopProductInput) => portalRepository.adminCreateShopProduct(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-shop-products"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+    },
+  });
+}
+
+export function useAdminUpdateShopProductMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AdminUpdateShopProductInput) => portalRepository.adminUpdateShopProduct(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-shop-products"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+    },
   });
 }
 

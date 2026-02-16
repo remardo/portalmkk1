@@ -6,13 +6,16 @@ import { portalRepository } from "../services/portalRepository";
 import {
   useAdminAuditQuery,
   useAdminCreateUserMutation,
+  useAdminCreateShopProductMutation,
+  useAdminShopProductsQuery,
   useAdminUpdateOfficeMutation,
+  useAdminUpdateShopProductMutation,
   useUpdateShopOrderStatusMutation,
   useAdminUpdateUserMutation,
   usePortalData,
 } from "../hooks/usePortalData";
 import { canAccessAdmin } from "../lib/permissions";
-import { RoleLabels, type Office, type Role, type User } from "../domain/models";
+import { RoleLabels, type Office, type Role, type ShopProduct, type User } from "../domain/models";
 import { useSearchParams } from "react-router-dom";
 
 const roleOptions: Role[] = ["operator", "office_head", "director", "admin"];
@@ -26,6 +29,19 @@ const shopOrderStatusOptions: Array<{ value: "new" | "processing" | "shipped" | 
   { value: "cancelled", label: "Отменен" },
 ];
 
+function toBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const base64 = result.replace(/^data:[^;]+;base64,/, "");
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data } = usePortalData();
@@ -34,6 +50,8 @@ export function AdminPage() {
   const updateUser = useAdminUpdateUserMutation();
   const updateOffice = useAdminUpdateOfficeMutation();
   const updateShopOrderStatus = useUpdateShopOrderStatusMutation();
+  const createShopProduct = useAdminCreateShopProductMutation();
+  const updateShopProduct = useAdminUpdateShopProductMutation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +73,24 @@ export function AdminPage() {
   const [officeDrafts, setOfficeDrafts] = useState<
     Record<number, { name: string; city: string; address: string; rating: string; headId: string }>
   >({});
+  const [shopProductDrafts, setShopProductDrafts] = useState<
+    Record<number, { name: string; description: string; category: string; pricePoints: string; imageUrl: string; isActive: boolean }>
+  >({});
+  const [shopProductImageFiles, setShopProductImageFiles] = useState<Record<number, File | null>>({});
+  const [newShopProduct, setNewShopProduct] = useState<{
+    name: string;
+    description: string;
+    category: string;
+    pricePoints: string;
+    imageUrl: string;
+  }>({
+    name: "",
+    description: "",
+    category: "",
+    pricePoints: "",
+    imageUrl: "",
+  });
+  const [newShopProductImageFile, setNewShopProductImageFile] = useState<File | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const initialTab = (() => {
     const raw = searchParams.get("tab");
@@ -63,6 +99,8 @@ export function AdminPage() {
   })();
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const pageSize = Number(auditLimit) || 50;
+  const canViewShopOrders = user?.role === "office_head" || user?.role === "director" || user?.role === "admin";
+  const adminShopProducts = useAdminShopProductsQuery(Boolean(user && canAccessAdmin(user.role) && canViewShopOrders));
   const audit = useAdminAuditQuery({
     limit: pageSize,
     offset: (auditPage - 1) * pageSize,
@@ -134,7 +172,6 @@ export function AdminPage() {
   if (!canAccessAdmin(user.role)) {
     return <p className="text-sm text-red-500">Доступ запрещен.</p>;
   }
-  const canViewShopOrders = user.role === "office_head" || user.role === "director" || user.role === "admin";
 
   function getUserDraft(item: User) {
     return (
@@ -157,6 +194,19 @@ export function AdminPage() {
         address: item.address,
         rating: String(item.rating ?? 0),
         headId: item.headId ? String(item.headId) : "",
+      }
+    );
+  }
+
+  function getShopProductDraft(item: ShopProduct) {
+    return (
+      shopProductDrafts[item.id] ?? {
+        name: item.name,
+        description: item.description ?? "",
+        category: item.category,
+        pricePoints: String(item.pricePoints),
+        imageUrl: item.imageUrl ?? "",
+        isActive: item.isActive,
       }
     );
   }
@@ -579,7 +629,234 @@ export function AdminPage() {
 
       {activeTab === "orders" ? (
       <Card className="p-4">
-        <h2 className="mb-3 font-semibold">Заказы внутреннего магазина</h2>
+        <h2 className="mb-3 font-semibold">Товары и заказы внутреннего магазина</h2>
+        <div className="mb-4 rounded-xl border border-gray-200 p-3">
+          <h3 className="mb-2 text-sm font-semibold text-gray-900">Редактор товаров</h3>
+          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-5">
+            <input
+              value={newShopProduct.name}
+              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, name: event.target.value }))}
+              placeholder="Название"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              value={newShopProduct.category}
+              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, category: event.target.value }))}
+              placeholder="Категория"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              value={newShopProduct.pricePoints}
+              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, pricePoints: event.target.value }))}
+              placeholder="Цена в баллах"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              value={newShopProduct.imageUrl}
+              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, imageUrl: event.target.value }))}
+              placeholder="URL картинки"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <label className="flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={(event) => setNewShopProductImageFile(event.target.files?.[0] ?? null)}
+                className="text-sm"
+              />
+            </label>
+            <button
+              onClick={async () => {
+                if (!newShopProduct.name.trim() || !newShopProduct.category.trim()) {
+                  showToast("error", "Заполните название и категорию товара");
+                  return;
+                }
+                const pricePoints = Number(newShopProduct.pricePoints);
+                if (!Number.isFinite(pricePoints) || pricePoints < 1) {
+                  showToast("error", "Цена должна быть больше 0");
+                  return;
+                }
+                try {
+                  let imageDataBase64: string | undefined;
+                  let imageMimeType: string | undefined;
+                  if (newShopProductImageFile) {
+                    imageDataBase64 = await toBase64(newShopProductImageFile);
+                    imageMimeType = newShopProductImageFile.type || "image/png";
+                  }
+                  await createShopProduct.mutateAsync({
+                    name: newShopProduct.name.trim(),
+                    description: newShopProduct.description.trim() || undefined,
+                    category: newShopProduct.category.trim(),
+                    pricePoints,
+                    isMaterial: true,
+                    isActive: true,
+                    imageUrl: newShopProduct.imageUrl.trim() || undefined,
+                    imageDataBase64,
+                    imageMimeType,
+                  });
+                  setNewShopProduct({ name: "", description: "", category: "", pricePoints: "", imageUrl: "" });
+                  setNewShopProductImageFile(null);
+                  showToast("success", "Товар создан");
+                } catch (error) {
+                  showToast("error", extractErrorMessage(error));
+                }
+              }}
+              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Добавить товар
+            </button>
+            <input
+              value={newShopProduct.description}
+              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, description: event.target.value }))}
+              placeholder="Описание"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm md:col-span-5"
+            />
+          </div>
+          <div className="space-y-2">
+            {(adminShopProducts.data ?? data.shopProducts).map((product) => (
+              <div key={product.id} className="rounded-xl border border-gray-200 p-3">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
+                  <input
+                    value={getShopProductDraft(product).name}
+                    onChange={(event) =>
+                      setShopProductDrafts((prev) => ({
+                        ...prev,
+                        [product.id]: { ...getShopProductDraft(product), name: event.target.value },
+                      }))
+                    }
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                  />
+                  <input
+                    value={getShopProductDraft(product).category}
+                    onChange={(event) =>
+                      setShopProductDrafts((prev) => ({
+                        ...prev,
+                        [product.id]: { ...getShopProductDraft(product), category: event.target.value },
+                      }))
+                    }
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                  />
+                  <input
+                    value={getShopProductDraft(product).pricePoints}
+                    onChange={(event) =>
+                      setShopProductDrafts((prev) => ({
+                        ...prev,
+                        [product.id]: { ...getShopProductDraft(product), pricePoints: event.target.value },
+                      }))
+                    }
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                  />
+                  <input
+                    value={getShopProductDraft(product).imageUrl}
+                    onChange={(event) =>
+                      setShopProductDrafts((prev) => ({
+                        ...prev,
+                        [product.id]: { ...getShopProductDraft(product), imageUrl: event.target.value },
+                      }))
+                    }
+                    placeholder="URL картинки"
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                  />
+                  <label className="flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      onChange={(event) =>
+                        setShopProductImageFiles((prev) => ({
+                          ...prev,
+                          [product.id]: event.target.files?.[0] ?? null,
+                        }))
+                      }
+                      className="text-sm"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={getShopProductDraft(product).isActive}
+                      onChange={(event) =>
+                        setShopProductDrafts((prev) => ({
+                          ...prev,
+                          [product.id]: { ...getShopProductDraft(product), isActive: event.target.checked },
+                        }))
+                      }
+                    />
+                    Активен
+                  </label>
+                  <input
+                    value={getShopProductDraft(product).description}
+                    onChange={(event) =>
+                      setShopProductDrafts((prev) => ({
+                        ...prev,
+                        [product.id]: { ...getShopProductDraft(product), description: event.target.value },
+                      }))
+                    }
+                    placeholder="Описание"
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm md:col-span-4"
+                  />
+                  {(product.imageDataBase64 || getShopProductDraft(product).imageUrl) ? (
+                    <div className="md:col-span-4">
+                      <img
+                        src={
+                          product.imageDataBase64
+                            ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
+                            : (getShopProductDraft(product).imageUrl || "")
+                        }
+                        alt={product.name}
+                        className="h-24 w-24 rounded-lg object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="md:col-span-4 text-xs text-gray-400">Картинка не задана</div>
+                  )}
+                  <button
+                    onClick={async () => {
+                      const draft = getShopProductDraft(product);
+                      const pricePoints = Number(draft.pricePoints);
+                      if (!draft.name.trim() || !draft.category.trim()) {
+                        showToast("error", "Название и категория обязательны");
+                        return;
+                      }
+                      if (!Number.isFinite(pricePoints) || pricePoints < 1) {
+                        showToast("error", "Цена должна быть больше 0");
+                        return;
+                      }
+                      try {
+                        const nextFile = shopProductImageFiles[product.id];
+                        let imageDataBase64: string | null | undefined;
+                        let imageMimeType: string | null | undefined;
+                        if (nextFile) {
+                          imageDataBase64 = await toBase64(nextFile);
+                          imageMimeType = nextFile.type || "image/png";
+                        }
+                        await updateShopProduct.mutateAsync({
+                          id: product.id,
+                          name: draft.name.trim(),
+                          description: draft.description.trim() || null,
+                          category: draft.category.trim(),
+                          pricePoints,
+                          imageUrl: draft.imageUrl.trim() || null,
+                          imageDataBase64,
+                          imageMimeType,
+                          isActive: draft.isActive,
+                        });
+                        setShopProductImageFiles((prev) => ({ ...prev, [product.id]: null }));
+                        showToast("success", `Товар "${draft.name}" сохранен`);
+                      } catch (error) {
+                        showToast("error", extractErrorMessage(error));
+                      }
+                    }}
+                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black"
+                  >
+                    Сохранить
+                  </button>
+                </div>
+              </div>
+            ))}
+            {adminShopProducts.isLoading ? <p className="text-xs text-gray-500">Загрузка товаров...</p> : null}
+          </div>
+        </div>
+        <h3 className="mb-3 text-sm font-semibold text-gray-900">Отслеживание заказов</h3>
         <div className="space-y-3">
           {data.shopOrders.map((order) => {
             const buyer = data.users.find((item) => String(item.id) === String(order.buyerUserId));

@@ -328,6 +328,9 @@ export const backendApi = {
         price_points: number;
         stock_qty: number | null;
         is_active: boolean;
+        image_url: string | null;
+        image_data_base64: string | null;
+        image_mime_type: string | null;
         image_emoji: string | null;
         created_at: string;
         updated_at: string;
@@ -1285,6 +1288,57 @@ export const backendApi = {
     id: number,
     status: "new" | "processing" | "shipped" | "delivered" | "cancelled",
   ) => apiRequest(`/api/shop/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+
+  getAdminShopProducts: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        name: string;
+        description: string | null;
+        category: string;
+        is_material: boolean;
+        price_points: number;
+        stock_qty: number | null;
+        is_active: boolean;
+        image_url: string | null;
+        image_data_base64: string | null;
+        image_mime_type: string | null;
+        image_emoji: string | null;
+        created_at: string;
+        updated_at: string;
+      }>
+    >("/api/admin/shop/products"),
+
+  createAdminShopProduct: (input: {
+    name: string;
+    description?: string;
+    category: string;
+    isMaterial?: boolean;
+    pricePoints: number;
+    stockQty?: number | null;
+    isActive?: boolean;
+    imageUrl?: string;
+    imageDataBase64?: string;
+    imageMimeType?: string;
+    imageEmoji?: string;
+  }) => apiRequest("/api/admin/shop/products", { method: "POST", body: JSON.stringify(input) }),
+
+  updateAdminShopProduct: (
+    id: number,
+    input: {
+      name?: string;
+      description?: string | null;
+      category?: string;
+      isMaterial?: boolean;
+      pricePoints?: number;
+      stockQty?: number | null;
+      isActive?: boolean;
+      imageUrl?: string | null;
+      imageDataBase64?: string | null;
+      imageMimeType?: string | null;
+      imageEmoji?: string | null;
+    },
+  ) => apiRequest(`/api/admin/shop/products/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
 
   // LMS Quiz API methods
   getLmsQuizzes: (subsectionId: number) =>

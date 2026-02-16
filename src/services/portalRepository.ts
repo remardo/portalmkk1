@@ -141,6 +141,35 @@ export interface UpdateShopOrderStatusInput {
   status: "new" | "processing" | "shipped" | "delivered" | "cancelled";
 }
 
+export interface AdminCreateShopProductInput {
+  name: string;
+  description?: string;
+  category: string;
+  isMaterial?: boolean;
+  pricePoints: number;
+  stockQty?: number | null;
+  isActive?: boolean;
+  imageUrl?: string;
+  imageDataBase64?: string;
+  imageMimeType?: string;
+  imageEmoji?: string;
+}
+
+export interface AdminUpdateShopProductInput {
+  id: number;
+  name?: string;
+  description?: string | null;
+  category?: string;
+  isMaterial?: boolean;
+  pricePoints?: number;
+  stockQty?: number | null;
+  isActive?: boolean;
+  imageUrl?: string | null;
+  imageDataBase64?: string | null;
+  imageMimeType?: string | null;
+  imageEmoji?: string | null;
+}
+
 export interface DocumentDecisionInput {
   id: number;
   comment?: string;
@@ -569,6 +598,9 @@ function transformPortalData(raw: Awaited<ReturnType<typeof backendApi.getBootst
       pricePoints: Number(item.price_points),
       stockQty: item.stock_qty === null ? null : Number(item.stock_qty),
       isActive: item.is_active,
+      imageUrl: item.image_url,
+      imageDataBase64: item.image_data_base64,
+      imageMimeType: item.image_mime_type,
       imageEmoji: item.image_emoji,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
@@ -655,6 +687,46 @@ export const portalRepository = {
 
   async updateShopOrderStatus(input: UpdateShopOrderStatusInput): Promise<void> {
     await backendApi.updateShopOrderStatus(input.id, input.status);
+  },
+
+  async adminGetShopProducts(): Promise<ShopProduct[]> {
+    const rows = await backendApi.getAdminShopProducts();
+    return rows.map((item) => ({
+      id: Number(item.id),
+      name: item.name,
+      description: item.description,
+      category: item.category,
+      isMaterial: item.is_material,
+      pricePoints: Number(item.price_points),
+      stockQty: item.stock_qty === null ? null : Number(item.stock_qty),
+      isActive: item.is_active,
+      imageUrl: item.image_url,
+      imageDataBase64: item.image_data_base64,
+      imageMimeType: item.image_mime_type,
+      imageEmoji: item.image_emoji,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+    }));
+  },
+
+  async adminCreateShopProduct(input: AdminCreateShopProductInput): Promise<void> {
+    await backendApi.createAdminShopProduct(input);
+  },
+
+  async adminUpdateShopProduct(input: AdminUpdateShopProductInput): Promise<void> {
+    await backendApi.updateAdminShopProduct(input.id, {
+      name: input.name,
+      description: input.description,
+      category: input.category,
+      isMaterial: input.isMaterial,
+      pricePoints: input.pricePoints,
+      stockQty: input.stockQty,
+      isActive: input.isActive,
+      imageUrl: input.imageUrl,
+      imageDataBase64: input.imageDataBase64,
+      imageMimeType: input.imageMimeType,
+      imageEmoji: input.imageEmoji,
+    });
   },
 
   async submitDocument(id: number): Promise<void> {

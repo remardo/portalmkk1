@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor
--- schema_snapshot_migration: 0015
+-- schema_snapshot_migration: 0017
 create extension if not exists pgcrypto;
 create extension if not exists pg_trgm;
 
@@ -248,10 +248,16 @@ create table if not exists public.shop_products (
   price_points int not null check (price_points > 0),
   stock_qty int null check (stock_qty is null or stock_qty >= 0),
   is_active boolean not null default true,
+  image_url text null,
+  image_data_base64 text null,
+  image_mime_type text null,
   image_emoji text null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.shop_products add column if not exists image_url text null;
+alter table public.shop_products add column if not exists image_data_base64 text null;
+alter table public.shop_products add column if not exists image_mime_type text null;
 
 create table if not exists public.shop_orders (
   id bigint generated always as identity primary key,
