@@ -1,7 +1,7 @@
 import type { Role, Task, User } from "../domain/models";
 
 export function canCreateNews(role: Role) {
-  return role === "director" || role === "admin";
+  return role === "director" || role === "admin" || role === "office_head";
 }
 
 export function canManageNews(role: Role) {
@@ -37,7 +37,7 @@ export function canDeleteTask(role: Role) {
 }
 
 export function canAccessAdmin(role: Role) {
-  return role === "admin";
+  return role === "admin" || role === "director" || role === "office_head";
 }
 
 export function canAccessReports(role: Role) {

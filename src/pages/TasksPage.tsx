@@ -419,11 +419,12 @@ export function TasksPage() {
                 if (!title.trim() || !assigneeId) {
                   return;
                 }
+                const candidateOfficeId = Number(officeId || availableOffices[0]?.id);
                 createTask.mutate({
                   title: title.trim(),
                   description: description.trim() || "Без описания",
                   assigneeId,
-                  officeId: Number(officeId || availableOffices[0]?.id),
+                  ...(Number.isFinite(candidateOfficeId) ? { officeId: candidateOfficeId } : {}),
                   dueDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10),
                   priority,
                   type,

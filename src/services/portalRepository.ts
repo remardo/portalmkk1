@@ -80,7 +80,7 @@ export interface PortalData {
 export interface CreateTaskInput {
   title: string;
   description: string;
-  officeId: number;
+  officeId?: number;
   assigneeId: string;
   type: "order" | "checklist" | "auto";
   priority: "low" | "medium" | "high";

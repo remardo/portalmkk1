@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { User } from "../domain/models";
 import {
+  canAccessAdmin,
   canAccessReports,
   canCreateDocument,
   canCreateNews,
@@ -58,10 +59,13 @@ const users: Record<string, User> = {
 describe("permissions", () => {
   it("checks create capabilities by role", () => {
     expect(canCreateNews("director")).toBe(true);
+    expect(canCreateNews("office_head")).toBe(true);
     expect(canCreateNews("operator")).toBe(false);
     expect(canCreateDocument("office_head")).toBe(true);
     expect(canCreateTask("operator")).toBe(false);
     expect(canCreateTask("admin")).toBe(true);
+    expect(canAccessAdmin("office_head")).toBe(true);
+    expect(canAccessAdmin("director")).toBe(true);
     expect(canAccessReports("director")).toBe(true);
     expect(canAccessReports("office_head")).toBe(true);
     expect(canAccessReports("operator")).toBe(false);
