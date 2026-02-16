@@ -264,6 +264,7 @@ export const backendApi = {
         description: string;
         office_id: number;
         assignee_id: string;
+        created_by?: string | null;
         status: "new" | "in_progress" | "done" | "overdue";
         type: "order" | "checklist" | "auto";
         priority: "low" | "medium" | "high";

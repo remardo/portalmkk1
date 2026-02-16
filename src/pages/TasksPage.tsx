@@ -25,7 +25,6 @@ import {
   canCreateTask,
   canDeleteTask,
   canEditTask,
-  filterTasksForUser,
 } from "../lib/permissions";
 import { statusLabels, typeLabels } from "../lib/uiMaps";
 
@@ -71,14 +70,30 @@ export function TasksPage() {
   const [editPriority, setEditPriority] = useState<"low" | "medium" | "high">("medium");
   const [editType, setEditType] = useState<"order" | "checklist" | "auto">("order");
 
+  const managedOfficeIds = useMemo(() => {
+    if (!data || user?.role !== "office_head") {
+      return [] as number[];
+    }
+    const byHead = data.offices
+      .filter((office) => String(office.headId) === String(user.id))
+      .map((office) => Number(office.id));
+    if (byHead.length > 0) {
+      return byHead;
+    }
+    return user.officeId ? [Number(user.officeId)] : [];
+  }, [data, user]);
+
   const tasks = useMemo(() => {
     if (!data || !user) {
       return [];
     }
-    return filterTasksForUser(data.tasks, user).filter(
-      (task) => !statusFilter || task.status === statusFilter
-    );
-  }, [data, statusFilter, user]);
+    const roleScopedTasks = user.role === "operator"
+      ? data.tasks.filter((task) => String(task.assigneeId) === String(user.id))
+      : user.role === "office_head"
+        ? data.tasks.filter((task) => managedOfficeIds.includes(Number(task.officeId)))
+        : data.tasks;
+    return roleScopedTasks.filter((task) => !statusFilter || task.status === statusFilter);
+  }, [data, managedOfficeIds, statusFilter, user]);
 
   if (!data || !user) {
     return null;
@@ -90,7 +105,7 @@ export function TasksPage() {
 
   const availableOffices =
     user.role === "office_head"
-      ? data.offices.filter((office) => office.id === user.officeId)
+      ? data.offices.filter((office) => managedOfficeIds.includes(Number(office.id)))
       : data.offices;
 
   const selectedOfficeId = officeId ? Number(officeId) : availableOffices[0]?.id;
@@ -121,6 +136,7 @@ export function TasksPage() {
 
     const assignee = data.users.find((item) => item.id === task.assigneeId);
     const office = data.offices.find((item) => item.id === task.officeId);
+    const assigner = data.users.find((item) => String(item.id) === String(task.createdById ?? ""));
 
     return (
       <div className="mx-auto max-w-3xl space-y-6">
@@ -165,10 +181,14 @@ export function TasksPage() {
                 <h2 className="text-xl font-bold text-gray-900">{task.title}</h2>
                 <p className="mt-2 text-gray-600">{task.description}</p>
 
-                <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
                   <div className="rounded-xl bg-gray-50 p-3">
                     <p className="text-xs text-gray-500">Исполнитель</p>
                     <p className="mt-1 font-medium text-gray-900">{assignee?.name}</p>
+                  </div>
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <p className="text-xs text-gray-500">Постановщик</p>
+                    <p className="mt-1 font-medium text-gray-900">{assigner?.name ?? "Система"}</p>
                   </div>
                   <div className="rounded-xl bg-gray-50 p-3">
                     <p className="text-xs text-gray-500">Офис</p>
@@ -462,6 +482,7 @@ export function TasksPage() {
         {tasks.map((task) => {
           const assignee = data.users.find((item) => item.id === task.assigneeId);
           const office = data.offices.find((item) => item.id === task.officeId);
+          const assigner = data.users.find((item) => String(item.id) === String(task.createdById ?? ""));
           const statusConf = statusConfig[task.status];
           const Icon = statusConf.icon;
 
@@ -503,6 +524,8 @@ export function TasksPage() {
                       <span>{assignee?.name}</span>
                       <span className="text-gray-300">•</span>
                       <span>{office?.name}</span>
+                      <span className="text-gray-300">•</span>
+                      <span>Постановщик: {assigner?.name ?? "Система"}</span>
                     </div>
                   </div>
                   <div className="flex-shrink-0 text-right">

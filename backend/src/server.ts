@@ -501,6 +501,45 @@ function requireRole(roles: Array<Profile["role"]>) {
   };
 }
 
+async function getOfficeHeadScopeOfficeIds(profile: Profile) {
+  const { data, error } = await supabaseAdmin
+    .from("offices")
+    .select("id")
+    .eq("head_id", profile.id);
+  if (error) {
+    throw new Error(error.message);
+  }
+  const officeIds = (data ?? []).map((item) => Number(item.id)).filter((id) => Number.isFinite(id));
+  if (officeIds.length === 0 && profile.office_id) {
+    return [Number(profile.office_id)];
+  }
+  return officeIds;
+}
+
+async function ensureOfficeHeadCanAssignAssignee(profile: Profile, assigneeId: string) {
+  const managedOfficeIds = await getOfficeHeadScopeOfficeIds(profile);
+  if (managedOfficeIds.length === 0) {
+    return { ok: false as const, error: "Office head is not assigned to any office as head" };
+  }
+
+  const { data: assignee, error: assigneeError } = await supabaseAdmin
+    .from("profiles")
+    .select("id,office_id")
+    .eq("id", assigneeId)
+    .single();
+  if (assigneeError) {
+    return { ok: false as const, error: assigneeError.message };
+  }
+  const assigneeOfficeId = assignee?.office_id ? Number(assignee.office_id) : null;
+  if (!assigneeOfficeId) {
+    return { ok: false as const, error: "Assignee has no office" };
+  }
+  if (!managedOfficeIds.includes(assigneeOfficeId)) {
+    return { ok: false as const, error: "Office head can assign tasks only within managed offices" };
+  }
+  return { ok: true as const, assigneeOfficeId, managedOfficeIds };
+}
+
 function isSmokeBypassAuthorizedRequest(req: express.Request) {
   if (!env.SMOKE_AUTH_BYPASS_ENABLED) {
     return false;
@@ -1896,6 +1935,19 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     return res.status(500).json({ error: errors[0]?.message ?? "Failed to load bootstrap" });
   }
 
+  const officeHeadOfficeIds = session.profile.role === "office_head"
+    ? await getOfficeHeadScopeOfficeIds(session.profile)
+    : [];
+  const scopedTasks = (tasks.data ?? []).filter((task) => {
+    if (session.profile.role === "operator") {
+      return task.assignee_id === session.profile.id;
+    }
+    if (session.profile.role === "office_head") {
+      return officeHeadOfficeIds.includes(Number(task.office_id));
+    }
+    return true;
+  });
+
   return res.json({
     offices: offices.data,
     users: users.data,
@@ -1906,7 +1958,7 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     courseAssignments: courseAssignments.data,
     courseAttempts: courseAttempts.data,
     attestations: attestations.data,
-    tasks: tasks.data,
+    tasks: scopedTasks,
     documents: documents.data,
     documentApprovals: documentApprovals.data,
     notifications: notifications.data,
@@ -2979,7 +3031,22 @@ app.post("/api/tasks", requireAuth(), requireRole(["director", "admin", "office_
   }
 
   const session = (req as express.Request & { session: Session }).session;
+  let assigneeOfficeId: number | null = null;
+  if (session.profile.role === "office_head") {
+    const allowed = await ensureOfficeHeadCanAssignAssignee(session.profile, parsed.data.assigneeId);
+    if (!allowed.ok) {
+      return res.status(403).json({ error: allowed.error });
+    }
+    if (parsed.data.officeId !== undefined && parsed.data.officeId !== allowed.assigneeOfficeId) {
+      return res.status(400).json({ error: "Office does not match assignee office" });
+    }
+    assigneeOfficeId = allowed.assigneeOfficeId;
+  }
+
   let resolvedOfficeId = parsed.data.officeId;
+  if (session.profile.role === "office_head" && assigneeOfficeId) {
+    resolvedOfficeId = assigneeOfficeId;
+  }
   if (resolvedOfficeId === undefined) {
     const { data: assignee, error: assigneeError } = await supabaseAdmin
       .from("profiles")
@@ -3010,6 +3077,7 @@ app.post("/api/tasks", requireAuth(), requireRole(["director", "admin", "office_
     priority: parsed.data.priority,
     due_date: parsed.data.dueDate,
     created_date: new Date().toISOString().slice(0, 10),
+    created_by: session.profile.id,
   };
 
   const { data, error } = await supabaseAdmin.from("tasks").insert(payload).select("*").single();
@@ -3060,6 +3128,39 @@ app.patch("/api/tasks/:id", requireAuth(), requireRole(["director", "admin", "of
     return res.status(400).json({ error: "Invalid task id" });
   }
 
+  const session = (req as express.Request & { session: Session }).session;
+  let managedOfficeIds: number[] = [];
+  if (session.profile.role === "office_head") {
+    managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
+    if (managedOfficeIds.length === 0) {
+      return res.status(403).json({ error: "Office head is not assigned to any office as head" });
+    }
+    const { data: currentTask, error: currentTaskError } = await supabaseAdmin
+      .from("tasks")
+      .select("id,office_id")
+      .eq("id", taskId)
+      .single();
+    if (currentTaskError || !currentTask) {
+      return res.status(404).json({ error: currentTaskError?.message ?? "Task not found" });
+    }
+    if (!managedOfficeIds.includes(Number(currentTask.office_id))) {
+      return res.status(403).json({ error: "Office head can edit tasks only within managed offices" });
+    }
+    if (parsed.data.officeId !== undefined && !managedOfficeIds.includes(parsed.data.officeId)) {
+      return res.status(403).json({ error: "Office head can set office only within managed offices" });
+    }
+  }
+
+  if (session.profile.role === "office_head" && parsed.data.assigneeId !== undefined) {
+    const allowed = await ensureOfficeHeadCanAssignAssignee(session.profile, parsed.data.assigneeId);
+    if (!allowed.ok) {
+      return res.status(403).json({ error: allowed.error });
+    }
+    if (parsed.data.officeId !== undefined && parsed.data.officeId !== allowed.assigneeOfficeId) {
+      return res.status(400).json({ error: "Office does not match assignee office" });
+    }
+  }
+
   const updatePayload: Record<string, unknown> = {};
   if (parsed.data.title !== undefined) updatePayload.title = parsed.data.title;
   if (parsed.data.description !== undefined) updatePayload.description = parsed.data.description;
@@ -3085,7 +3186,6 @@ app.patch("/api/tasks/:id", requireAuth(), requireRole(["director", "admin", "of
     return res.status(400).json({ error: error.message });
   }
 
-  const session = (req as express.Request & { session: Session }).session;
   await writeAuditLog({
     actorUserId: session.profile.id,
     actorRole: session.profile.role,
@@ -6238,6 +6338,7 @@ app.get("/api/tasks", requireAuth(), async (req, res) => {
     return res.status(400).json(parsed.error.format());
   }
 
+  const session = (req as express.Request & { session: Session }).session;
   const { status, limit, offset } = parsed.data;
   const paginated = isPaginatedQuery(parsed.data.paginated);
   const rangeEnd = offset + limit - 1;
@@ -6260,6 +6361,19 @@ app.get("/api/tasks", requireAuth(), async (req, res) => {
 
   if (status) {
     query = query.eq("status", status);
+  }
+
+  if (session.profile.role === "operator") {
+    query = query.eq("assignee_id", session.profile.id);
+  } else if (session.profile.role === "office_head") {
+    const officeIds = await getOfficeHeadScopeOfficeIds(session.profile);
+    if (officeIds.length === 0) {
+      if (paginated) {
+        return res.json({ items: [], total: 0, limit, offset, hasMore: false });
+      }
+      return res.json([]);
+    }
+    query = query.in("office_id", officeIds);
   }
 
   if (paginated) {

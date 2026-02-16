@@ -72,6 +72,7 @@ export interface Task {
   description: string;
   officeId: number;
   assigneeId: number | string;
+  createdById?: string | null;
   status: "new" | "in_progress" | "done" | "overdue";
   type: "order" | "checklist" | "auto";
   priority: "low" | "medium" | "high";

@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor
--- schema_snapshot_migration: 0011
+-- schema_snapshot_migration: 0012
 create extension if not exists pgcrypto;
 create extension if not exists pg_trgm;
 
@@ -161,6 +161,7 @@ create table if not exists public.tasks (
   description text not null,
   office_id bigint not null references public.offices(id) on delete restrict,
   assignee_id uuid not null references public.profiles(id) on delete restrict,
+  created_by uuid null references public.profiles(id) on delete set null,
   status public.task_status not null default 'new',
   type public.task_type not null,
   priority public.task_priority not null,
@@ -545,6 +546,7 @@ create unique index if not exists notifications_dedupe_key_uniq on public.notifi
 create index if not exists tasks_status_due_date_idx on public.tasks(status, due_date);
 create index if not exists tasks_assignee_status_idx on public.tasks(assignee_id, status);
 create index if not exists tasks_office_status_idx on public.tasks(office_id, status);
+create index if not exists tasks_created_by_idx on public.tasks(created_by);
 create index if not exists tasks_created_date_idx on public.tasks(created_date desc);
 create index if not exists documents_office_status_date_idx on public.documents(office_id, status, date desc);
 create index if not exists documents_author_date_idx on public.documents(author, date desc);

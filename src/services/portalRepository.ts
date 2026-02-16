@@ -486,6 +486,7 @@ function transformPortalData(raw: Awaited<ReturnType<typeof backendApi.getBootst
       description: task.description,
       officeId: task.office_id,
       assigneeId: task.assignee_id,
+      createdById: task.created_by ?? null,
       status: task.status,
       type: task.type,
       priority: task.priority,
