@@ -18,6 +18,7 @@ import { ReportsPage } from "../pages/ReportsPage";
 import { LMSBuilderPage } from "../pages/LMSBuilderPage";
 import { RouteErrorPage } from "../pages/RouteErrorPage";
 import { SearchPage } from "../pages/SearchPage";
+import { ShopPage } from "../pages/ShopPage";
 import { SystemGuidePage } from "../pages/SystemGuidePage";
 import { ProtectedRoute } from "./ProtectedRoute";
 
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
           { path: "docs", element: <DocsPage /> },
           { path: "tasks", element: <TasksPage /> },
           { path: "tasks/:taskId", element: <TasksPage /> },
+          { path: "shop", element: <ShopPage /> },
           { path: "ops", element: <OpsCenterPage /> },
           { path: "notifications", element: <NotificationsPage /> },
           { path: "search", element: <SearchPage /> },

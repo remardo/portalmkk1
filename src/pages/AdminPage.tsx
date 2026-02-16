@@ -7,6 +7,7 @@ import {
   useAdminAuditQuery,
   useAdminCreateUserMutation,
   useAdminUpdateOfficeMutation,
+  useUpdateShopOrderStatusMutation,
   useAdminUpdateUserMutation,
   usePortalData,
 } from "../hooks/usePortalData";
@@ -16,7 +17,14 @@ import { useSearchParams } from "react-router-dom";
 
 const roleOptions: Role[] = ["operator", "office_head", "director", "admin"];
 type ToastItem = { id: number; kind: "success" | "error"; message: string };
-type AdminTab = "users" | "offices" | "other";
+type AdminTab = "users" | "offices" | "orders" | "other";
+const shopOrderStatusOptions: Array<{ value: "new" | "processing" | "shipped" | "delivered" | "cancelled"; label: string }> = [
+  { value: "new", label: "Новый" },
+  { value: "processing", label: "В обработке" },
+  { value: "shipped", label: "Отгружен" },
+  { value: "delivered", label: "Доставлен" },
+  { value: "cancelled", label: "Отменен" },
+];
 
 export function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -25,6 +33,7 @@ export function AdminPage() {
   const createUser = useAdminCreateUserMutation();
   const updateUser = useAdminUpdateUserMutation();
   const updateOffice = useAdminUpdateOfficeMutation();
+  const updateShopOrderStatus = useUpdateShopOrderStatusMutation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,7 +58,7 @@ export function AdminPage() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const initialTab = (() => {
     const raw = searchParams.get("tab");
-    if (raw === "users" || raw === "offices" || raw === "other") return raw as AdminTab;
+    if (raw === "users" || raw === "offices" || raw === "orders" || raw === "other") return raw as AdminTab;
     return "users";
   })();
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
@@ -125,6 +134,7 @@ export function AdminPage() {
   if (!canAccessAdmin(user.role)) {
     return <p className="text-sm text-red-500">Доступ запрещен.</p>;
   }
+  const canViewShopOrders = user.role === "office_head" || user.role === "director" || user.role === "admin";
 
   function getUserDraft(item: User) {
     return (
@@ -180,6 +190,16 @@ export function AdminPage() {
           >
             Другое (журнал)
           </button>
+          {canViewShopOrders ? (
+            <button
+              onClick={() => switchTab("orders")}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                activeTab === "orders" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Заказы магазина ({data.shopOrders.length})
+            </button>
+          ) : null}
         </div>
       </Card>
       <div className="fixed right-4 top-4 z-50 space-y-2">
@@ -553,6 +573,75 @@ export function AdminPage() {
               </div>
             </div>
           ))}
+        </div>
+      </Card>
+      ) : null}
+
+      {activeTab === "orders" ? (
+      <Card className="p-4">
+        <h2 className="mb-3 font-semibold">Заказы внутреннего магазина</h2>
+        <div className="space-y-3">
+          {data.shopOrders.map((order) => {
+            const buyer = data.users.find((item) => String(item.id) === String(order.buyerUserId));
+            const office = order.officeId ? data.offices.find((item) => item.id === order.officeId) : null;
+            const items = data.shopOrderItems.filter((item) => item.orderId === order.id);
+            return (
+              <div key={order.id} className="rounded-xl border border-gray-200 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      Заказ #{order.id} · {buyer?.name ?? order.buyerUserId}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(order.createdAt).toLocaleString()} · {office ? office.name : "Офис не указан"} · {order.totalPoints} баллов
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={order.status}
+                      onChange={async (event) => {
+                        try {
+                          await updateShopOrderStatus.mutateAsync({
+                            id: order.id,
+                            status: event.target.value as "new" | "processing" | "shipped" | "delivered" | "cancelled",
+                          });
+                          showToast("success", `Статус заказа #${order.id} обновлен`);
+                        } catch (error) {
+                          showToast("error", extractErrorMessage(error));
+                        }
+                      }}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    >
+                      {shopOrderStatusOptions.map((statusOption) => (
+                        <option key={statusOption.value} value={statusOption.value}>
+                          {statusOption.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {order.deliveryInfo ? (
+                  <p className="mt-2 text-xs text-gray-600">Доставка: {order.deliveryInfo}</p>
+                ) : null}
+                {order.comment ? (
+                  <p className="mt-1 text-xs text-gray-600">Комментарий: {order.comment}</p>
+                ) : null}
+                <div className="mt-2 rounded-lg bg-gray-50 p-2">
+                  {items.map((item) => (
+                    <p key={item.id} className="text-xs text-gray-700">
+                      {item.productName} × {item.quantity} = {item.subtotalPoints} баллов
+                    </p>
+                  ))}
+                  {items.length === 0 ? (
+                    <p className="text-xs text-gray-500">Позиции заказа не найдены</p>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+          {data.shopOrders.length === 0 ? (
+            <p className="text-sm text-gray-500">Заказов пока нет.</p>
+          ) : null}
         </div>
       </Card>
       ) : null}

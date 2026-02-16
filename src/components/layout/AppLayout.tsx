@@ -18,6 +18,7 @@ import {
   Search,
   LogOut,
   Home,
+  ShoppingCart,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
@@ -44,6 +45,7 @@ const baseNavItems: NavItem[] = [
   { to: "/lms", label: "Обучение", icon: GraduationCap },
   { to: "/docs", label: "Документы", icon: FileText },
   { to: "/tasks", label: "Задачи", icon: ListTodo },
+  { to: "/shop", label: "Магазин", icon: ShoppingCart },
   { to: "/search", label: "Поиск", icon: Search },
   { to: "/ops", label: "Оперцентр", icon: Siren },
   { to: "/org", label: "Оргструктура", icon: Building2 },

@@ -1,4 +1,4 @@
-import type { Document, DocumentFolder, NewsItem, Task, User } from "../domain/models";
+import type { Document, DocumentFolder, NewsItem, ShopOrder, ShopOrderItem, ShopProduct, Task, User } from "../domain/models";
 import { backendApi } from "./apiClient";
 import { mapProfileToUser } from "./authStorage";
 
@@ -76,6 +76,9 @@ export interface PortalData {
     createdAt: string;
     readAt: string | null;
   }>;
+  shopProducts: ShopProduct[];
+  shopOrders: ShopOrder[];
+  shopOrderItems: ShopOrderItem[];
 }
 
 export interface CreateTaskInput {
@@ -125,6 +128,17 @@ export interface CreateDocumentInput {
   fileName?: string;
   mimeType?: string;
   fileDataBase64?: string;
+}
+
+export interface CreateShopOrderInput {
+  items: Array<{ productId: number; quantity: number }>;
+  deliveryInfo?: string;
+  comment?: string;
+}
+
+export interface UpdateShopOrderStatusInput {
+  id: number;
+  status: "new" | "processing" | "shipped" | "delivered" | "cancelled";
 }
 
 export interface DocumentDecisionInput {
@@ -546,6 +560,40 @@ function transformPortalData(raw: Awaited<ReturnType<typeof backendApi.getBootst
       createdAt: item.created_at,
       readAt: item.read_at,
     })),
+    shopProducts: raw.shopProducts.map((item) => ({
+      id: Number(item.id),
+      name: item.name,
+      description: item.description,
+      category: item.category,
+      isMaterial: item.is_material,
+      pricePoints: Number(item.price_points),
+      stockQty: item.stock_qty === null ? null : Number(item.stock_qty),
+      isActive: item.is_active,
+      imageEmoji: item.image_emoji,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+    })),
+    shopOrders: raw.shopOrders.map((item) => ({
+      id: Number(item.id),
+      buyerUserId: item.buyer_user_id,
+      officeId: item.office_id === null ? null : Number(item.office_id),
+      status: item.status,
+      totalPoints: Number(item.total_points),
+      deliveryInfo: item.delivery_info,
+      comment: item.comment,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+    })),
+    shopOrderItems: raw.shopOrderItems.map((item) => ({
+      id: Number(item.id),
+      orderId: Number(item.order_id),
+      productId: Number(item.product_id),
+      productName: item.product_name,
+      quantity: Number(item.quantity),
+      pricePoints: Number(item.price_points),
+      subtotalPoints: Number(item.subtotal_points),
+      createdAt: item.created_at,
+    })),
   };
 }
 
@@ -599,6 +647,14 @@ export const portalRepository = {
 
   async createDocument(input: CreateDocumentInput): Promise<void> {
     await backendApi.createDocument(input);
+  },
+
+  async createShopOrder(input: CreateShopOrderInput): Promise<void> {
+    await backendApi.createShopOrder(input);
+  },
+
+  async updateShopOrderStatus(input: UpdateShopOrderStatusInput): Promise<void> {
+    await backendApi.updateShopOrderStatus(input.id, input.status);
   },
 
   async submitDocument(id: number): Promise<void> {

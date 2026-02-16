@@ -319,6 +319,40 @@ export const backendApi = {
         created_at: string;
         read_at: string | null;
       }>;
+      shopProducts: Array<{
+        id: number;
+        name: string;
+        description: string | null;
+        category: string;
+        is_material: boolean;
+        price_points: number;
+        stock_qty: number | null;
+        is_active: boolean;
+        image_emoji: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      shopOrders: Array<{
+        id: number;
+        buyer_user_id: string;
+        office_id: number | null;
+        status: "new" | "processing" | "shipped" | "delivered" | "cancelled";
+        total_points: number;
+        delivery_info: string | null;
+        comment: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      shopOrderItems: Array<{
+        id: number;
+        order_id: number;
+        product_id: number;
+        product_name: string;
+        quantity: number;
+        price_points: number;
+        subtotal_points: number;
+        created_at: string;
+      }>;
     }>("/api/bootstrap"),
 
   createNews: (input: { title: string; body: string; pinned?: boolean }) =>
@@ -1217,6 +1251,40 @@ export const backendApi = {
 
   readNotification: (id: number) => apiRequest(`/api/notifications/${id}/read`, { method: "POST" }),
   readAllNotifications: () => apiRequest(`/api/notifications/read-all`, { method: "POST" }),
+
+  createShopOrder: (input: {
+    items: Array<{ productId: number; quantity: number }>;
+    deliveryInfo?: string;
+    comment?: string;
+  }) =>
+    apiRequest<{
+      order: {
+        id: number;
+        buyer_user_id: string;
+        office_id: number | null;
+        status: "new" | "processing" | "shipped" | "delivered" | "cancelled";
+        total_points: number;
+        delivery_info: string | null;
+        comment: string | null;
+        created_at: string;
+        updated_at: string;
+      };
+      items: Array<{
+        id: number;
+        order_id: number;
+        product_id: number;
+        product_name: string;
+        quantity: number;
+        price_points: number;
+        subtotal_points: number;
+        created_at: string;
+      }>;
+    }>("/api/shop/orders", { method: "POST", body: JSON.stringify(input) }),
+
+  updateShopOrderStatus: (
+    id: number,
+    status: "new" | "processing" | "shipped" | "delivered" | "cancelled",
+  ) => apiRequest(`/api/shop/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
 
   // LMS Quiz API methods
   getLmsQuizzes: (subsectionId: number) =>

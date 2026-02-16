@@ -20,10 +20,12 @@ import {
   type CreateNewsInput,
   type CreateCourseInput,
   type DocumentDecisionInput,
+  type CreateShopOrderInput,
   type RestoreKbArticleVersionInput,
   type CreateTaskInput,
   type UpdateNewsInput,
   type UpdateKbArticleInput,
+  type UpdateShopOrderStatusInput,
   type UpdateCourseInput,
   type UpdateTaskInput,
 } from "../services/portalRepository";
@@ -98,6 +100,22 @@ export function useCreateDocumentMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (document: CreateDocumentInput) => portalRepository.createDocument(document),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useCreateShopOrderMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateShopOrderInput) => portalRepository.createShopOrder(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useUpdateShopOrderStatusMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateShopOrderStatusInput) => portalRepository.updateShopOrderStatus(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
   });
 }

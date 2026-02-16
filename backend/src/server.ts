@@ -564,6 +564,7 @@ const allowedDocumentFileMimeTypes = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 const maxDocumentFileBytes = 10 * 1024 * 1024;
+const shopOrderStatuses = ["new", "processing", "shipped", "delivered", "cancelled"] as const;
 
 function getFileExtension(fileName: string) {
   const dot = fileName.lastIndexOf(".");
@@ -615,6 +616,71 @@ async function canSessionAccessDocument(session: Session, document: { office_id:
     return document.author === session.profile.full_name;
   }
   return false;
+}
+
+async function getScopedShopOrders(session: Session) {
+  const { data: orders, error } = await supabaseAdmin
+    .from("shop_orders")
+    .select("*")
+    .order("id", { ascending: false });
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const rows = orders ?? [];
+  if (session.profile.role === "admin" || session.profile.role === "director") {
+    return rows;
+  }
+  if (session.profile.role === "office_head") {
+    const managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
+    return rows.filter((order) => {
+      if (order.buyer_user_id === session.profile.id) {
+        return true;
+      }
+      if (managedOfficeIds.length > 0) {
+        return order.office_id !== null && managedOfficeIds.includes(Number(order.office_id));
+      }
+      if (session.profile.office_id) {
+        return Number(order.office_id) === Number(session.profile.office_id);
+      }
+      return false;
+    });
+  }
+  return rows.filter((order) => order.buyer_user_id === session.profile.id);
+}
+
+async function getShopOrderManagerRecipientIds(orderOfficeId: number | null, excludeUserIds: string[] = []) {
+  const recipientIds = new Set<string>();
+
+  const { data: directorAndAdmins, error: managersError } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .in("role", ["director", "admin"]);
+  if (managersError) {
+    throw new Error(managersError.message);
+  }
+  for (const row of directorAndAdmins ?? []) {
+    recipientIds.add(row.id);
+  }
+
+  if (orderOfficeId) {
+    const { data: officesData, error: officeError } = await supabaseAdmin
+      .from("offices")
+      .select("head_id")
+      .eq("id", orderOfficeId)
+      .single();
+    if (officeError && officeError.code !== "PGRST116") {
+      throw new Error(officeError.message);
+    }
+    if (officesData?.head_id) {
+      recipientIds.add(officesData.head_id);
+    }
+  }
+
+  for (const userId of excludeUserIds) {
+    recipientIds.delete(userId);
+  }
+  return Array.from(recipientIds);
 }
 
 function isSmokeBypassAuthorizedRequest(req: express.Request) {
@@ -1988,7 +2054,7 @@ app.get("/api/offices", requireAuth(), async (_req, res) => {
 
 app.get("/api/bootstrap", requireAuth(), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
-  const [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles] = await Promise.all([
+  const [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles, shopProducts, shopOrders, shopOrderItems] = await Promise.all([
     supabaseAdmin.from("offices").select("*").order("id"),
     supabaseAdmin.from("profiles").select("id,full_name,role,office_id,email,phone,points,position,avatar").order("full_name"),
     supabaseAdmin.from("news").select("*").order("date", { ascending: false }),
@@ -2004,9 +2070,12 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     supabaseAdmin.from("notifications").select("*").eq("recipient_user_id", session.profile.id).order("created_at", { ascending: false }).limit(200),
     supabaseAdmin.from("document_folders").select("*").order("name"),
     supabaseAdmin.from("document_files").select("document_id,file_name,mime_type,size_bytes,updated_at"),
+    supabaseAdmin.from("shop_products").select("*").eq("is_active", true).order("name"),
+    supabaseAdmin.from("shop_orders").select("*").order("id", { ascending: false }),
+    supabaseAdmin.from("shop_order_items").select("*").order("id", { ascending: false }),
   ]);
 
-  const errors = [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles]
+  const errors = [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles, shopProducts, shopOrders, shopOrderItems]
     .map((q) => q.error)
     .filter(Boolean);
 
@@ -2054,6 +2123,26 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
   const documentFileByDocumentId = new Map(
     (documentFiles.data ?? []).map((row) => [Number(row.document_id), row]),
   );
+  const scopedShopOrders = (shopOrders.data ?? []).filter((order) => {
+    if (session.profile.role === "admin" || session.profile.role === "director") {
+      return true;
+    }
+    if (session.profile.role === "office_head") {
+      if (order.buyer_user_id === session.profile.id) {
+        return true;
+      }
+      if (officeHeadOfficeIds.length > 0) {
+        return order.office_id !== null && officeHeadOfficeIds.includes(Number(order.office_id));
+      }
+      if (session.profile.office_id) {
+        return Number(order.office_id) === Number(session.profile.office_id);
+      }
+      return false;
+    }
+    return order.buyer_user_id === session.profile.id;
+  });
+  const scopedShopOrderIdSet = new Set((scopedShopOrders ?? []).map((order) => Number(order.id)));
+  const scopedShopOrderItems = (shopOrderItems.data ?? []).filter((item) => scopedShopOrderIdSet.has(Number(item.order_id)));
 
   return res.json({
     offices: offices.data,
@@ -2079,6 +2168,9 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     documentFolders: documentFolders.data ?? [],
     documentApprovals: documentApprovals.data,
     notifications: notifications.data,
+    shopProducts: shopProducts.data ?? [],
+    shopOrders: scopedShopOrders,
+    shopOrderItems: scopedShopOrderItems,
   });
 });
 
@@ -3390,6 +3482,311 @@ app.delete("/api/tasks/:id", requireAuth(), requireRole(["director", "admin"]), 
   });
 
   return res.status(204).send();
+});
+
+const createShopOrderSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        productId: z.number().int().positive(),
+        quantity: z.number().int().min(1).max(100),
+      }),
+    )
+    .min(1)
+    .max(50),
+  deliveryInfo: z.string().trim().max(500).optional(),
+  comment: z.string().trim().max(500).optional(),
+});
+
+const updateShopOrderStatusSchema = z.object({
+  status: z.enum(shopOrderStatuses),
+});
+
+app.get("/api/shop/products", requireAuth(), async (_req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("shop_products")
+    .select("*")
+    .eq("is_active", true)
+    .order("name");
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.get("/api/shop/orders", requireAuth(), async (req, res) => {
+  const session = (req as express.Request & { session: Session }).session;
+  let scopedOrders: Array<{
+    id: number;
+    buyer_user_id: string;
+    office_id: number | null;
+    status: (typeof shopOrderStatuses)[number];
+    total_points: number;
+    delivery_info: string | null;
+    comment: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  try {
+    scopedOrders = await getScopedShopOrders(session);
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : "Failed to load orders" });
+  }
+  const orderIds = scopedOrders.map((row) => Number(row.id));
+  if (orderIds.length === 0) {
+    return res.json({ orders: [], items: [] });
+  }
+  const { data: items, error: itemsError } = await supabaseAdmin
+    .from("shop_order_items")
+    .select("*")
+    .in("order_id", orderIds)
+    .order("id", { ascending: true });
+  if (itemsError) {
+    return res.status(400).json({ error: itemsError.message });
+  }
+  return res.json({ orders: scopedOrders, items: items ?? [] });
+});
+
+app.post("/api/shop/orders", requireAuth(), async (req, res) => {
+  const parsed = createShopOrderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const uniqueProductIds = Array.from(new Set(parsed.data.items.map((item) => Number(item.productId))));
+  const { data: products, error: productsError } = await supabaseAdmin
+    .from("shop_products")
+    .select("id,name,price_points,is_material,stock_qty,is_active")
+    .in("id", uniqueProductIds);
+  if (productsError) {
+    return res.status(400).json({ error: productsError.message });
+  }
+
+  const productById = new Map((products ?? []).map((row) => [Number(row.id), row]));
+  const lineItems: Array<{
+    productId: number;
+    productName: string;
+    quantity: number;
+    pricePoints: number;
+    subtotalPoints: number;
+  }> = [];
+  for (const requestedItem of parsed.data.items) {
+    const product = productById.get(Number(requestedItem.productId));
+    if (!product || !product.is_active) {
+      return res.status(400).json({ error: `Product ${requestedItem.productId} is not available` });
+    }
+    if (product.stock_qty !== null && Number(product.stock_qty) < requestedItem.quantity) {
+      return res.status(400).json({ error: `Недостаточно остатков: ${product.name}` });
+    }
+    const pricePoints = Number(product.price_points);
+    lineItems.push({
+      productId: Number(product.id),
+      productName: product.name,
+      quantity: requestedItem.quantity,
+      pricePoints,
+      subtotalPoints: pricePoints * requestedItem.quantity,
+    });
+  }
+
+  const totalPoints = lineItems.reduce((sum, row) => sum + row.subtotalPoints, 0);
+  if (totalPoints <= 0) {
+    return res.status(400).json({ error: "Cart total must be positive" });
+  }
+
+  const { data: buyerProfile, error: buyerError } = await supabaseAdmin
+    .from("profiles")
+    .select("id,points,office_id,full_name")
+    .eq("id", session.profile.id)
+    .single();
+  if (buyerError || !buyerProfile) {
+    return res.status(400).json({ error: buyerError?.message ?? "Buyer not found" });
+  }
+
+  const currentPoints = Number(buyerProfile.points ?? 0);
+  if (currentPoints < totalPoints) {
+    return res.status(400).json({ error: `Недостаточно баллов. Нужно ${totalPoints}, доступно ${currentPoints}` });
+  }
+
+  const nextPoints = currentPoints - totalPoints;
+  const { error: pointsUpdateError } = await supabaseAdmin
+    .from("profiles")
+    .update({ points: nextPoints })
+    .eq("id", session.profile.id);
+  if (pointsUpdateError) {
+    return res.status(400).json({ error: pointsUpdateError.message });
+  }
+
+  const payload = {
+    buyer_user_id: session.profile.id,
+    office_id: buyerProfile.office_id,
+    status: "new" as const,
+    total_points: totalPoints,
+    delivery_info: parsed.data.deliveryInfo?.trim() || null,
+    comment: parsed.data.comment?.trim() || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: order, error: orderError } = await supabaseAdmin
+    .from("shop_orders")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (orderError || !order) {
+    await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", session.profile.id);
+    return res.status(400).json({ error: orderError?.message ?? "Failed to create order" });
+  }
+
+  const itemRows = lineItems.map((item) => ({
+    order_id: Number(order.id),
+    product_id: item.productId,
+    product_name: item.productName,
+    quantity: item.quantity,
+    price_points: item.pricePoints,
+    subtotal_points: item.subtotalPoints,
+  }));
+  const { data: createdItems, error: itemsError } = await supabaseAdmin
+    .from("shop_order_items")
+    .insert(itemRows)
+    .select("*");
+  if (itemsError) {
+    await supabaseAdmin.from("shop_orders").delete().eq("id", order.id);
+    await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", session.profile.id);
+    return res.status(400).json({ error: itemsError.message });
+  }
+
+  const managerRecipients = await getShopOrderManagerRecipientIds(
+    order.office_id ? Number(order.office_id) : null,
+    [session.profile.id],
+  );
+  await Promise.all(
+    managerRecipients.map((recipientId) =>
+      createNotification({
+        recipientUserId: recipientId,
+        level: "info",
+        title: "Новый заказ в магазине",
+        body: `${buyerProfile.full_name} оформил заказ #${order.id} на ${totalPoints} баллов.`,
+        entityType: "shop_orders",
+        entityId: String(order.id),
+      }),
+    ),
+  );
+
+  await createNotification({
+    recipientUserId: session.profile.id,
+    level: "info",
+    title: "Заказ оформлен",
+    body: `Ваш заказ #${order.id} принят в обработку.`,
+    entityType: "shop_orders",
+    entityId: String(order.id),
+  });
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "shop_orders.create",
+    entityType: "shop_orders",
+    entityId: String(order.id),
+    payload: {
+      totalPoints,
+      items: itemRows.map((item) => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        subtotal_points: item.subtotal_points,
+      })),
+      deliveryInfo: payload.delivery_info,
+      comment: payload.comment,
+    },
+  });
+
+  return res.status(201).json({ order, items: createdItems ?? [] });
+});
+
+app.patch("/api/shop/orders/:id/status", requireAuth(), requireRole(["office_head", "director", "admin"]), async (req, res) => {
+  const parsed = updateShopOrderStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const orderId = Number(req.params.id);
+  if (Number.isNaN(orderId)) {
+    return res.status(400).json({ error: "Invalid order id" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const { data: existingOrder, error: existingOrderError } = await supabaseAdmin
+    .from("shop_orders")
+    .select("*")
+    .eq("id", orderId)
+    .single();
+  if (existingOrderError || !existingOrder) {
+    return res.status(404).json({ error: existingOrderError?.message ?? "Order not found" });
+  }
+
+  if (session.profile.role === "office_head") {
+    const managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
+    if (managedOfficeIds.length > 0) {
+      if (!existingOrder.office_id || !managedOfficeIds.includes(Number(existingOrder.office_id))) {
+        return res.status(403).json({ error: "Office head can update orders only in managed offices" });
+      }
+    } else if (
+      session.profile.office_id
+      && Number(existingOrder.office_id) !== Number(session.profile.office_id)
+    ) {
+      return res.status(403).json({ error: "Office head can update orders only in own office" });
+    }
+  }
+
+  const { data: updatedOrder, error: updateError } = await supabaseAdmin
+    .from("shop_orders")
+    .update({
+      status: parsed.data.status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orderId)
+    .select("*")
+    .single();
+  if (updateError || !updatedOrder) {
+    return res.status(400).json({ error: updateError?.message ?? "Failed to update order status" });
+  }
+
+  const managerRecipients = await getShopOrderManagerRecipientIds(
+    updatedOrder.office_id ? Number(updatedOrder.office_id) : null,
+    [session.profile.id],
+  );
+  await Promise.all(
+    managerRecipients.map((recipientId) =>
+      createNotification({
+        recipientUserId: recipientId,
+        level: "info",
+        title: "Статус заказа обновлен",
+        body: `Заказ #${updatedOrder.id}: новый статус "${parsed.data.status}".`,
+        entityType: "shop_orders",
+        entityId: String(updatedOrder.id),
+      }),
+    ),
+  );
+
+  await createNotification({
+    recipientUserId: updatedOrder.buyer_user_id,
+    level: "info",
+    title: "Изменился статус заказа",
+    body: `Ваш заказ #${updatedOrder.id} переведен в статус "${parsed.data.status}".`,
+    entityType: "shop_orders",
+    entityId: String(updatedOrder.id),
+  });
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "shop_orders.update_status",
+    entityType: "shop_orders",
+    entityId: String(updatedOrder.id),
+    payload: { status: parsed.data.status },
+  });
+
+  return res.json(updatedOrder);
 });
 
 const createDocumentSchema = z.object({

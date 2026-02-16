@@ -108,3 +108,40 @@ export interface DocumentFolder {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ShopProduct {
+  id: number;
+  name: string;
+  description: string | null;
+  category: string;
+  isMaterial: boolean;
+  pricePoints: number;
+  stockQty: number | null;
+  isActive: boolean;
+  imageEmoji: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShopOrder {
+  id: number;
+  buyerUserId: string;
+  officeId: number | null;
+  status: "new" | "processing" | "shipped" | "delivered" | "cancelled";
+  totalPoints: number;
+  deliveryInfo: string | null;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShopOrderItem {
+  id: number;
+  orderId: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  pricePoints: number;
+  subtotalPoints: number;
+  createdAt: string;
+}
