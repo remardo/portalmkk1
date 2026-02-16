@@ -518,10 +518,6 @@ async function getOfficeHeadScopeOfficeIds(profile: Profile) {
 
 async function ensureOfficeHeadCanAssignAssignee(profile: Profile, assigneeId: string) {
   const managedOfficeIds = await getOfficeHeadScopeOfficeIds(profile);
-  if (managedOfficeIds.length === 0) {
-    return { ok: false as const, error: "Office head is not assigned to any office as head" };
-  }
-
   const { data: assignee, error: assigneeError } = await supabaseAdmin
     .from("profiles")
     .select("id,office_id")
@@ -533,6 +529,9 @@ async function ensureOfficeHeadCanAssignAssignee(profile: Profile, assigneeId: s
   const assigneeOfficeId = assignee?.office_id ? Number(assignee.office_id) : null;
   if (!assigneeOfficeId) {
     return { ok: false as const, error: "Assignee has no office" };
+  }
+  if (managedOfficeIds.length === 0) {
+    return { ok: true as const, assigneeOfficeId, managedOfficeIds };
   }
   if (!managedOfficeIds.includes(assigneeOfficeId)) {
     return { ok: false as const, error: "Office head can assign tasks only within managed offices" };
@@ -1943,7 +1942,10 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
       return task.assignee_id === session.profile.id;
     }
     if (session.profile.role === "office_head") {
-      return officeHeadOfficeIds.includes(Number(task.office_id));
+      if (officeHeadOfficeIds.length > 0) {
+        return officeHeadOfficeIds.includes(Number(task.office_id));
+      }
+      return String(task.created_by ?? "") === String(session.profile.id);
     }
     return true;
   });
@@ -3132,22 +3134,32 @@ app.patch("/api/tasks/:id", requireAuth(), requireRole(["director", "admin", "of
   let managedOfficeIds: number[] = [];
   if (session.profile.role === "office_head") {
     managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
-    if (managedOfficeIds.length === 0) {
-      return res.status(403).json({ error: "Office head is not assigned to any office as head" });
-    }
     const { data: currentTask, error: currentTaskError } = await supabaseAdmin
       .from("tasks")
-      .select("id,office_id")
+      .select("id,office_id,created_by")
       .eq("id", taskId)
       .single();
     if (currentTaskError || !currentTask) {
       return res.status(404).json({ error: currentTaskError?.message ?? "Task not found" });
     }
-    if (!managedOfficeIds.includes(Number(currentTask.office_id))) {
+    if (
+      managedOfficeIds.length > 0
+      && !managedOfficeIds.includes(Number(currentTask.office_id))
+    ) {
       return res.status(403).json({ error: "Office head can edit tasks only within managed offices" });
     }
-    if (parsed.data.officeId !== undefined && !managedOfficeIds.includes(parsed.data.officeId)) {
+    if (
+      managedOfficeIds.length > 0
+      && parsed.data.officeId !== undefined
+      && !managedOfficeIds.includes(parsed.data.officeId)
+    ) {
       return res.status(403).json({ error: "Office head can set office only within managed offices" });
+    }
+    if (
+      managedOfficeIds.length === 0
+      && String(currentTask.created_by ?? "") !== String(session.profile.id)
+    ) {
+      return res.status(403).json({ error: "Office head can edit only own created tasks without office binding" });
     }
   }
 
@@ -6367,13 +6379,11 @@ app.get("/api/tasks", requireAuth(), async (req, res) => {
     query = query.eq("assignee_id", session.profile.id);
   } else if (session.profile.role === "office_head") {
     const officeIds = await getOfficeHeadScopeOfficeIds(session.profile);
-    if (officeIds.length === 0) {
-      if (paginated) {
-        return res.json({ items: [], total: 0, limit, offset, hasMore: false });
-      }
-      return res.json([]);
+    if (officeIds.length > 0) {
+      query = query.in("office_id", officeIds);
+    } else {
+      query = query.eq("created_by", session.profile.id);
     }
-    query = query.in("office_id", officeIds);
   }
 
   if (paginated) {
