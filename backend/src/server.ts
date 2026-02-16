@@ -539,6 +539,14 @@ async function ensureOfficeHeadCanAssignAssignee(profile: Profile, assigneeId: s
   return { ok: true as const, assigneeOfficeId, managedOfficeIds };
 }
 
+function isMissingCreatedByColumnError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const maybeMessage = "message" in error ? (error as { message?: unknown }).message : undefined;
+  return typeof maybeMessage === "string" && /created_by/i.test(maybeMessage) && /column/i.test(maybeMessage);
+}
+
 function isSmokeBypassAuthorizedRequest(req: express.Request) {
   if (!env.SMOKE_AUTH_BYPASS_ENABLED) {
     return false;
@@ -1945,7 +1953,10 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
       if (officeHeadOfficeIds.length > 0) {
         return officeHeadOfficeIds.includes(Number(task.office_id));
       }
-      return String(task.created_by ?? "") === String(session.profile.id);
+      if (session.profile.office_id) {
+        return Number(task.office_id) === Number(session.profile.office_id);
+      }
+      return false;
     }
     return true;
   });
@@ -3082,7 +3093,12 @@ app.post("/api/tasks", requireAuth(), requireRole(["director", "admin", "office_
     created_by: session.profile.id,
   };
 
-  const { data, error } = await supabaseAdmin.from("tasks").insert(payload).select("*").single();
+  let createResponse = await supabaseAdmin.from("tasks").insert(payload).select("*").single();
+  if (createResponse.error && isMissingCreatedByColumnError(createResponse.error)) {
+    const { created_by: _createdBy, ...legacyPayload } = payload;
+    createResponse = await supabaseAdmin.from("tasks").insert(legacyPayload).select("*").single();
+  }
+  const { data, error } = createResponse;
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -3136,7 +3152,7 @@ app.patch("/api/tasks/:id", requireAuth(), requireRole(["director", "admin", "of
     managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
     const { data: currentTask, error: currentTaskError } = await supabaseAdmin
       .from("tasks")
-      .select("id,office_id,created_by")
+      .select("id,office_id")
       .eq("id", taskId)
       .single();
     if (currentTaskError || !currentTask) {
@@ -3155,11 +3171,8 @@ app.patch("/api/tasks/:id", requireAuth(), requireRole(["director", "admin", "of
     ) {
       return res.status(403).json({ error: "Office head can set office only within managed offices" });
     }
-    if (
-      managedOfficeIds.length === 0
-      && String(currentTask.created_by ?? "") !== String(session.profile.id)
-    ) {
-      return res.status(403).json({ error: "Office head can edit only own created tasks without office binding" });
+    if (managedOfficeIds.length === 0 && session.profile.office_id && Number(currentTask.office_id) !== session.profile.office_id) {
+      return res.status(403).json({ error: "Office head can edit tasks only within own office" });
     }
   }
 
@@ -6382,7 +6395,14 @@ app.get("/api/tasks", requireAuth(), async (req, res) => {
     if (officeIds.length > 0) {
       query = query.in("office_id", officeIds);
     } else {
-      query = query.eq("created_by", session.profile.id);
+      if (session.profile.office_id) {
+        query = query.eq("office_id", session.profile.office_id);
+      } else {
+        if (paginated) {
+          return res.json({ items: [], total: 0, limit, offset, hasMore: false });
+        }
+        return res.json([]);
+      }
     }
   }
 
