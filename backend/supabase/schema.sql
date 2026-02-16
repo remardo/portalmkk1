@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor
--- schema_snapshot_migration: 0013
+-- schema_snapshot_migration: 0014
 create extension if not exists pgcrypto;
 create extension if not exists pg_trgm;
 
@@ -181,6 +181,14 @@ create table if not exists public.documents (
   office_id bigint not null references public.offices(id) on delete restrict,
   created_at timestamptz not null default now()
 );
+create table if not exists public.document_folders (
+  id bigint generated always as identity primary key,
+  name text not null,
+  parent_id bigint null references public.document_folders(id) on delete cascade,
+  created_by uuid not null references public.profiles(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 create table if not exists public.document_approval_routes (
   id bigint generated always as identity primary key,
   name text not null unique,
@@ -216,7 +224,18 @@ alter table public.documents add column if not exists body text null;
 alter table public.documents add column if not exists template_id bigint null references public.document_templates(id) on delete set null;
 alter table public.documents add column if not exists approval_route_id bigint null references public.document_approval_routes(id) on delete set null;
 alter table public.documents add column if not exists current_approval_step int null;
+alter table public.documents add column if not exists folder_id bigint null references public.document_folders(id) on delete set null;
 alter table public.documents add column if not exists updated_at timestamptz not null default now();
+create table if not exists public.document_files (
+  id bigint generated always as identity primary key,
+  document_id bigint not null unique references public.documents(id) on delete cascade,
+  file_name text not null,
+  mime_type text not null,
+  size_bytes int not null,
+  content_base64 text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
 create table if not exists public.audit_log (
   id bigint generated always as identity primary key,
@@ -572,6 +591,11 @@ create index if not exists report_delivery_runs_recipient_generated_idx on publi
 create index if not exists slo_alert_routing_policies_active_priority_idx on public.slo_alert_routing_policies(is_active, priority, created_at);
 create index if not exists documents_title_trgm_idx on public.documents using gin (title gin_trgm_ops);
 create index if not exists documents_body_trgm_idx on public.documents using gin (coalesce(body, '') gin_trgm_ops);
+create unique index if not exists document_folders_unique_name_per_parent_idx on public.document_folders (coalesce(parent_id, 0), lower(name));
+create index if not exists document_folders_parent_idx on public.document_folders(parent_id);
+create index if not exists documents_folder_id_idx on public.documents(folder_id);
+create index if not exists document_files_document_id_idx on public.document_files(document_id);
+create index if not exists document_templates_folder_idx on public.document_templates(folder);
 create index if not exists kb_articles_title_trgm_idx on public.kb_articles using gin (title gin_trgm_ops);
 create index if not exists kb_articles_content_trgm_idx on public.kb_articles using gin (content gin_trgm_ops);
 create index if not exists lms_courses_title_trgm_idx on public.lms_courses using gin (title gin_trgm_ops);

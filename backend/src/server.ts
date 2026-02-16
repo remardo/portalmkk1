@@ -76,7 +76,7 @@ const supabaseAnon = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
 });
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 app.use(cors({ origin: env.CORS_ORIGIN.split(",").map((v) => v.trim()), credentials: true }));
 app.use(morgan("tiny"));
 app.set("trust proxy", 1);
@@ -553,6 +553,62 @@ function isCreatedByForeignKeyError(error: unknown) {
   }
   const maybeMessage = "message" in error ? (error as { message?: unknown }).message : undefined;
   return typeof maybeMessage === "string" && /tasks_created_by_fkey/i.test(maybeMessage);
+}
+
+const allowedDocumentFileExtensions = new Set(["pdf", "doc", "docx", "xls", "xlsx"]);
+const allowedDocumentFileMimeTypes = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+const maxDocumentFileBytes = 10 * 1024 * 1024;
+
+function getFileExtension(fileName: string) {
+  const dot = fileName.lastIndexOf(".");
+  if (dot < 0) return "";
+  return fileName.slice(dot + 1).toLowerCase();
+}
+
+function validateDocumentFile(input: { fileName: string; mimeType: string; fileDataBase64: string }) {
+  const extension = getFileExtension(input.fileName);
+  if (!allowedDocumentFileExtensions.has(extension)) {
+    return { ok: false as const, error: "Unsupported file extension. Allowed: pdf, doc, docx, xls, xlsx" };
+  }
+  if (!allowedDocumentFileMimeTypes.has(input.mimeType)) {
+    return { ok: false as const, error: "Unsupported file MIME type" };
+  }
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(input.fileDataBase64, "base64");
+  } catch {
+    return { ok: false as const, error: "Invalid base64 file payload" };
+  }
+  if (!buffer.length) {
+    return { ok: false as const, error: "File payload is empty" };
+  }
+  if (buffer.length > maxDocumentFileBytes) {
+    return { ok: false as const, error: "File exceeds size limit 10MB" };
+  }
+  return { ok: true as const, buffer };
+}
+
+async function canSessionAccessDocument(session: Session, document: { office_id: number; author: string }) {
+  if (session.profile.role === "admin" || session.profile.role === "director") {
+    return true;
+  }
+  if (session.profile.role === "office_head") {
+    const managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
+    if (managedOfficeIds.length > 0) {
+      return managedOfficeIds.includes(Number(document.office_id));
+    }
+    if (session.profile.office_id) {
+      return Number(document.office_id) === Number(session.profile.office_id);
+    }
+    return false;
+  }
+  return document.author === session.profile.full_name;
 }
 
 function isSmokeBypassAuthorizedRequest(req: express.Request) {
@@ -1926,7 +1982,7 @@ app.get("/api/offices", requireAuth(), async (_req, res) => {
 
 app.get("/api/bootstrap", requireAuth(), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
-  const [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications] = await Promise.all([
+  const [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles] = await Promise.all([
     supabaseAdmin.from("offices").select("*").order("id"),
     supabaseAdmin.from("profiles").select("id,full_name,role,office_id,email,phone,points,position,avatar").order("full_name"),
     supabaseAdmin.from("news").select("*").order("date", { ascending: false }),
@@ -1940,9 +1996,11 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     supabaseAdmin.from("documents").select("*").order("id", { ascending: false }),
     supabaseAdmin.from("document_approvals").select("*").order("created_at", { ascending: false }),
     supabaseAdmin.from("notifications").select("*").eq("recipient_user_id", session.profile.id).order("created_at", { ascending: false }).limit(200),
+    supabaseAdmin.from("document_folders").select("*").order("name"),
+    supabaseAdmin.from("document_files").select("document_id,file_name,mime_type,size_bytes,updated_at"),
   ]);
 
-  const errors = [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications]
+  const errors = [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles]
     .map((q) => q.error)
     .filter(Boolean);
 
@@ -1969,6 +2027,10 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     return true;
   });
 
+  const documentFileByDocumentId = new Map(
+    (documentFiles.data ?? []).map((row) => [Number(row.document_id), row]),
+  );
+
   return res.json({
     offices: offices.data,
     users: users.data,
@@ -1980,7 +2042,17 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     courseAttempts: courseAttempts.data,
     attestations: attestations.data,
     tasks: scopedTasks,
-    documents: documents.data,
+    documents: (documents.data ?? []).map((document) => {
+      const file = documentFileByDocumentId.get(Number(document.id));
+      return {
+        ...document,
+        file_name: file?.file_name ?? null,
+        file_mime_type: file?.mime_type ?? null,
+        file_size_bytes: file?.size_bytes ?? null,
+        file_updated_at: file?.updated_at ?? null,
+      };
+    }),
+    documentFolders: documentFolders.data ?? [],
     documentApprovals: documentApprovals.data,
     notifications: notifications.data,
   });
@@ -3299,10 +3371,14 @@ app.delete("/api/tasks/:id", requireAuth(), requireRole(["director", "admin"]), 
 const createDocumentSchema = z.object({
   title: z.string().min(2),
   type: z.enum(["incoming", "outgoing", "internal"]).default("internal"),
-  officeId: z.number().int().positive(),
+  officeId: z.number().int().positive().optional(),
+  folderId: z.number().int().positive().optional(),
   body: z.string().optional(),
   templateId: z.number().int().positive().optional(),
   approvalRouteId: z.number().int().positive().optional(),
+  fileName: z.string().min(3).max(255).optional(),
+  mimeType: z.string().min(3).max(255).optional(),
+  fileDataBase64: z.string().min(4).optional(),
 });
 
 const createDocumentTemplateSchema = z.object({
@@ -3327,6 +3403,11 @@ const createDocumentApprovalRouteSchema = z.object({
       }),
     )
     .min(1),
+});
+
+const createDocumentFolderSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  parentId: z.number().int().positive().nullable().optional(),
 });
 
 const createSlaPolicySchema = z.object({
@@ -3483,6 +3564,62 @@ app.post("/api/document-approval-routes", requireAuth(), requireRole(["admin", "
   return res.status(201).json({ ...route, steps });
 });
 
+app.get("/api/document-folders", requireAuth(), async (_req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("document_folders")
+    .select("*")
+    .order("name");
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.post("/api/document-folders", requireAuth(), requireRole(["director", "admin", "office_head"]), async (req, res) => {
+  const parsed = createDocumentFolderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  if (parsed.data.parentId) {
+    const { data: parent, error: parentError } = await supabaseAdmin
+      .from("document_folders")
+      .select("id")
+      .eq("id", parsed.data.parentId)
+      .single();
+    if (parentError || !parent) {
+      return res.status(400).json({ error: parentError?.message ?? "Parent folder not found" });
+    }
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const { data, error } = await supabaseAdmin
+    .from("document_folders")
+    .insert({
+      name: parsed.data.name,
+      parent_id: parsed.data.parentId ?? null,
+      created_by: session.profile.id,
+      updated_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "document_folders.create",
+    entityType: "document_folders",
+    entityId: String(data.id),
+    payload: { name: parsed.data.name, parentId: parsed.data.parentId ?? null },
+  });
+
+  return res.status(201).json(data);
+});
+
 app.post(
   "/api/documents",
   requireAuth(),
@@ -3500,6 +3637,62 @@ app.post(
     let body = parsed.data.body ?? null;
     let templateId: number | null = parsed.data.templateId ?? null;
     let approvalRouteId: number | null = parsed.data.approvalRouteId ?? null;
+    let officeId: number | null = parsed.data.officeId ?? session.profile.office_id ?? null;
+    const folderId = parsed.data.folderId ?? null;
+
+    if (!officeId) {
+      const { data: firstOffice, error: firstOfficeError } = await supabaseAdmin
+        .from("offices")
+        .select("id")
+        .order("id", { ascending: true })
+        .limit(1)
+        .single();
+      if (firstOfficeError || !firstOffice) {
+        return res.status(400).json({ error: firstOfficeError?.message ?? "Office is required" });
+      }
+      officeId = Number(firstOffice.id);
+    }
+
+    if (session.profile.role === "office_head") {
+      const managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
+      if (managedOfficeIds.length > 0 && !managedOfficeIds.includes(Number(officeId))) {
+        return res.status(403).json({ error: "Office head can create documents only within managed offices" });
+      }
+    }
+
+    if (folderId) {
+      const { data: folder, error: folderError } = await supabaseAdmin
+        .from("document_folders")
+        .select("id")
+        .eq("id", folderId)
+        .single();
+      if (folderError || !folder) {
+        return res.status(400).json({ error: folderError?.message ?? "Document folder not found" });
+      }
+    }
+
+    let filePayload:
+      | { fileName: string; mimeType: string; fileDataBase64: string; sizeBytes: number }
+      | null = null;
+    if (parsed.data.fileName || parsed.data.mimeType || parsed.data.fileDataBase64) {
+      if (!parsed.data.fileName || !parsed.data.mimeType || !parsed.data.fileDataBase64) {
+        return res.status(400).json({ error: "fileName, mimeType and fileDataBase64 must be provided together" });
+      }
+      const fileValidation = validateDocumentFile({
+        fileName: parsed.data.fileName,
+        mimeType: parsed.data.mimeType,
+        fileDataBase64: parsed.data.fileDataBase64,
+      });
+      if (!fileValidation.ok) {
+        return res.status(400).json({ error: fileValidation.error });
+      }
+      filePayload = {
+        fileName: parsed.data.fileName,
+        mimeType: parsed.data.mimeType,
+        fileDataBase64: parsed.data.fileDataBase64,
+        sizeBytes: fileValidation.buffer.length,
+      };
+    }
 
     if (templateId) {
       const { data: template, error: templateError } = await supabaseAdmin
@@ -3523,9 +3716,10 @@ app.post(
       status: "draft",
       author: session.profile.full_name,
       date: new Date().toISOString().slice(0, 10),
-      office_id: parsed.data.officeId,
+      office_id: officeId,
       body,
       template_id: templateId,
+      folder_id: folderId,
       approval_route_id: approvalRouteId,
       current_approval_step: null,
       updated_at: new Date().toISOString(),
@@ -3539,6 +3733,26 @@ app.post(
 
     if (error) {
       return res.status(400).json({ error: error.message });
+    }
+
+    if (filePayload) {
+      const { error: fileError } = await supabaseAdmin
+        .from("document_files")
+        .upsert(
+          {
+            document_id: data.id,
+            file_name: filePayload.fileName,
+            mime_type: filePayload.mimeType,
+            size_bytes: filePayload.sizeBytes,
+            content_base64: filePayload.fileDataBase64,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "document_id" },
+        );
+      if (fileError) {
+        await supabaseAdmin.from("documents").delete().eq("id", data.id);
+        return res.status(400).json({ error: fileError.message });
+      }
     }
 
     await writeAuditLog({
@@ -3741,6 +3955,45 @@ app.get("/api/documents/:id/history", requireAuth(), async (req, res) => {
   }
 
   return res.json(data);
+});
+
+app.get("/api/documents/:id/file", requireAuth(), async (req, res) => {
+  const documentId = Number(req.params.id);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  const { data: document, error: documentError } = await supabaseAdmin
+    .from("documents")
+    .select("id,office_id,author")
+    .eq("id", documentId)
+    .single();
+  if (documentError || !document) {
+    return res.status(404).json({ error: documentError?.message ?? "Document not found" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const allowed = await canSessionAccessDocument(session, {
+    office_id: Number(document.office_id),
+    author: document.author,
+  });
+  if (!allowed) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const { data: file, error: fileError } = await supabaseAdmin
+    .from("document_files")
+    .select("file_name,mime_type,content_base64")
+    .eq("document_id", documentId)
+    .single();
+  if (fileError || !file) {
+    return res.status(404).json({ error: fileError?.message ?? "Document file not found" });
+  }
+
+  const binary = Buffer.from(file.content_base64, "base64");
+  res.setHeader("Content-Type", file.mime_type);
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(file.file_name)}`);
+  return res.send(binary);
 });
 
 const createKbArticleSchema = z.object({

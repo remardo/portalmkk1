@@ -282,8 +282,21 @@ export const backendApi = {
         office_id: number;
         body?: string | null;
         template_id?: number | null;
+        folder_id?: number | null;
         approval_route_id?: number | null;
         current_approval_step?: number | null;
+        file_name?: string | null;
+        file_mime_type?: string | null;
+        file_size_bytes?: number | null;
+        file_updated_at?: string | null;
+      }>;
+      documentFolders: Array<{
+        id: number;
+        name: string;
+        parent_id: number | null;
+        created_by: string;
+        created_at: string;
+        updated_at: string;
       }>;
       documentApprovals: Array<{
         id: number;
@@ -355,12 +368,33 @@ export const backendApi = {
   createDocument: (input: {
     title: string;
     type: "incoming" | "outgoing" | "internal";
-    officeId: number;
+    officeId?: number;
+    folderId?: number;
     body?: string;
     templateId?: number;
     approvalRouteId?: number;
+    fileName?: string;
+    mimeType?: string;
+    fileDataBase64?: string;
   }) =>
     apiRequest("/api/documents", { method: "POST", body: JSON.stringify(input) }),
+
+  getDocumentFolders: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        name: string;
+        parent_id: number | null;
+        created_by: string;
+        created_at: string;
+        updated_at: string;
+      }>
+    >("/api/document-folders"),
+
+  createDocumentFolder: (input: { name: string; parentId?: number | null }) =>
+    apiRequest("/api/document-folders", { method: "POST", body: JSON.stringify(input) }),
+
+  downloadDocumentFile: (id: number) => apiRequestBlob(`/api/documents/${id}/file`),
 
   getDocumentTemplates: () =>
     apiRequest<

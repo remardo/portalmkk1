@@ -91,6 +91,20 @@ export interface Document {
   officeId: number;
   body?: string;
   templateId?: number | null;
+  folderId?: number | null;
   approvalRouteId?: number | null;
   currentApprovalStep?: number | null;
+  fileName?: string | null;
+  fileMimeType?: string | null;
+  fileSizeBytes?: number | null;
+  fileUpdatedAt?: string | null;
+}
+
+export interface DocumentFolder {
+  id: number;
+  name: string;
+  parentId: number | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }

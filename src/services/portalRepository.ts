@@ -1,4 +1,4 @@
-import type { Document, NewsItem, Task, User } from "../domain/models";
+import type { Document, DocumentFolder, NewsItem, Task, User } from "../domain/models";
 import { backendApi } from "./apiClient";
 import { mapProfileToUser } from "./authStorage";
 
@@ -54,6 +54,7 @@ export interface PortalData {
   attestations: Array<{ id: number; courseId: number; userId: string; date: string; score: number; passed: boolean }>;
   tasks: Task[];
   documents: Document[];
+  documentFolders: DocumentFolder[];
   documentApprovals: Array<{
     id: number;
     documentId: number;
@@ -116,10 +117,14 @@ export interface UpdateNewsInput {
 export interface CreateDocumentInput {
   title: string;
   type: "incoming" | "outgoing" | "internal";
-  officeId: number;
+  officeId?: number;
+  folderId?: number;
   body?: string;
   templateId?: number;
   approvalRouteId?: number;
+  fileName?: string;
+  mimeType?: string;
+  fileDataBase64?: string;
 }
 
 export interface DocumentDecisionInput {
@@ -504,8 +509,21 @@ function transformPortalData(raw: Awaited<ReturnType<typeof backendApi.getBootst
       officeId: doc.office_id,
       body: doc.body ?? undefined,
       templateId: doc.template_id ?? null,
+      folderId: doc.folder_id ?? null,
       approvalRouteId: doc.approval_route_id ?? null,
       currentApprovalStep: doc.current_approval_step ?? null,
+      fileName: doc.file_name ?? null,
+      fileMimeType: doc.file_mime_type ?? null,
+      fileSizeBytes: doc.file_size_bytes ?? null,
+      fileUpdatedAt: doc.file_updated_at ?? null,
+    })),
+    documentFolders: raw.documentFolders.map((folder) => ({
+      id: Number(folder.id),
+      name: folder.name,
+      parentId: folder.parent_id ? Number(folder.parent_id) : null,
+      createdBy: folder.created_by,
+      createdAt: folder.created_at,
+      updatedAt: folder.updated_at,
     })),
     documentApprovals: raw.documentApprovals.map((item) => ({
       id: Number(item.id),
