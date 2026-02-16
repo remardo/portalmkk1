@@ -3307,9 +3307,11 @@ const createDocumentSchema = z.object({
 
 const createDocumentTemplateSchema = z.object({
   name: z.string().min(2),
+  folder: z.string().min(2).default("Общее"),
   type: z.enum(["incoming", "outgoing", "internal"]).default("internal"),
   titleTemplate: z.string().min(2),
   bodyTemplate: z.string().optional(),
+  instruction: z.string().optional(),
   defaultRouteId: z.number().int().positive().optional(),
   status: z.enum(["draft", "review", "approved", "rejected"]).default("draft"),
 });
@@ -3392,9 +3394,11 @@ app.post("/api/document-templates", requireAuth(), requireRole(["admin", "direct
   const session = (req as express.Request & { session: Session }).session;
   const payload = {
     name: parsed.data.name,
+    folder: parsed.data.folder,
     type: parsed.data.type,
     title_template: parsed.data.titleTemplate,
     body_template: parsed.data.bodyTemplate ?? null,
+    instruction: parsed.data.instruction ?? null,
     default_route_id: parsed.data.defaultRouteId ?? null,
     status: parsed.data.status,
     created_by: session.profile.id,

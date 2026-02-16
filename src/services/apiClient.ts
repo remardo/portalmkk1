@@ -367,9 +367,11 @@ export const backendApi = {
       Array<{
         id: number;
         name: string;
+        folder: string;
         type: "incoming" | "outgoing" | "internal";
         title_template: string;
         body_template: string | null;
+        instruction: string | null;
         default_route_id: number | null;
         status: "draft" | "review" | "approved" | "rejected";
       }>
@@ -377,9 +379,11 @@ export const backendApi = {
 
   createDocumentTemplate: (input: {
     name: string;
+    folder: string;
     type: "incoming" | "outgoing" | "internal";
     titleTemplate: string;
     bodyTemplate?: string;
+    instruction?: string;
     defaultRouteId?: number;
     status?: "draft" | "review" | "approved" | "rejected";
   }) => apiRequest("/api/document-templates", { method: "POST", body: JSON.stringify(input) }),

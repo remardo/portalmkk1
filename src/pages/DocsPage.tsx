@@ -30,8 +30,10 @@ export function DocsPage() {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateFolder, setNewTemplateFolder] = useState("Общее");
   const [newTemplateTitle, setNewTemplateTitle] = useState("");
   const [newTemplateBody, setNewTemplateBody] = useState("");
+  const [newTemplateInstruction, setNewTemplateInstruction] = useState("");
   const [newRouteName, setNewRouteName] = useState("");
   const [newRouteDescription, setNewRouteDescription] = useState("");
   const [newRouteSteps, setNewRouteSteps] = useState("office_head,director");
@@ -50,16 +52,20 @@ export function DocsPage() {
     mutationFn: () =>
       backendApi.createDocumentTemplate({
         name: newTemplateName,
+        folder: newTemplateFolder,
         type: "internal",
         titleTemplate: newTemplateTitle,
         bodyTemplate: newTemplateBody || undefined,
+        instruction: newTemplateInstruction || undefined,
         defaultRouteId: approvalRouteId === "" ? undefined : Number(approvalRouteId),
         status: "approved",
       }),
     onSuccess: async () => {
       setNewTemplateName("");
+      setNewTemplateFolder("Общее");
       setNewTemplateTitle("");
       setNewTemplateBody("");
+      setNewTemplateInstruction("");
       await queryClient.invalidateQueries({ queryKey: ["document-templates"] });
     },
   });
@@ -109,6 +115,23 @@ export function DocsPage() {
     return map;
   }, [data]);
 
+  const selectedTemplate = useMemo(
+    () => (templatesQuery.data ?? []).find((item) => Number(item.id) === Number(templateId)) ?? null,
+    [templateId, templatesQuery.data],
+  );
+
+  const templatesByFolder = useMemo(() => {
+    const templateItems = templatesQuery.data ?? [];
+    const grouped = new Map<string, Array<(typeof templateItems)[number]>>();
+    for (const template of templateItems) {
+      const folderName = template.folder?.trim() || "Общее";
+      const current = grouped.get(folderName) ?? [];
+      current.push(template);
+      grouped.set(folderName, current);
+    }
+    return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0], "ru"));
+  }, [templatesQuery.data]);
+
   if (!data || !user) {
     return null;
   }
@@ -144,10 +167,14 @@ export function DocsPage() {
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
               >
                 <option value="">Без шаблона</option>
-                {(templatesQuery.data ?? []).map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
+                {templatesByFolder.map(([folderName, templates]) => (
+                  <optgroup key={folderName} label={folderName}>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <select
@@ -176,6 +203,12 @@ export function DocsPage() {
               rows={4}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
+            {selectedTemplate?.instruction ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <p className="font-medium">Инструкция по шаблону</p>
+                <p className="mt-1 whitespace-pre-wrap">{selectedTemplate.instruction}</p>
+              </div>
+            ) : null}
             <button
               onClick={() => {
                 if (!title.trim()) {
@@ -243,6 +276,12 @@ export function DocsPage() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
               <input
+                value={newTemplateFolder}
+                onChange={(event) => setNewTemplateFolder(event.target.value)}
+                placeholder="Папка (например: Кадры)"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
                 value={newTemplateTitle}
                 onChange={(event) => setNewTemplateTitle(event.target.value)}
                 placeholder="Шаблон заголовка"
@@ -255,9 +294,21 @@ export function DocsPage() {
                 rows={3}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
+              <textarea
+                value={newTemplateInstruction}
+                onChange={(event) => setNewTemplateInstruction(event.target.value)}
+                placeholder="Инструкция по заполнению шаблона"
+                rows={3}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
               <button
                 onClick={() => createTemplateMutation.mutate()}
-                disabled={!newTemplateName.trim() || !newTemplateTitle.trim() || createTemplateMutation.isPending}
+                disabled={
+                  !newTemplateName.trim()
+                  || !newTemplateFolder.trim()
+                  || !newTemplateTitle.trim()
+                  || createTemplateMutation.isPending
+                }
                 className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
               >
                 Создать шаблон

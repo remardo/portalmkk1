@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor
--- schema_snapshot_migration: 0012
+-- schema_snapshot_migration: 0013
 create extension if not exists pgcrypto;
 create extension if not exists pg_trgm;
 
@@ -201,9 +201,11 @@ create table if not exists public.document_approval_route_steps (
 create table if not exists public.document_templates (
   id bigint generated always as identity primary key,
   name text not null unique,
+  folder text not null default 'Общее',
   type public.document_type not null default 'internal',
   title_template text not null,
   body_template text null,
+  instruction text null,
   default_route_id bigint null references public.document_approval_routes(id) on delete set null,
   status public.document_status not null default 'draft',
   created_by uuid not null references public.profiles(id) on delete restrict,
