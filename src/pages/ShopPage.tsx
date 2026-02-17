@@ -107,16 +107,21 @@ export function ShopPage() {
                       {product.name}
                     </p>
                     {product.imageDataBase64 || product.imageUrl ? (
-                      <img
-                        src={
-                          product.imageDataBase64
-                            ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
-                            : (product.imageUrl ?? "")
-                        }
-                        alt={product.name}
-                        className="mt-2 h-28 w-full rounded-lg object-cover"
-                        loading="lazy"
-                      />
+                      <div
+                        className="mt-2 flex w-full items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white p-2"
+                        style={{ aspectRatio: "1 / 1" }}
+                      >
+                        <img
+                          src={
+                            product.imageDataBase64
+                              ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
+                              : (product.imageUrl ?? "")
+                          }
+                          alt={product.name}
+                          className="max-h-full max-w-full object-contain"
+                          loading="lazy"
+                        />
+                      </div>
                     ) : null}
                     <p className="mt-1 text-xs text-gray-500">{product.description ?? "Без описания"}</p>
                     <div className="mt-2 flex items-center justify-between text-xs text-gray-500">

@@ -42,6 +42,56 @@ function toBase64(file: File) {
   });
 }
 
+function readImageDimensions(file: File) {
+  return new Promise<{ image: HTMLImageElement; src: string }>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = String(reader.result ?? "");
+      const image = new Image();
+      image.onload = () => resolve({ image, src });
+      image.onerror = () => reject(new Error("Не удалось открыть изображение"));
+      image.src = src;
+    };
+    reader.onerror = () => reject(new Error("Не удалось прочитать изображение"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressShopImage(file: File): Promise<{ base64: string; mimeType: string }> {
+  if (file.type === "image/gif") {
+    return { base64: await toBase64(file), mimeType: "image/gif" };
+  }
+
+  const { image } = await readImageDimensions(file);
+  const maxSide = 1200;
+  const ratio = Math.min(1, maxSide / Math.max(image.width, image.height));
+  const targetWidth = Math.max(1, Math.round(image.width * ratio));
+  const targetHeight = Math.max(1, Math.round(image.height * ratio));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return { base64: await toBase64(file), mimeType: file.type || "image/png" };
+  }
+  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+  const mimeType = "image/webp";
+  let quality = 0.86;
+  let blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, mimeType, quality));
+  while (blob && blob.size > 2.8 * 1024 * 1024 && quality > 0.5) {
+    quality -= 0.08;
+    blob = await new Promise((resolve) => canvas.toBlob(resolve, mimeType, quality));
+  }
+
+  if (!blob) {
+    return { base64: await toBase64(file), mimeType: file.type || "image/png" };
+  }
+
+  return { base64: await toBase64(new File([blob], "shop-image.webp", { type: mimeType })), mimeType };
+}
+
 export function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data } = usePortalData();
@@ -680,8 +730,9 @@ export function AdminPage() {
                   let imageDataBase64: string | undefined;
                   let imageMimeType: string | undefined;
                   if (newShopProductImageFile) {
-                    imageDataBase64 = await toBase64(newShopProductImageFile);
-                    imageMimeType = newShopProductImageFile.type || "image/png";
+                    const compressed = await compressShopImage(newShopProductImageFile);
+                    imageDataBase64 = compressed.base64;
+                    imageMimeType = compressed.mimeType;
                   }
                   await createShopProduct.mutateAsync({
                     name: newShopProduct.name.trim(),
@@ -796,15 +847,20 @@ export function AdminPage() {
                   />
                   {(product.imageDataBase64 || getShopProductDraft(product).imageUrl) ? (
                     <div className="md:col-span-4">
-                      <img
-                        src={
-                          product.imageDataBase64
-                            ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
-                            : (getShopProductDraft(product).imageUrl || "")
-                        }
-                        alt={product.name}
-                        className="h-24 w-24 rounded-lg object-cover"
-                      />
+                      <div
+                        className="flex w-24 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white p-1"
+                        style={{ aspectRatio: "1 / 1" }}
+                      >
+                        <img
+                          src={
+                            product.imageDataBase64
+                              ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
+                              : (getShopProductDraft(product).imageUrl || "")
+                          }
+                          alt={product.name}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
                     </div>
                   ) : (
                     <div className="md:col-span-4 text-xs text-gray-400">Картинка не задана</div>
@@ -826,8 +882,9 @@ export function AdminPage() {
                         let imageDataBase64: string | null | undefined;
                         let imageMimeType: string | null | undefined;
                         if (nextFile) {
-                          imageDataBase64 = await toBase64(nextFile);
-                          imageMimeType = nextFile.type || "image/png";
+                          const compressed = await compressShopImage(nextFile);
+                          imageDataBase64 = compressed.base64;
+                          imageMimeType = compressed.mimeType;
                         }
                         await updateShopProduct.mutateAsync({
                           id: product.id,
