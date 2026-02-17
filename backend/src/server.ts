@@ -2082,10 +2082,11 @@ app.get("/api/offices", requireAuth(), async (_req, res) => {
 
 app.get("/api/bootstrap", requireAuth(), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
-  const [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles, shopProducts, shopOrders, shopOrderItems] = await Promise.all([
+  const [offices, users, news, newsImages, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles, shopProducts, shopOrders, shopOrderItems] = await Promise.all([
     supabaseAdmin.from("offices").select("*").order("id"),
     supabaseAdmin.from("profiles").select("id,full_name,role,office_id,email,phone,points,position,avatar").order("full_name"),
     supabaseAdmin.from("news").select("*").order("date", { ascending: false }),
+    supabaseAdmin.from("news_images").select("*").order("created_at", { ascending: false }),
     supabaseAdmin.from("kb_articles").select("*").order("date", { ascending: false }),
     supabaseAdmin.from("kb_article_versions").select("*").order("created_at", { ascending: false }),
     supabaseAdmin.from("courses").select("*").order("id"),
@@ -2103,7 +2104,7 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     supabaseAdmin.from("shop_order_items").select("*").order("id", { ascending: false }),
   ]);
 
-  const errors = [offices, users, news, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles, shopProducts, shopOrders, shopOrderItems]
+  const errors = [offices, users, news, newsImages, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles, shopProducts, shopOrders, shopOrderItems]
     .map((q) => q.error)
     .filter(Boolean);
 
@@ -2176,6 +2177,7 @@ app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     offices: offices.data,
     users: users.data,
     news: news.data,
+    newsImages: newsImages.data ?? [],
     kbArticles: kbArticles.data,
     kbArticleVersions: kbArticleVersions.data,
     courses: courses.data,
@@ -3144,6 +3146,8 @@ const createNewsSchema = z.object({
   title: z.string().min(2),
   body: z.string().min(2),
   pinned: z.boolean().default(false),
+  coverImageDataBase64: z.string().min(20).max(8_000_000).optional(),
+  coverImageMimeType: z.string().trim().min(3).max(120).optional(),
 });
 
 app.post("/api/news", requireAuth(), requireRole(["director", "admin", "office_head"]), async (req, res) => {
@@ -3153,8 +3157,24 @@ app.post("/api/news", requireAuth(), requireRole(["director", "admin", "office_h
   }
 
   const session = (req as express.Request & { session: Session }).session;
+  if ((parsed.data.coverImageDataBase64 && !parsed.data.coverImageMimeType) || (!parsed.data.coverImageDataBase64 && parsed.data.coverImageMimeType)) {
+    return res.status(400).json({ error: "coverImageDataBase64 and coverImageMimeType must be provided together" });
+  }
+  if (parsed.data.coverImageDataBase64 && parsed.data.coverImageMimeType) {
+    const validated = validateShopProductImage({
+      imageDataBase64: parsed.data.coverImageDataBase64,
+      mimeType: parsed.data.coverImageMimeType,
+    });
+    if (!validated.ok) {
+      return res.status(400).json({ error: validated.error });
+    }
+  }
   const payload = {
-    ...parsed.data,
+    title: parsed.data.title,
+    body: parsed.data.body,
+    pinned: parsed.data.pinned,
+    cover_image_data_base64: parsed.data.coverImageDataBase64 ?? null,
+    cover_image_mime_type: parsed.data.coverImageMimeType ?? null,
     date: new Date().toISOString().slice(0, 10),
     author: session.profile.full_name,
   };
@@ -3181,6 +3201,15 @@ const updateNewsSchema = z.object({
   body: z.string().min(2).optional(),
   pinned: z.boolean().optional(),
   status: z.enum(["draft", "published", "archived"]).optional(),
+  coverImageDataBase64: z.string().min(20).max(8_000_000).nullable().optional(),
+  coverImageMimeType: z.string().trim().min(3).max(120).nullable().optional(),
+});
+
+const createNewsImageSchema = z.object({
+  newsId: z.number().int().positive().optional(),
+  imageDataBase64: z.string().min(20).max(8_000_000),
+  imageMimeType: z.string().trim().min(3).max(120),
+  caption: z.string().trim().max(300).optional(),
 });
 
 app.patch("/api/news/:id", requireAuth(), requireRole(["director", "admin"]), async (req, res) => {
@@ -3193,12 +3222,31 @@ app.patch("/api/news/:id", requireAuth(), requireRole(["director", "admin"]), as
   if (Number.isNaN(newsId)) {
     return res.status(400).json({ error: "Invalid news id" });
   }
+  if ((parsed.data.coverImageDataBase64 !== undefined) !== (parsed.data.coverImageMimeType !== undefined)) {
+    return res.status(400).json({ error: "coverImageDataBase64 and coverImageMimeType must be provided together" });
+  }
+  if (parsed.data.coverImageDataBase64 !== undefined && parsed.data.coverImageMimeType !== undefined) {
+    if ((parsed.data.coverImageDataBase64 === null) !== (parsed.data.coverImageMimeType === null)) {
+      return res.status(400).json({ error: "coverImageDataBase64 and coverImageMimeType must be both null or both non-null" });
+    }
+    if (parsed.data.coverImageDataBase64 && parsed.data.coverImageMimeType) {
+      const validated = validateShopProductImage({
+        imageDataBase64: parsed.data.coverImageDataBase64,
+        mimeType: parsed.data.coverImageMimeType,
+      });
+      if (!validated.ok) {
+        return res.status(400).json({ error: validated.error });
+      }
+    }
+  }
 
   const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (parsed.data.title !== undefined) updatePayload.title = parsed.data.title;
   if (parsed.data.body !== undefined) updatePayload.body = parsed.data.body;
   if (parsed.data.pinned !== undefined) updatePayload.pinned = parsed.data.pinned;
   if (parsed.data.status !== undefined) updatePayload.status = parsed.data.status;
+  if (parsed.data.coverImageDataBase64 !== undefined) updatePayload.cover_image_data_base64 = parsed.data.coverImageDataBase64;
+  if (parsed.data.coverImageMimeType !== undefined) updatePayload.cover_image_mime_type = parsed.data.coverImageMimeType;
 
   const { data, error } = await supabaseAdmin
     .from("news")
@@ -3222,6 +3270,55 @@ app.patch("/api/news/:id", requireAuth(), requireRole(["director", "admin"]), as
   });
 
   return res.json(data);
+});
+
+app.post("/api/news/images", requireAuth(), requireRole(["director", "admin", "office_head"]), async (req, res) => {
+  const parsed = createNewsImageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const validated = validateShopProductImage({
+    imageDataBase64: parsed.data.imageDataBase64,
+    mimeType: parsed.data.imageMimeType,
+  });
+  if (!validated.ok) {
+    return res.status(400).json({ error: validated.error });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    news_id: parsed.data.newsId ?? null,
+    uploaded_by: session.profile.id,
+    image_data_base64: parsed.data.imageDataBase64,
+    image_mime_type: parsed.data.imageMimeType,
+    caption: parsed.data.caption?.trim() || null,
+  };
+
+  const { data, error } = await supabaseAdmin.from("news_images").insert(payload).select("*").single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to upload news image" });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "news_images.create",
+    entityType: "news_images",
+    entityId: String(data.id),
+    payload: {
+      newsId: payload.news_id,
+      mimeType: payload.image_mime_type,
+      sizeBytes: validated.sizeBytes,
+      caption: payload.caption,
+    },
+  });
+
+  return res.status(201).json({
+    id: Number(data.id),
+    token: `{{news-image:${data.id}}}`,
+    caption: data.caption ?? null,
+  });
 });
 
 app.delete("/api/news/:id", requireAuth(), requireRole(["director", "admin"]), async (req, res) => {

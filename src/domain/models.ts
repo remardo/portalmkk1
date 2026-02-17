@@ -35,7 +35,19 @@ export interface NewsItem {
   date: string;
   pinned: boolean;
   author: string;
+  coverImageDataBase64?: string | null;
+  coverImageMimeType?: string | null;
   status?: "draft" | "published" | "archived";
+}
+
+export interface NewsImage {
+  id: number;
+  newsId: number | null;
+  uploadedBy: string;
+  imageDataBase64: string;
+  imageMimeType: string;
+  caption: string | null;
+  createdAt: string;
 }
 
 export interface KBArticle {

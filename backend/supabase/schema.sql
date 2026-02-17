@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor
--- schema_snapshot_migration: 0017
+-- schema_snapshot_migration: 0018
 create extension if not exists pgcrypto;
 create extension if not exists pg_trgm;
 
@@ -123,6 +123,18 @@ create table if not exists public.news (
 );
 alter table public.news add column if not exists status public.news_status not null default 'published';
 alter table public.news add column if not exists updated_at timestamptz not null default now();
+alter table public.news add column if not exists cover_image_data_base64 text null;
+alter table public.news add column if not exists cover_image_mime_type text null;
+
+create table if not exists public.news_images (
+  id bigint generated always as identity primary key,
+  news_id bigint null references public.news(id) on delete cascade,
+  uploaded_by uuid not null references public.profiles(id) on delete restrict,
+  image_data_base64 text not null,
+  image_mime_type text not null,
+  caption text null,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.kb_articles (
   id bigint generated always as identity primary key,
@@ -619,6 +631,8 @@ create index if not exists documents_author_date_idx on public.documents(author,
 create index if not exists documents_updated_at_idx on public.documents(updated_at desc);
 create index if not exists news_status_date_idx on public.news(status, date desc);
 create index if not exists news_updated_at_idx on public.news(updated_at desc);
+create index if not exists news_images_news_id_idx on public.news_images(news_id);
+create index if not exists news_images_created_at_idx on public.news_images(created_at desc);
 create index if not exists kb_articles_status_updated_at_idx on public.kb_articles(status, updated_at desc);
 create index if not exists courses_status_updated_at_idx on public.courses(status, updated_at desc);
 create index if not exists course_assignments_user_created_idx on public.course_assignments(user_id, created_at desc);
@@ -690,6 +704,7 @@ create index if not exists lms_subsections_markdown_trgm_idx on public.lms_subse
 alter table public.offices enable row level security;
 alter table public.profiles enable row level security;
 alter table public.news enable row level security;
+alter table public.news_images enable row level security;
 alter table public.kb_articles enable row level security;
 alter table public.courses enable row level security;
 alter table public.attestations enable row level security;
@@ -831,6 +846,8 @@ drop policy if exists "read office document approvals" on public.document_approv
 drop policy if exists "read admin document approvals" on public.document_approvals;
 drop policy if exists "read own notifications" on public.notifications;
 drop policy if exists "read admin notifications" on public.notifications;
+drop policy if exists "read published news images" on public.news_images;
+drop policy if exists "read admin news images" on public.news_images;
 
 create policy "read offices" on public.offices
 for select to authenticated
@@ -856,6 +873,21 @@ for select to authenticated
 using (status = 'published');
 
 create policy "read admin news" on public.news
+for select to authenticated
+using (public.is_admin_or_director());
+
+create policy "read published news images" on public.news_images
+for select to authenticated
+using (
+  exists (
+    select 1
+    from public.news n
+    where n.id = public.news_images.news_id
+      and n.status = 'published'
+  )
+);
+
+create policy "read admin news images" on public.news_images
 for select to authenticated
 using (public.is_admin_or_director());
 

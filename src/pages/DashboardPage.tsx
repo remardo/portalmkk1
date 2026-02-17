@@ -18,6 +18,10 @@ import { StatCard } from "../components/ui/StatCard";
 import { Badge } from "../components/ui/Badge";
 import { usePortalData } from "../hooks/usePortalData";
 
+function stripNewsImageTokens(text: string) {
+  return text.replace(/\{\{news-image:\d+\}\}/g, " ").replace(/\s+/g, " ").trim();
+}
+
 export function DashboardPage() {
   const { data } = usePortalData();
   if (!data) {
@@ -110,7 +114,7 @@ export function DashboardPage() {
                   <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-red-400" />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-gray-900">{item.title}</p>
-                    <p className="mt-1 line-clamp-2 text-sm text-gray-500">{item.body}</p>
+                    <p className="mt-1 line-clamp-2 text-sm text-gray-500">{stripNewsImageTokens(item.body)}</p>
                     <p className="mt-2 text-xs text-gray-400">{item.date}</p>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-import type { Document, DocumentFolder, NewsItem, ShopOrder, ShopOrderItem, ShopProduct, Task, User } from "../domain/models";
+import type { Document, DocumentFolder, NewsImage, NewsItem, ShopOrder, ShopOrderItem, ShopProduct, Task, User } from "../domain/models";
 import { backendApi } from "./apiClient";
 import { mapProfileToUser } from "./authStorage";
 
@@ -6,6 +6,7 @@ export interface PortalData {
   offices: Array<{ id: number; name: string; city: string; address: string; headId: string | null; rating: number }>;
   users: User[];
   news: NewsItem[];
+  newsImages: NewsImage[];
   kbArticles: Array<{
     id: number;
     title: string;
@@ -107,6 +108,8 @@ export interface CreateNewsInput {
   title: string;
   body: string;
   pinned?: boolean;
+  coverImageDataBase64?: string;
+  coverImageMimeType?: string;
 }
 
 export interface UpdateNewsInput {
@@ -115,6 +118,15 @@ export interface UpdateNewsInput {
   body?: string;
   pinned?: boolean;
   status?: "draft" | "published" | "archived";
+  coverImageDataBase64?: string | null;
+  coverImageMimeType?: string | null;
+}
+
+export interface UploadNewsImageInput {
+  newsId?: number;
+  imageDataBase64: string;
+  imageMimeType: string;
+  caption?: string;
 }
 
 export interface CreateDocumentInput {
@@ -473,7 +485,18 @@ function transformPortalData(raw: Awaited<ReturnType<typeof backendApi.getBootst
       date: item.date,
       pinned: item.pinned,
       author: item.author,
+      coverImageDataBase64: item.cover_image_data_base64 ?? null,
+      coverImageMimeType: item.cover_image_mime_type ?? null,
       status: item.status,
+    })),
+    newsImages: raw.newsImages.map((item) => ({
+      id: Number(item.id),
+      newsId: item.news_id === null ? null : Number(item.news_id),
+      uploadedBy: item.uploaded_by,
+      imageDataBase64: item.image_data_base64,
+      imageMimeType: item.image_mime_type,
+      caption: item.caption,
+      createdAt: item.created_at,
     })),
     kbArticles: raw.kbArticles.map((item) => ({
       id: Number(item.id),
@@ -670,7 +693,13 @@ export const portalRepository = {
       body: input.body,
       pinned: input.pinned,
       status: input.status,
+      coverImageDataBase64: input.coverImageDataBase64,
+      coverImageMimeType: input.coverImageMimeType,
     });
+  },
+
+  async uploadNewsImage(input: UploadNewsImageInput): Promise<{ id: number; token: string; caption: string | null }> {
+    return backendApi.uploadNewsImage(input);
   },
 
   async deleteNews(id: number): Promise<void> {

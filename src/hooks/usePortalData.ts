@@ -23,6 +23,7 @@ import {
   type CreateCourseInput,
   type DocumentDecisionInput,
   type CreateShopOrderInput,
+  type UploadNewsImageInput,
   type RestoreKbArticleVersionInput,
   type CreateTaskInput,
   type UpdateNewsInput,
@@ -87,6 +88,12 @@ export function useUpdateNewsMutation() {
   return useMutation({
     mutationFn: (input: UpdateNewsInput) => portalRepository.updateNews(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useUploadNewsImageMutation() {
+  return useMutation({
+    mutationFn: (input: UploadNewsImageInput) => portalRepository.uploadNewsImage(input),
   });
 }
 

@@ -203,7 +203,18 @@ export const backendApi = {
         date: string;
         pinned: boolean;
         author: string;
+        cover_image_data_base64?: string | null;
+        cover_image_mime_type?: string | null;
         status?: "draft" | "published" | "archived";
+      }>;
+      newsImages: Array<{
+        id: number;
+        news_id: number | null;
+        uploaded_by: string;
+        image_data_base64: string;
+        image_mime_type: string;
+        caption: string | null;
+        created_at: string;
       }>;
       kbArticles: Array<{
         id: number;
@@ -358,7 +369,13 @@ export const backendApi = {
       }>;
     }>("/api/bootstrap"),
 
-  createNews: (input: { title: string; body: string; pinned?: boolean }) =>
+  createNews: (input: {
+    title: string;
+    body: string;
+    pinned?: boolean;
+    coverImageDataBase64?: string;
+    coverImageMimeType?: string;
+  }) =>
     apiRequest("/api/news", { method: "POST", body: JSON.stringify(input) }),
 
   updateNews: (
@@ -368,8 +385,16 @@ export const backendApi = {
       body?: string;
       pinned?: boolean;
       status?: "draft" | "published" | "archived";
+      coverImageDataBase64?: string | null;
+      coverImageMimeType?: string | null;
     },
   ) => apiRequest(`/api/news/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  uploadNewsImage: (input: { newsId?: number; imageDataBase64: string; imageMimeType: string; caption?: string }) =>
+    apiRequest<{ id: number; token: string; caption: string | null }>("/api/news/images", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 
   deleteNews: (id: number) => apiRequest(`/api/news/${id}`, { method: "DELETE" }),
 
