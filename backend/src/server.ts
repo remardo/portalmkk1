@@ -1373,13 +1373,30 @@ app.get("/api/admin/users", requireAuth(), requireRole(["admin", "director", "of
   return res.json(data);
 });
 
-app.post("/api/admin/users", requireAuth(), requireRole(["admin", "director"]), async (req, res) => {
+app.post("/api/admin/users", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
   const parsed = adminCreateUserSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json(parsed.error.format());
   }
 
   const input = parsed.data;
+  const session = (req as express.Request & { session: Session }).session;
+
+  if (session.profile.role === "office_head") {
+    if (input.role !== "operator") {
+      return res.status(403).json({ error: "Office head can create only operator users" });
+    }
+    if (!session.profile.office_id) {
+      return res.status(400).json({ error: "Office head profile has no office assigned" });
+    }
+    if (input.officeId !== undefined && input.officeId !== null && Number(input.officeId) !== Number(session.profile.office_id)) {
+      return res.status(403).json({ error: "Office head can create users only in own office" });
+    }
+  }
+
+  const effectiveOfficeId = session.profile.role === "office_head"
+    ? Number(session.profile.office_id)
+    : (input.officeId ?? null);
 
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: input.email,
@@ -1388,7 +1405,7 @@ app.post("/api/admin/users", requireAuth(), requireRole(["admin", "director"]), 
     user_metadata: {
       full_name: input.fullName,
       role: input.role,
-      office_id: input.officeId ?? null,
+      office_id: effectiveOfficeId,
     },
   });
 
@@ -1400,7 +1417,7 @@ app.post("/api/admin/users", requireAuth(), requireRole(["admin", "director"]), 
     id: data.user.id,
     full_name: input.fullName,
     role: input.role,
-    office_id: input.officeId ?? null,
+    office_id: effectiveOfficeId,
     email: input.email,
   });
 
@@ -1408,7 +1425,6 @@ app.post("/api/admin/users", requireAuth(), requireRole(["admin", "director"]), 
     return res.status(400).json({ error: profileError.message });
   }
 
-  const session = (req as express.Request & { session: Session }).session;
   await writeAuditLog({
     actorUserId: session.profile.id,
     actorRole: session.profile.role,
@@ -1419,7 +1435,7 @@ app.post("/api/admin/users", requireAuth(), requireRole(["admin", "director"]), 
       email: input.email,
       fullName: input.fullName,
       role: input.role,
-      officeId: input.officeId ?? null,
+      officeId: effectiveOfficeId,
     },
   });
 

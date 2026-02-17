@@ -150,6 +150,8 @@ export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const pageSize = Number(auditLimit) || 50;
   const canViewShopOrders = user?.role === "office_head" || user?.role === "director" || user?.role === "admin";
+  const canCreateUsers = user?.role === "admin" || user?.role === "director" || user?.role === "office_head";
+  const createUserRoleOptions: Role[] = user?.role === "office_head" ? ["operator"] : roleOptions;
   const adminShopProducts = useAdminShopProductsQuery(Boolean(user && canAccessAdmin(user.role) && canViewShopOrders));
   const audit = useAdminAuditQuery({
     limit: pageSize,
@@ -315,7 +317,7 @@ export function AdminPage() {
         ))}
       </div>
 
-      {activeTab === "users" ? (
+      {activeTab === "users" && canCreateUsers ? (
       <Card className="p-4">
         <h2 className="mb-3 font-semibold">Создать пользователя</h2>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -343,19 +345,22 @@ export function AdminPage() {
             onChange={(event) => setRole(event.target.value as Role)}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
           >
-            {roleOptions.map((item) => (
+            {createUserRoleOptions.map((item) => (
               <option key={item} value={item}>
                 {RoleLabels[item]}
               </option>
             ))}
           </select>
           <select
-            value={officeId}
+            value={user.role === "office_head" ? String(user.officeId) : officeId}
             onChange={(event) => setOfficeId(event.target.value)}
+            disabled={user.role === "office_head"}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
           >
-            <option value="">Без офиса</option>
-            {data.offices.map((office) => (
+            {user.role === "office_head" ? null : <option value="">Без офиса</option>}
+            {data.offices
+              .filter((office) => (user.role === "office_head" ? office.id === user.officeId : true))
+              .map((office) => (
               <option key={office.id} value={office.id}>
                 {office.name}
               </option>
@@ -368,13 +373,17 @@ export function AdminPage() {
               showToast("error", "Заполните ФИО, email и пароль");
               return;
             }
+            if (password.trim().length < 8) {
+              showToast("error", "Пароль должен быть не короче 8 символов");
+              return;
+            }
             try {
               await createUser.mutateAsync({
                 email: email.trim(),
                 password: password.trim(),
                 fullName: fullName.trim(),
                 role,
-                officeId: officeId ? Number(officeId) : null,
+                officeId: user.role === "office_head" ? user.officeId : (officeId ? Number(officeId) : null),
               });
               setEmail("");
               setPassword("");
