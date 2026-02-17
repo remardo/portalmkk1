@@ -136,4 +136,4 @@ lines.push(
 
 mkdirSync(dirname(output), { recursive: true });
 writeFileSync(output, `${lines.join("\n")}\n`, "utf8");
-console.log(`drill summary written: ${output}`);
+process.stdout.write(`drill summary written: ${output}\n`);

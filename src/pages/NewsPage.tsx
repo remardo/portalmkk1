@@ -175,16 +175,13 @@ export function NewsPage() {
   const [isUploadingEditInlineImage, setIsUploadingEditInlineImage] = useState(false);
   const createBodyRef = useRef<HTMLTextAreaElement | null>(null);
   const editBodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const newsImageById = useMemo(() => new Map((data?.newsImages ?? []).map((image) => [image.id, image])), [data?.newsImages]);
 
   if (!data || !user) {
     return null;
   }
 
-  const newsImageById = useMemo(() => {
-    return new Map(data.newsImages.map((image) => [image.id, image]));
-  }, [data.newsImages]);
-
-    const insertAtCursor = (
+  const insertAtCursor = (
     currentValue: string,
     setValue: (value: string) => void,
     textareaRef: RefObject<HTMLTextAreaElement | null>,

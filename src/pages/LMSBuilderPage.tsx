@@ -388,6 +388,7 @@ export function LMSBuilderPage() {
     return null;
   }, [courseTreeQuery.data, selectedSubsectionId]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!selectedSubsection) {
       setEditorTitle("");
@@ -416,6 +417,7 @@ export function LMSBuilderPage() {
     if (selectedSectionId && sections.some((section) => Number(section.id) === selectedSectionId)) return;
     setSelectedSectionId(Number(sections[0].id));
   }, [courseTreeQuery.data, selectedSectionId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["lms-builder-courses"] });

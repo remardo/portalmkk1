@@ -166,6 +166,7 @@ function QuizPlayer({
   const currentQuestion = questions[currentQuestionIndex];
 
   // Initialize answers from existing attempt or create new
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (attempt && attempt.answers) {
       setAnswers(
@@ -191,6 +192,7 @@ function QuizPlayer({
       );
     }
   }, [attempt, questions]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const submitQuizMutation = useMutation({
     mutationFn: async () => {

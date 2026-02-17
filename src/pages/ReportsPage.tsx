@@ -1,7 +1,9 @@
 import { Download, FileBarChart } from "lucide-react";
 import { useMemo, useState } from "react";
+import { downloadReportRunCsv, exportRowsAsCsv } from "../application/reports/reportUseCases";
 import { Card } from "../components/ui/Card";
 import { useAuth } from "../contexts/useAuth";
+import { RoleLabels, type Role } from "../domain/models";
 import {
   useCreateReportScheduleMutation,
   useKpiReportQuery,
@@ -12,21 +14,14 @@ import {
   useRunReportScheduleMutation,
   useUpdateReportScheduleMutation,
 } from "../hooks/usePortalData";
-import { RoleLabels, type Role } from "../domain/models";
 import { canAccessReports } from "../lib/permissions";
 import { portalRepository } from "../services/portalRepository";
-
-function toCsv(rows: Array<Record<string, string | number>>) {
-  if (rows.length === 0) return "";
-  const headers = Object.keys(rows[0]);
-  const esc = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
-  const body = rows.map((row) => headers.map((header) => esc(row[header] ?? "")).join(","));
-  return [headers.join(","), ...body].join("\n");
-}
 
 export function ReportsPage() {
   const { data } = usePortalData();
   const { user } = useAuth();
+  const userRole = user?.role;
+  const userOfficeId = user?.officeId ?? 0;
   const [days, setDays] = useState(30);
   const [officeId, setOfficeId] = useState<number | "all">("all");
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
@@ -34,9 +29,8 @@ export function ReportsPage() {
   const [scheduleRecipient, setScheduleRecipient] = useState("");
   const [scheduleFrequency, setScheduleFrequency] = useState<"daily" | "weekly" | "monthly">("weekly");
 
-  const canManageSchedules = user?.role === "admin" || user?.role === "director";
-  const effectiveOfficeId =
-    user?.role === "office_head" && user.officeId > 0 ? user.officeId : officeId === "all" ? undefined : officeId;
+  const canManageSchedules = userRole === "admin" || userRole === "director";
+  const effectiveOfficeId = userRole === "office_head" && userOfficeId > 0 ? userOfficeId : officeId === "all" ? undefined : officeId;
   const kpi = useKpiReportQuery({ days, officeId: effectiveOfficeId });
   const drilldown = useReportsDrilldownQuery({
     days,
@@ -48,6 +42,17 @@ export function ReportsPage() {
   const createSchedule = useCreateReportScheduleMutation();
   const toggleSchedule = useUpdateReportScheduleMutation();
   const runSchedule = useRunReportScheduleMutation();
+  const availableOffices = useMemo(() => {
+    if (!data) return [];
+    if (userRole === "office_head") {
+      return data.offices.filter((office) => office.id === userOfficeId);
+    }
+    return data.offices;
+  }, [data, userOfficeId, userRole]);
+  const reportManagers = useMemo(
+    () => (userRole === "admin" || userRole === "director" ? data?.users.filter((u) => u.role !== "operator") ?? [] : []),
+    [data?.users, userRole],
+  );
 
   if (!user) {
     return null;
@@ -59,17 +64,6 @@ export function ReportsPage() {
 
   const rows = kpi.data?.byOffice ?? [];
   const totals = kpi.data?.totals;
-  const availableOffices = useMemo(() => {
-    if (!data) return [];
-    if (user.role === "office_head") {
-      return data.offices.filter((office) => office.id === user.officeId);
-    }
-    return data.offices;
-  }, [data, user.role, user.officeId]);
-  const reportManagers = useMemo(
-    () => (user.role === "admin" || user.role === "director" ? data?.users.filter((u) => u.role !== "operator") ?? [] : []),
-    [data?.users, user.role],
-  );
 
   return (
     <div className="space-y-4">
@@ -115,14 +109,7 @@ export function ReportsPage() {
           </select>
           <button
             onClick={() => {
-              const csv = toCsv(rows);
-              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement("a");
-              link.href = url;
-              link.download = `reports-${new Date().toISOString().slice(0, 10)}.csv`;
-              link.click();
-              URL.revokeObjectURL(url);
+              exportRowsAsCsv(rows, "reports");
             }}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
           >
@@ -365,13 +352,7 @@ export function ReportsPage() {
                 </span>
                 <button
                   onClick={async () => {
-                    const blob = await portalRepository.downloadReportRun(run.id);
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = run.fileName ?? `report-run-${run.id}.csv`;
-                    link.click();
-                    URL.revokeObjectURL(url);
+                    await downloadReportRunCsv(run.id, run.fileName, portalRepository);
                   }}
                   className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-50"
                 >
