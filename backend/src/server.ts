@@ -5016,7 +5016,30 @@ async function completeAgentChat(input: {
     })),
     {
       role: "user",
-      content: input.question,
+      content: `Вопрос пользователя: ${input.question}
+
+Верни ТОЛЬКО JSON-объект без markdown и без пояснений со схемой:
+{
+  "answer": "строка, можно с markdown",
+  "actions": [
+    {
+      "type": "create_task",
+      "title": "краткий заголовок",
+      "description": "описание",
+      "priority": "low|medium|high",
+      "taskType": "order|checklist|auto",
+      "dueDate": "YYYY-MM-DD или null",
+      "assigneeId": "uuid исполнителя или null"
+    },
+    {
+      "type": "complete_task",
+      "taskId": 123,
+      "taskTitle": "опционально, если нет id"
+    }
+  ]
+}
+
+Если действий нет, верни "actions": [].`,
     },
   ];
 
@@ -5041,6 +5064,45 @@ async function completeAgentChat(input: {
     throw new Error("OpenRouter chat response is empty");
   }
   return text;
+}
+
+const agentActionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("create_task"),
+    title: z.string().trim().min(2).max(200),
+    description: z.string().trim().min(1).max(2000),
+    priority: z.enum(["low", "medium", "high"]).default("medium"),
+    taskType: z.enum(["order", "checklist", "auto"]).default("order"),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    assigneeId: z.string().uuid().nullable().optional(),
+  }),
+  z.object({
+    type: z.literal("complete_task"),
+    taskId: z.number().int().positive().optional(),
+    taskTitle: z.string().trim().min(1).max(200).optional(),
+  }),
+]);
+
+const agentChatResponseSchema = z.object({
+  answer: z.string().trim().min(1).max(12000),
+  actions: z.array(agentActionSchema).max(5).default([]),
+});
+
+function extractJsonFromModelOutput(raw: string) {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+  const fenced = trimmed.match(/```json\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) {
+    return fenced[1];
+  }
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return trimmed.slice(start, end + 1);
+  }
+  return null;
 }
 
 const createKbArticleSchema = z.object({
@@ -5370,7 +5432,7 @@ app.post("/api/agent/chat", requireAuth(), async (req, res) => {
       topK: 4,
       minSimilarity: Math.max(0.35, env.KB_VECTOR_MIN_SIMILARITY_DEFAULT - 0.1),
     });
-    const answer = await completeAgentChat({
+    const rawModelResponse = await completeAgentChat({
       question: parsed.data.question,
       page: parsed.data.page,
       context: parsed.data.context,
@@ -5378,8 +5440,24 @@ app.post("/api/agent/chat", requireAuth(), async (req, res) => {
       kbMatches: matches,
     });
 
+    const jsonCandidate = extractJsonFromModelOutput(rawModelResponse);
+    let parsedModel: ReturnType<typeof agentChatResponseSchema.safeParse> | null = null;
+    if (jsonCandidate) {
+      try {
+        parsedModel = agentChatResponseSchema.safeParse(JSON.parse(jsonCandidate));
+      } catch {
+        parsedModel = null;
+      }
+    }
+
+    const answer = parsedModel?.success
+      ? parsedModel.data.answer
+      : rawModelResponse;
+    const actions = parsedModel?.success ? parsedModel.data.actions : [];
+
     return res.json({
       answer,
+      actions,
       sources: matches.map((item) => ({
         articleId: Number(item.article_id),
         chunkId: Number(item.chunk_id),

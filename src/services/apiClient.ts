@@ -569,6 +569,22 @@ export const backendApi = {
   }) =>
     apiRequest<{
       answer: string;
+      actions: Array<
+        | {
+            type: "create_task";
+            title: string;
+            description: string;
+            priority: "low" | "medium" | "high";
+            taskType: "order" | "checklist" | "auto";
+            dueDate?: string | null;
+            assigneeId?: string | null;
+          }
+        | {
+            type: "complete_task";
+            taskId?: number;
+            taskTitle?: string;
+          }
+      >;
       sources: Array<{
         articleId: number;
         chunkId: number;
