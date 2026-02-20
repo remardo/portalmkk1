@@ -5029,7 +5029,8 @@ async function completeAgentChat(input: {
       "priority": "low|medium|high",
       "taskType": "order|checklist|auto",
       "dueDate": "YYYY-MM-DD или null",
-      "assigneeId": "uuid исполнителя или null"
+      "assigneeId": "uuid исполнителя или null",
+      "officeId": "number > 0 или null"
     },
     {
       "type": "complete_task",
@@ -5075,6 +5076,7 @@ const agentActionSchema = z.discriminatedUnion("type", [
     taskType: z.enum(["order", "checklist", "auto"]).default("order"),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
     assigneeId: z.string().uuid().nullable().optional(),
+    officeId: z.number().int().positive().nullable().optional(),
   }),
   z.object({
     type: z.literal("complete_task"),

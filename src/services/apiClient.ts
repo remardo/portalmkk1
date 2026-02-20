@@ -578,6 +578,7 @@ export const backendApi = {
             taskType: "order" | "checklist" | "auto";
             dueDate?: string | null;
             assigneeId?: string | null;
+            officeId?: number | null;
           }
         | {
             type: "complete_task";

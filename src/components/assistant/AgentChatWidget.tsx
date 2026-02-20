@@ -23,6 +23,7 @@ type AgentAction =
       taskType: "order" | "checklist" | "auto";
       dueDate?: string | null;
       assigneeId?: string | null;
+      officeId?: number | null;
     }
   | {
       type: "complete_task";
@@ -165,11 +166,16 @@ export function AgentChatWidget() {
         top: activeTasks.slice(0, 10).map((task) => ({
           id: task.id,
           title: task.title,
+          officeId: task.officeId,
           status: task.status,
           dueDate: task.dueDate,
           priority: task.priority,
         })),
       },
+      offices: data.offices.slice(0, 20).map((office) => ({
+        id: office.id,
+        name: office.name,
+      })),
       lms: {
         assigned: assignedCourseIds.length,
         completed: assignedCourseIds.filter((id) => passedCourseIds.has(id)).length,
@@ -247,10 +253,17 @@ export function AgentChatWidget() {
       if (action.type === "create_task") {
         const assigneeId = action.assigneeId ?? String(user.id);
         const dueDate = action.dueDate ?? isoDatePlusDays(7);
-        const officeId =
-          typeof user.officeId === "number" && Number.isFinite(user.officeId) && user.officeId > 0
-            ? user.officeId
-            : undefined;
+        const inferredTaskOfficeId = data.tasks.find((task) => String(task.assigneeId) === String(assigneeId))?.officeId;
+        const fallbackOfficeId = data.offices.find((office) => Number(office.id) > 0)?.id;
+        const officeIdCandidates = [
+          action.officeId,
+          user.officeId,
+          inferredTaskOfficeId,
+          fallbackOfficeId,
+        ];
+        const officeId = officeIdCandidates.find(
+          (value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0,
+        );
         await createTask.mutateAsync({
           title: action.title,
           description: action.description,
