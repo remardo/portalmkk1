@@ -247,6 +247,10 @@ export function AgentChatWidget() {
       if (action.type === "create_task") {
         const assigneeId = action.assigneeId ?? String(user.id);
         const dueDate = action.dueDate ?? isoDatePlusDays(7);
+        const officeId =
+          typeof user.officeId === "number" && Number.isFinite(user.officeId) && user.officeId > 0
+            ? user.officeId
+            : undefined;
         await createTask.mutateAsync({
           title: action.title,
           description: action.description,
@@ -254,7 +258,7 @@ export function AgentChatWidget() {
           dueDate,
           priority: action.priority,
           type: action.taskType,
-          officeId: user.officeId,
+          officeId,
         });
         setPendingActions((prev) =>
           prev.map((item) =>
