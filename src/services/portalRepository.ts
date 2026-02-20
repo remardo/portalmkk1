@@ -274,6 +274,14 @@ export interface AdminUpdateOfficeInput {
   rating?: number;
 }
 
+export interface AdminCreateOfficeInput {
+  name: string;
+  city: string;
+  address: string;
+  headId?: string | null;
+  rating?: number;
+}
+
 export interface AdminAuditRecord {
   id: number;
   actorUserId: string;
@@ -862,6 +870,16 @@ export const portalRepository = {
 
   async adminUpdateOffice(input: AdminUpdateOfficeInput): Promise<void> {
     await backendApi.adminUpdateOffice(input.id, {
+      name: input.name,
+      city: input.city,
+      address: input.address,
+      headId: input.headId,
+      rating: input.rating,
+    });
+  },
+
+  async adminCreateOffice(input: AdminCreateOfficeInput): Promise<void> {
+    await backendApi.adminCreateOffice({
       name: input.name,
       city: input.city,
       address: input.address,

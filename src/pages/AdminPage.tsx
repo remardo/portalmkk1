@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/useAuth";
 import { portalRepository } from "../services/portalRepository";
 import {
   useAdminAuditQuery,
+  useAdminCreateOfficeMutation,
   useAdminCreateUserMutation,
   useAdminCreateShopProductMutation,
   useAdminShopProductsQuery,
@@ -97,6 +98,7 @@ export function AdminPage() {
   const { data } = usePortalData();
   const { user } = useAuth();
   const createUser = useAdminCreateUserMutation();
+  const createOffice = useAdminCreateOfficeMutation();
   const updateUser = useAdminUpdateUserMutation();
   const updateOffice = useAdminUpdateOfficeMutation();
   const updateShopOrderStatus = useUpdateShopOrderStatusMutation();
@@ -123,6 +125,14 @@ export function AdminPage() {
   const [officeDrafts, setOfficeDrafts] = useState<
     Record<number, { name: string; city: string; address: string; rating: string; headId: string }>
   >({});
+  const [officeSearch, setOfficeSearch] = useState("");
+  const [newOffice, setNewOffice] = useState<{ name: string; city: string; address: string; rating: string; headId: string }>({
+    name: "",
+    city: "",
+    address: "",
+    rating: "0",
+    headId: "",
+  });
   const [shopProductDrafts, setShopProductDrafts] = useState<
     Record<number, { name: string; description: string; category: string; pricePoints: string; imageUrl: string; isActive: boolean }>
   >({});
@@ -249,6 +259,28 @@ export function AdminPage() {
       }
     );
   }
+
+  function officeHasUnsavedChanges(item: Office) {
+    const draft = getOfficeDraft(item);
+    return (
+      draft.name !== item.name
+      || draft.city !== item.city
+      || draft.address !== item.address
+      || draft.rating !== String(item.rating ?? 0)
+      || draft.headId !== (item.headId ? String(item.headId) : "")
+    );
+  }
+
+  const officeHeadCandidates = data.users.filter((employee) => employee.role === "office_head");
+  const filteredOffices = data.offices.filter((office) => {
+    const q = officeSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      office.name.toLowerCase().includes(q)
+      || office.city.toLowerCase().includes(q)
+      || office.address.toLowerCase().includes(q)
+    );
+  });
 
   function getShopProductDraft(item: ShopProduct) {
     return (
@@ -588,102 +620,205 @@ export function AdminPage() {
       ) : null}
 
       {activeTab === "offices" ? (
-      <Card className="p-4">
-        <h2 className="mb-3 font-semibold">Редактирование офисов</h2>
-        <div className="space-y-3">
-          {data.offices.map((office) => (
-            <div key={office.id} className="rounded-xl border border-gray-200 p-3">
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                <input
-                  value={getOfficeDraft(office).name}
-                  onChange={(event) =>
-                    setOfficeDrafts((prev) => ({
-                      ...prev,
-                      [office.id]: { ...getOfficeDraft(office), name: event.target.value },
-                    }))
+      <div className="space-y-4">
+        <Card className="border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-sky-50 p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Офисы</h2>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm">
+              {data.offices.length} офисов
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
+            <input
+              value={newOffice.name}
+              onChange={(event) => setNewOffice((prev) => ({ ...prev, name: event.target.value }))}
+              placeholder="Название офиса"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-2"
+            />
+            <input
+              value={newOffice.city}
+              onChange={(event) => setNewOffice((prev) => ({ ...prev, city: event.target.value }))}
+              placeholder="Город"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            />
+            <input
+              value={newOffice.address}
+              onChange={(event) => setNewOffice((prev) => ({ ...prev, address: event.target.value }))}
+              placeholder="Адрес"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-2"
+            />
+            <input
+              type="number"
+              min={0}
+              value={newOffice.rating}
+              onChange={(event) => setNewOffice((prev) => ({ ...prev, rating: event.target.value }))}
+              placeholder="Рейтинг"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            />
+            <select
+              value={newOffice.headId}
+              onChange={(event) => setNewOffice((prev) => ({ ...prev, headId: event.target.value }))}
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-3"
+            >
+              <option value="">Без руководителя</option>
+              {officeHeadCandidates.map((employee) => (
+                <option key={String(employee.id)} value={String(employee.id)}>
+                  {employee.name}
+                </option>
+              ))}
+            </select>
+            <input
+              value={officeSearch}
+              onChange={(event) => setOfficeSearch(event.target.value)}
+              placeholder="Поиск: название, город, адрес"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-2"
+            />
+            <div className="md:col-span-1">
+              <button
+                onClick={async () => {
+                  if (newOffice.name.trim().length < 2 || newOffice.city.trim().length < 2 || newOffice.address.trim().length < 3) {
+                    showToast("error", "Заполните название, город и адрес офиса");
+                    return;
                   }
-                  placeholder="Название офиса"
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                />
-                <input
-                  value={getOfficeDraft(office).city}
-                  onChange={(event) =>
-                    setOfficeDrafts((prev) => ({
-                      ...prev,
-                      [office.id]: { ...getOfficeDraft(office), city: event.target.value },
-                    }))
+                  const rating = Number(newOffice.rating || 0);
+                  if (!Number.isFinite(rating) || rating < 0) {
+                    showToast("error", "Рейтинг должен быть числом 0 или больше");
+                    return;
                   }
-                  placeholder="Город"
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                />
-                <input
-                  value={getOfficeDraft(office).address}
-                  onChange={(event) =>
-                    setOfficeDrafts((prev) => ({
-                      ...prev,
-                      [office.id]: { ...getOfficeDraft(office), address: event.target.value },
-                    }))
+                  try {
+                    await createOffice.mutateAsync({
+                      name: newOffice.name.trim(),
+                      city: newOffice.city.trim(),
+                      address: newOffice.address.trim(),
+                      rating,
+                      headId: newOffice.headId || null,
+                    });
+                    showToast("success", `Офис «${newOffice.name.trim()}» создан`);
+                    setNewOffice({ name: "", city: "", address: "", rating: "0", headId: "" });
+                  } catch (error) {
+                    showToast("error", extractErrorMessage(error));
                   }
-                  placeholder="Адрес"
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={getOfficeDraft(office).rating}
-                  onChange={(event) =>
-                    setOfficeDrafts((prev) => ({
-                      ...prev,
-                      [office.id]: { ...getOfficeDraft(office), rating: event.target.value },
-                    }))
-                  }
-                  placeholder="Рейтинг"
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                />
-                <select
-                  value={getOfficeDraft(office).headId}
-                  onChange={(event) =>
-                    setOfficeDrafts((prev) => ({
-                      ...prev,
-                      [office.id]: { ...getOfficeDraft(office), headId: event.target.value },
-                    }))
-                  }
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                >
-                  <option value="">Без руководителя</option>
-                  {data.users.map((employee) => (
-                    <option key={String(employee.id)} value={String(employee.id)}>
-                      {employee.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mt-2">
-                <button
-                  onClick={async () => {
-                    try {
-                      await updateOffice.mutateAsync({
-                        id: office.id,
-                        name: getOfficeDraft(office).name.trim(),
-                        city: getOfficeDraft(office).city.trim(),
-                        address: getOfficeDraft(office).address.trim(),
-                        rating: Number(getOfficeDraft(office).rating || 0),
-                        headId: getOfficeDraft(office).headId ? getOfficeDraft(office).headId : null,
-                      });
-                      showToast("success", `Офис ${office.name} сохранен`);
-                    } catch (error) {
-                      showToast("error", extractErrorMessage(error));
-                    }
-                  }}
-                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-                >
-                  Сохранить офис
-                </button>
-              </div>
+                }}
+                className="w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                disabled={createOffice.isPending}
+              >
+                {createOffice.isPending ? "Создание..." : "Создать офис"}
+              </button>
             </div>
-          ))}
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {filteredOffices.map((office) => {
+            const draft = getOfficeDraft(office);
+            return (
+              <Card key={office.id} className="rounded-2xl border border-gray-200 p-4 shadow-sm">
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm text-gray-500">Офис #{office.id}</p>
+                    <h3 className="text-base font-semibold text-gray-900">{office.name}</h3>
+                  </div>
+                  {officeHasUnsavedChanges(office) ? (
+                    <Badge className="bg-amber-100 text-amber-700">Есть изменения</Badge>
+                  ) : (
+                    <Badge className="bg-emerald-100 text-emerald-700">Синхронизировано</Badge>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  <input
+                    value={draft.name}
+                    onChange={(event) =>
+                      setOfficeDrafts((prev) => ({
+                        ...prev,
+                        [office.id]: { ...draft, name: event.target.value },
+                      }))
+                    }
+                    placeholder="Название офиса"
+                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  />
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input
+                      value={draft.city}
+                      onChange={(event) =>
+                        setOfficeDrafts((prev) => ({
+                          ...prev,
+                          [office.id]: { ...draft, city: event.target.value },
+                        }))
+                      }
+                      placeholder="Город"
+                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      value={draft.rating}
+                      onChange={(event) =>
+                        setOfficeDrafts((prev) => ({
+                          ...prev,
+                          [office.id]: { ...draft, rating: event.target.value },
+                        }))
+                      }
+                      placeholder="Рейтинг"
+                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+                  <input
+                    value={draft.address}
+                    onChange={(event) =>
+                      setOfficeDrafts((prev) => ({
+                        ...prev,
+                        [office.id]: { ...draft, address: event.target.value },
+                      }))
+                    }
+                    placeholder="Адрес"
+                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  />
+                  <select
+                    value={draft.headId}
+                    onChange={(event) =>
+                      setOfficeDrafts((prev) => ({
+                        ...prev,
+                        [office.id]: { ...draft, headId: event.target.value },
+                      }))
+                    }
+                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  >
+                    <option value="">Без руководителя</option>
+                    {officeHeadCandidates.map((employee) => (
+                      <option key={String(employee.id)} value={String(employee.id)}>
+                        {employee.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await updateOffice.mutateAsync({
+                          id: office.id,
+                          name: draft.name.trim(),
+                          city: draft.city.trim(),
+                          address: draft.address.trim(),
+                          rating: Number(draft.rating || 0),
+                          headId: draft.headId ? draft.headId : null,
+                        });
+                        showToast("success", `Офис ${office.name} сохранен`);
+                      } catch (error) {
+                        showToast("error", extractErrorMessage(error));
+                      }
+                    }}
+                    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                    disabled={updateOffice.isPending}
+                  >
+                    Сохранить
+                  </button>
+                </div>
+              </Card>
+            );
+          })}
         </div>
-      </Card>
+      </div>
       ) : null}
 
       {activeTab === "orders" ? (

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Task } from "../domain/models";
 import {
   type AdminCreateShopProductInput,
+  type AdminCreateOfficeInput,
   type AdminUpdateShopProductInput,
   type AdminAuditList,
   type AdminCreateUserInput,
@@ -281,6 +282,14 @@ export function useAdminUpdateOfficeMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AdminUpdateOfficeInput) => portalRepository.adminUpdateOffice(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function useAdminCreateOfficeMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AdminCreateOfficeInput) => portalRepository.adminCreateOffice(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
   });
 }

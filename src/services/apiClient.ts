@@ -916,6 +916,14 @@ export const backendApi = {
     },
   ) => apiRequest(`/api/admin/offices/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
 
+  adminCreateOffice: (input: {
+    name: string;
+    city: string;
+    address: string;
+    headId?: string | null;
+    rating?: number;
+  }) => apiRequest("/api/admin/offices", { method: "POST", body: JSON.stringify(input) }),
+
   getAdminAudit: (input?: {
     limit?: number;
     offset?: number;

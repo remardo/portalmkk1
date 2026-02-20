@@ -37,6 +37,38 @@ type PendingAction = AgentAction & {
   resultMessage?: string;
 };
 
+function parseApiErrorMessage(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "Неизвестная ошибка";
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    if (typeof parsed.error === "string" && parsed.error.trim()) {
+      return parsed.error;
+    }
+    const rootErrors = Array.isArray(parsed._errors)
+      ? parsed._errors.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+    const fieldErrors = Object.entries(parsed)
+      .flatMap(([field, value]) => {
+        if (!value || typeof value !== "object") return [];
+        const node = value as Record<string, unknown>;
+        if (!Array.isArray(node._errors)) return [];
+        return node._errors
+          .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          .map((msg) => `${field}: ${msg}`);
+      });
+    const combined = [...rootErrors, ...fieldErrors];
+    if (combined.length > 0) {
+      return combined.join("; ");
+    }
+    return trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
 function pageTitleByPath(pathname: string) {
   if (pathname === "/") return "Дашборд";
   if (pathname.startsWith("/tasks")) return "Задачи";
@@ -229,7 +261,7 @@ export function AgentChatWidget() {
         );
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Не удалось получить ответ от агента";
+      const message = e instanceof Error ? parseApiErrorMessage(e.message) : "Не удалось получить ответ от агента";
       setError(message);
       setMessages((prev) => [
         ...prev,
@@ -308,7 +340,7 @@ export function AgentChatWidget() {
         ]);
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Действие выполнить не удалось";
+      const msg = e instanceof Error ? parseApiErrorMessage(e.message) : "Действие выполнить не удалось";
       setPendingActions((prev) =>
         prev.map((item) =>
           item.id === action.id ? { ...item, status: "failed", resultMessage: msg } : item,

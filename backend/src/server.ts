@@ -1613,6 +1613,46 @@ const adminUpdateOfficeSchema = z.object({
   rating: z.number().int().min(0).optional(),
 });
 
+const adminCreateOfficeSchema = z.object({
+  name: z.string().min(2),
+  city: z.string().min(2),
+  address: z.string().min(3),
+  headId: z.string().uuid().nullable().optional(),
+  rating: z.number().int().min(0).default(0),
+});
+
+app.post("/api/admin/offices", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = adminCreateOfficeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const payload = {
+    name: parsed.data.name,
+    city: parsed.data.city,
+    address: parsed.data.address,
+    head_id: parsed.data.headId ?? null,
+    rating: parsed.data.rating,
+  };
+
+  const { data, error } = await supabaseAdmin.from("offices").insert(payload).select("*").single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to create office" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "admin.offices.create",
+    entityType: "offices",
+    entityId: String(data.id),
+    payload,
+  });
+
+  return res.status(201).json(data);
+});
+
 app.patch("/api/admin/offices/:id", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
   const parsed = adminUpdateOfficeSchema.safeParse(req.body);
   if (!parsed.success) {

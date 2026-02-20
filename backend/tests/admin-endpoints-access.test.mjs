@@ -206,6 +206,54 @@ test("PATCH /api/admin/offices/:id returns 400 for office_head role with invalid
   }
 });
 
+test("POST /api/admin/offices returns 401 without token", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/offices`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Central", city: "Moscow", address: "Lenina 1" }),
+    });
+    assert.equal(response.status, 401);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("POST /api/admin/offices returns 403 for operator role", async () => {
+  const server = await startTestServer({ role: "operator", token: "smoke-operator-admin-office-create" });
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/offices`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "Central", city: "Moscow", address: "Lenina 1" }),
+    });
+    assert.equal(response.status, 403);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("POST /api/admin/offices returns 400 for invalid payload schema", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/admin/offices`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "x", city: "x", address: "x" }),
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("PATCH /api/admin/users/:id returns 400 for office_head role with invalid payload schema", async () => {
   const server = await startTestServer({ role: "office_head", token: "smoke-office-head-admin-user-patch-invalid" });
   try {
