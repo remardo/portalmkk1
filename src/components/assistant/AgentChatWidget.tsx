@@ -1,5 +1,5 @@
 import { Bot, Check, ClipboardCheck, MessageCircle, PlusCircle, Send, X } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/useAuth";
 import {
@@ -118,6 +118,7 @@ export function AgentChatWidget() {
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const [runningActionId, setRunningActionId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const page = useMemo(
     () => ({
@@ -184,6 +185,10 @@ export function AgentChatWidget() {
       timestamp: new Date().toISOString(),
     };
   }, [data, page.path, page.title, user]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, loading]);
 
   if (!user) {
     return null;
@@ -274,11 +279,7 @@ export function AgentChatWidget() {
           officeId,
         });
         setPendingActions((prev) =>
-          prev.map((item) =>
-            item.id === action.id
-              ? { ...item, status: "done", resultMessage: "Задача успешно создана." }
-              : item,
-          ),
+          prev.filter((item) => item.id !== action.id),
         );
         setMessages((prev) => [
           ...prev,
@@ -299,11 +300,7 @@ export function AgentChatWidget() {
         }
         await updateTaskStatus.mutateAsync({ id: taskId, status: "done" });
         setPendingActions((prev) =>
-          prev.map((item) =>
-            item.id === action.id
-              ? { ...item, status: "done", resultMessage: `Задача #${taskId} закрыта.` }
-              : item,
-          ),
+          prev.filter((item) => item.id !== action.id),
         );
         setMessages((prev) => [
           ...prev,
@@ -359,15 +356,18 @@ export function AgentChatWidget() {
                 Агент думает...
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
-          {pendingActions.length > 0 && (
+          {pendingActions.some((action) => action.status !== "done") && (
             <div className="border-t border-gray-100 bg-indigo-50/50 p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-700">
                 Предложенные действия
               </p>
               <div className="space-y-2">
-                {pendingActions.map((action) => (
+                {pendingActions
+                  .filter((action) => action.status !== "done")
+                  .map((action) => (
                   <div key={action.id} className="rounded-lg border border-indigo-100 bg-white p-2 text-xs">
                     {action.type === "create_task" ? (
                       <p className="text-gray-700">
