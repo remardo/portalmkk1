@@ -63,7 +63,7 @@ export function SearchPage() {
                   </div>
                   <p className="font-medium text-gray-900">{item.title}</p>
                   {item.excerpt ? <p className="text-sm text-gray-600">{item.excerpt}</p> : null}
-                  <Link to={item.href} className="mt-1 inline-block text-xs text-indigo-600 hover:text-indigo-800">
+                  <Link to={item.href} className="mt-1 inline-block text-xs text-teal-600 hover:text-teal-800">
                     Открыть раздел →
                   </Link>
                 </div>
@@ -78,12 +78,12 @@ export function SearchPage() {
               {data.kb.map((item) => (
                 <div key={`kb-${item.id}`} className="rounded-lg border border-gray-200 p-3">
                   <div className="mb-1 flex items-center gap-2">
-                    <Badge className="bg-indigo-100 text-indigo-700">{item.category}</Badge>
+                    <Badge className="bg-teal-100 text-teal-700">{item.category}</Badge>
                     <span className="text-xs text-gray-500">{item.status}</span>
                   </div>
                   <p className="font-medium text-gray-900">{item.title}</p>
                   {item.excerpt ? <p className="text-sm text-gray-600">{item.excerpt}</p> : null}
-                  <Link to={item.href} className="mt-1 inline-block text-xs text-indigo-600 hover:text-indigo-800">
+                  <Link to={item.href} className="mt-1 inline-block text-xs text-teal-600 hover:text-teal-800">
                     Открыть →
                   </Link>
                 </div>
@@ -98,14 +98,14 @@ export function SearchPage() {
               {data.lms.map((item) => (
                 <div key={item.id} className="rounded-lg border border-gray-200 p-3">
                   <div className="mb-1 flex items-center gap-2">
-                    <Badge className="bg-purple-100 text-purple-700">{item.kind}</Badge>
+                    <Badge className="bg-cyan-100 text-cyan-700">{item.kind}</Badge>
                     <span className="text-xs text-gray-500">{item.status}</span>
                   </div>
                   <p className="font-medium text-gray-900">{item.title}</p>
                   {item.courseTitle ? <p className="text-xs text-gray-500">Курс: {item.courseTitle}</p> : null}
                   {item.sectionTitle ? <p className="text-xs text-gray-500">Раздел: {item.sectionTitle}</p> : null}
                   {item.excerpt ? <p className="text-sm text-gray-600">{item.excerpt}</p> : null}
-                  <Link to={item.href} className="mt-1 inline-block text-xs text-indigo-600 hover:text-indigo-800">
+                  <Link to={item.href} className="mt-1 inline-block text-xs text-teal-600 hover:text-teal-800">
                     Открыть раздел →
                   </Link>
                 </div>
@@ -118,3 +118,4 @@ export function SearchPage() {
     </div>
   );
 }
+

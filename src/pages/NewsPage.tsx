@@ -288,7 +288,7 @@ export function NewsPage() {
         {canCreate && (
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+            className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700"
           >
             {showCreateForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
             {showCreateForm ? "Отмена" : "Новость"}
@@ -300,8 +300,8 @@ export function NewsPage() {
       {canCreate && showCreateForm && (
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-5 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
-              <Megaphone className="h-4 w-4 text-indigo-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100">
+              <Megaphone className="h-4 w-4 text-teal-600" />
             </div>
             <h2 className="font-semibold text-gray-900">Создать новость</h2>
           </div>
@@ -310,7 +310,7 @@ export function NewsPage() {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Заголовок новости"
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             <textarea
               value={body}
@@ -318,7 +318,7 @@ export function NewsPage() {
               ref={createBodyRef}
               rows={4}
               placeholder="Текст новости..."
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -343,7 +343,7 @@ export function NewsPage() {
                   />
                 </label>
                 {isUploadingCreateInlineImage && (
-                  <span className="inline-flex items-center gap-1 text-xs text-indigo-600">
+                  <span className="inline-flex items-center gap-1 text-xs text-teal-600">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     Загрузка фото...
                   </span>
@@ -390,7 +390,7 @@ export function NewsPage() {
                 setShowCreateForm(false);
               }}
               disabled={createNews.isPending || isUploadingCreateInlineImage}
-              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700"
             >
               Опубликовать
             </button>
@@ -426,7 +426,7 @@ export function NewsPage() {
                       <input
                         value={editTitle}
                         onChange={(event) => setEditTitle(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-lg font-semibold focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-lg font-semibold focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                       />
                     )}
                   </div>
@@ -457,7 +457,7 @@ export function NewsPage() {
                       onChange={(event) => setEditBody(event.target.value)}
                       ref={editBodyRef}
                       rows={5}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     />
                     <div className="flex flex-wrap items-center gap-2">
                       <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
@@ -481,7 +481,7 @@ export function NewsPage() {
                         />
                       </label>
                       {isUploadingEditInlineImage && (
-                        <span className="inline-flex items-center gap-1 text-xs text-indigo-600">
+                        <span className="inline-flex items-center gap-1 text-xs text-teal-600">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           Загрузка фото...
                         </span>
@@ -555,7 +555,7 @@ export function NewsPage() {
                             setEditingId(null);
                           }}
                           disabled={updateNews.isPending || isUploadingEditInlineImage}
-                          className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
+                          className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-teal-700"
                         >
                           <Save className="h-3.5 w-3.5" />
                           Сохранить
@@ -610,3 +610,4 @@ export function NewsPage() {
     </div>
   );
 }
+

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "purple";
+type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "cyan";
 
 const variantStyles: Record<BadgeVariant, string> = {
   default: "bg-gray-100 text-gray-700",
@@ -8,7 +8,7 @@ const variantStyles: Record<BadgeVariant, string> = {
   warning: "bg-amber-100 text-amber-700",
   danger: "bg-red-100 text-red-700",
   info: "bg-sky-100 text-sky-700",
-  purple: "bg-purple-100 text-purple-700",
+  cyan: "bg-cyan-100 text-cyan-700",
 };
 
 export function Badge({
@@ -41,8 +41,9 @@ export function StatusBadge({
     pending: { variant: "info" as const, label: "В процессе" },
     done: { variant: "success" as const, label: "Выполнено" },
     overdue: { variant: "danger" as const, label: "Просрочено" },
-    review: { variant: "purple" as const, label: "На проверке" },
+    review: { variant: "cyan" as const, label: "На проверке" },
   };
   const c = config[status];
   return <Badge variant={c.variant}>{c.label}</Badge>;
 }
+

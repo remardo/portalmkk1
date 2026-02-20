@@ -356,7 +356,7 @@ export function AgentChatWidget() {
     <div className="pointer-events-none fixed bottom-6 right-6 z-50">
       {open ? (
         <div className="pointer-events-auto flex h-[560px] w-[380px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-gray-300/40">
-          <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-white">
+          <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-r from-teal-600 to-cyan-600 px-4 py-3 text-white">
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4" />
               <p className="text-sm font-semibold">Агент портала</p>
@@ -372,7 +372,7 @@ export function AgentChatWidget() {
                 key={`${message.role}-${index}`}
                 className={`max-w-[92%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
                   message.role === "user"
-                    ? "ml-auto bg-indigo-600 text-white"
+                    ? "ml-auto bg-teal-600 text-white"
                     : "bg-white text-gray-700 shadow-sm"
                 }`}
               >
@@ -392,23 +392,23 @@ export function AgentChatWidget() {
           </div>
 
           {pendingActions.some((action) => action.status !== "done") && (
-            <div className="border-t border-gray-100 bg-indigo-50/50 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+            <div className="border-t border-gray-100 bg-teal-50/50 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-teal-700">
                 Предложенные действия
               </p>
               <div className="space-y-2">
                 {pendingActions
                   .filter((action) => action.status !== "done")
                   .map((action) => (
-                  <div key={action.id} className="rounded-lg border border-indigo-100 bg-white p-2 text-xs">
+                  <div key={action.id} className="rounded-lg border border-teal-100 bg-white p-2 text-xs">
                     {action.type === "create_task" ? (
                       <p className="text-gray-700">
-                        <PlusCircle className="mr-1 inline h-3.5 w-3.5 text-indigo-600" />
+                        <PlusCircle className="mr-1 inline h-3.5 w-3.5 text-teal-600" />
                         Создать задачу: <span className="font-semibold">{action.title}</span>
                       </p>
                     ) : (
                       <p className="text-gray-700">
-                        <ClipboardCheck className="mr-1 inline h-3.5 w-3.5 text-indigo-600" />
+                        <ClipboardCheck className="mr-1 inline h-3.5 w-3.5 text-teal-600" />
                         Закрыть задачу:{" "}
                         <span className="font-semibold">
                           {action.taskId ? `#${action.taskId}` : action.taskTitle ?? "без названия"}
@@ -430,7 +430,7 @@ export function AgentChatWidget() {
                       <button
                         disabled={action.status !== "pending" || runningActionId === action.id}
                         onClick={() => void executeAction(action)}
-                        className="rounded bg-indigo-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                        className="rounded bg-teal-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-teal-700 disabled:opacity-50"
                       >
                         {runningActionId === action.id ? "Выполнение..." : action.status === "done" ? (
                           <>
@@ -462,12 +462,12 @@ export function AgentChatWidget() {
                   }
                 }}
                 placeholder="Например: создай задачу обзвонить 5 клиентов и закрой задачу про принтер"
-                className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
               />
               <button
                 onClick={() => void handleSend()}
                 disabled={loading || !input.trim()}
-                className="rounded-xl bg-indigo-600 p-2.5 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                className="rounded-xl bg-teal-600 p-2.5 text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
               </button>
@@ -477,7 +477,7 @@ export function AgentChatWidget() {
       ) : (
         <button
           onClick={() => setOpen(true)}
-          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-2xl shadow-indigo-400/40 transition-transform hover:scale-105"
+          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-2xl shadow-teal-400/40 transition-transform hover:scale-105"
           aria-label="Открыть чат агента"
         >
           <MessageCircle className="h-6 w-6" />
@@ -486,3 +486,4 @@ export function AgentChatWidget() {
     </div>
   );
 }
+

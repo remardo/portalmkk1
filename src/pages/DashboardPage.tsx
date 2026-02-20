@@ -45,20 +45,20 @@ export function DashboardPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       {/* Agent banner */}
-      <Card className="overflow-hidden border-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 p-6 text-white shadow-xl shadow-indigo-200/50">
+      <Card className="overflow-hidden border-0 bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-600 p-6 text-white shadow-xl shadow-teal-200/50">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
               <h2 className="text-lg font-semibold">{digest.greeting}</h2>
             </div>
-            <p className="mt-2 max-w-xl text-sm text-indigo-100">
+            <p className="mt-2 max-w-xl text-sm text-teal-100">
               {digest.focusLine}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 to="/tasks"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-teal-600 transition-colors hover:bg-teal-50"
               >
                 Мои задачи
                 <ArrowRight className="h-4 w-4" />
@@ -76,7 +76,7 @@ export function DashboardPage() {
                 digest.todayTasks.map((task) => (
                   <div key={task.id} className="rounded-lg bg-white/10 px-3 py-2">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="line-clamp-2 text-indigo-50">{task.title}</p>
+                      <p className="line-clamp-2 text-teal-50">{task.title}</p>
                       <span className="rounded bg-white/20 px-2 py-0.5 text-xs uppercase tracking-wide">
                         {task.priority === "high" ? "high" : task.priority === "medium" ? "mid" : "low"}
                       </span>
@@ -84,7 +84,7 @@ export function DashboardPage() {
                   </div>
                 ))
               ) : (
-                <div className="rounded-lg bg-white/10 px-3 py-2 text-indigo-50">
+                <div className="rounded-lg bg-white/10 px-3 py-2 text-teal-50">
                   На сегодня нет активных задач. Можно взять новую.
                 </div>
               )}
@@ -104,7 +104,7 @@ export function DashboardPage() {
           icon={Building2}
           label="Офисов в сети"
           value={data.offices.length}
-          variant="indigo"
+          variant="teal"
           sub="активных точек"
         />
         <StatCard
@@ -125,14 +125,14 @@ export function DashboardPage() {
           icon={FileText}
           label="На согласовании"
           value={pendingDocs}
-          variant="purple"
+          variant="cyan"
           sub="документов"
         />
         <StatCard
           icon={GraduationCap}
           label="LMS прогресс"
           value={`${digest.lms.completed}/${digest.lms.assigned}`}
-          variant="indigo"
+          variant="teal"
           sub={`${digest.lms.completionPercent}% завершено`}
         />
         <StatCard
@@ -213,8 +213,8 @@ export function DashboardPage() {
         {/* Recent attestations */}
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
-              <GraduationCap className="h-4 w-4 text-indigo-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100">
+              <GraduationCap className="h-4 w-4 text-teal-600" />
             </div>
             <h2 className="font-semibold text-gray-900">Последние аттестации</h2>
           </div>
@@ -225,7 +225,7 @@ export function DashboardPage() {
               return (
                 <div key={attestation.id} className="flex items-center justify-between p-4 transition-colors hover:bg-gray-50">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-sm text-white">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-sm text-white">
                       {user?.avatar}
                     </div>
                     <div className="min-w-0">
@@ -291,8 +291,8 @@ export function DashboardPage() {
         {/* Learning focus */}
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
-              <GraduationCap className="h-4 w-4 text-indigo-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100">
+              <GraduationCap className="h-4 w-4 text-teal-600" />
             </div>
             <h2 className="font-semibold text-gray-900">Фокус по обучению</h2>
           </div>
@@ -319,3 +319,4 @@ export function DashboardPage() {
     </div>
   );
 }
+

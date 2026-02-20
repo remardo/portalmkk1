@@ -62,11 +62,11 @@ export function KBPage() {
 
     return (
       <div className="space-y-4">
-        <Link to="/kb" className="text-sm text-indigo-600 hover:text-indigo-800">
+        <Link to="/kb" className="text-sm text-teal-600 hover:text-teal-800">
           ← Назад к списку
         </Link>
         <Card className="p-5 sm:p-6">
-          <Badge className="mb-2 bg-indigo-100 text-indigo-700">{article.category}</Badge>
+          <Badge className="mb-2 bg-teal-100 text-teal-700">{article.category}</Badge>
           <h2 className="mb-1 text-xl font-bold text-gray-900">{article.title}</h2>
           <p className="mb-2 text-xs text-gray-400">{article.date} • v{article.version ?? 1}</p>
           <p className="whitespace-pre-line leading-relaxed text-gray-700">{article.content}</p>
@@ -128,7 +128,7 @@ export function KBPage() {
                         });
                         setEditMode(false);
                       }}
-                      className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                      className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700"
                     >
                       Сохранить
                     </button>
@@ -174,7 +174,7 @@ export function KBPage() {
                   }
                 }}
                 disabled={consultLoading || !consultQuestion.trim()}
-                className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
               >
                 {consultLoading ? "Обработка..." : "Спросить консультанта"}
               </button>
@@ -220,7 +220,7 @@ export function KBPage() {
                 {canManage ? (
                   <button
                     onClick={() => restoreVersion.mutate({ id: article.id, version: v.version })}
-                    className="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700"
+                    className="rounded bg-teal-600 px-2 py-1 text-xs text-white hover:bg-teal-700"
                   >
                     Восстановить
                   </button>
@@ -280,7 +280,7 @@ export function KBPage() {
                 setTitle("");
                 setContent("");
               }}
-              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700"
             >
               Создать
             </button>
@@ -291,12 +291,12 @@ export function KBPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {filtered.map((item) => (
           <Card key={item.id} className="p-4 transition-shadow hover:shadow-md">
-            <Badge className="mb-2 bg-indigo-100 text-indigo-700">{item.category}</Badge>
+            <Badge className="mb-2 bg-teal-100 text-teal-700">{item.category}</Badge>
             <h3 className="mb-1 font-semibold text-gray-900">{item.title}</h3>
             <p className="line-clamp-2 text-sm text-gray-500">{item.content}</p>
             <div className="mt-1 text-xs text-gray-400">v{item.version ?? 1} • {item.status ?? "published"}</div>
             <div className="mt-3">
-              <Link to={`/kb/${item.id}`} className="text-sm text-indigo-600 hover:text-indigo-800">
+              <Link to={`/kb/${item.id}`} className="text-sm text-teal-600 hover:text-teal-800">
                 Открыть →
               </Link>
             </div>
@@ -306,3 +306,4 @@ export function KBPage() {
     </div>
   );
 }
+

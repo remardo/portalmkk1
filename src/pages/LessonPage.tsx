@@ -275,7 +275,7 @@ function QuizPlayer({
   if (showResults && submittedResults) {
     return (
       <Card className="overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
+        <div className="bg-gradient-to-r from-teal-500 to-cyan-600 p-6 text-white">
           <h2 className="text-xl font-bold">Результаты: {quiz.title}</h2>
         </div>
         <div className="p-6">
@@ -377,7 +377,7 @@ function QuizPlayer({
                   );
                   setCurrentQuestionIndex(0);
                 }}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
               >
                 Попробовать снова
               </button>
@@ -400,8 +400,8 @@ function QuizPlayer({
       <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
-              <ListChecks className="h-4 w-4 text-indigo-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100">
+              <ListChecks className="h-4 w-4 text-teal-600" />
             </div>
             <div>
               <h2 className="font-semibold text-gray-900">{quiz.title}</h2>
@@ -420,7 +420,7 @@ function QuizPlayer({
         {/* Progress bar */}
         <div className="mt-3 h-2 w-full rounded-full bg-gray-200">
           <div
-            className="h-2 rounded-full bg-indigo-600 transition-all"
+            className="h-2 rounded-full bg-teal-600 transition-all"
             style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
           />
         </div>
@@ -448,7 +448,7 @@ function QuizPlayer({
                   onClick={() => handleAnswerSelect(option.id, currentQuestion.question_type === "multiple_choice")}
                   className={`w-full rounded-lg border-2 p-4 text-left transition-all ${
                     isSelected
-                      ? "border-indigo-500 bg-indigo-50"
+                      ? "border-teal-500 bg-teal-50"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
@@ -458,7 +458,7 @@ function QuizPlayer({
                         currentQuestion.question_type === "multiple_choice" ? "sm" : "full"
                       } border-2 ${
                         isSelected
-                          ? "border-indigo-500 bg-indigo-500 text-white"
+                          ? "border-teal-500 bg-teal-500 text-white"
                           : "border-gray-300"
                       }`}
                     >
@@ -487,14 +487,14 @@ function QuizPlayer({
             <button
               onClick={handleSubmit}
               disabled={submitQuizMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
             >
               {submitQuizMutation.isPending ? "Отправка..." : "Завершить тест"}
             </button>
           ) : (
             <button
               onClick={() => setCurrentQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
-              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
             >
               Далее
               <ChevronRight className="h-4 w-4" />
@@ -580,7 +580,7 @@ export function LessonPage() {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-teal-200 border-t-teal-600" />
           <p className="text-sm text-gray-500">Загрузка урока...</p>
         </div>
       </div>
@@ -598,7 +598,7 @@ export function LessonPage() {
           <p className="text-sm text-gray-500">Урок не найден.</p>
           <Link
             to={`/lms/courses/${courseId}`}
-            className="mt-4 inline-block text-sm text-indigo-600 hover:underline"
+            className="mt-4 inline-block text-sm text-teal-600 hover:underline"
           >
             Вернуться к курсу
           </Link>
@@ -618,7 +618,7 @@ export function LessonPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <button
           onClick={() => setActiveQuiz(null)}
-          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-indigo-600"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-teal-600"
         >
           <ChevronLeft className="h-4 w-4" />
           Вернуться к уроку
@@ -642,14 +642,14 @@ export function LessonPage() {
       <div className="flex items-center gap-2 text-sm">
         <Link
           to="/lms"
-          className="text-gray-500 transition-colors hover:text-indigo-600"
+          className="text-gray-500 transition-colors hover:text-teal-600"
         >
           Курсы
         </Link>
         <ChevronRight className="h-4 w-4 text-gray-400" />
         <Link
           to={`/lms/courses/${courseId}`}
-          className="text-gray-500 transition-colors hover:text-indigo-600"
+          className="text-gray-500 transition-colors hover:text-teal-600"
         >
           {course.title}
         </Link>
@@ -659,10 +659,10 @@ export function LessonPage() {
 
       {/* Lesson header */}
       <Card className="overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
+        <div className="bg-gradient-to-r from-teal-500 to-cyan-600 p-6 text-white">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-indigo-100">{section?.title}</p>
+              <p className="text-sm text-teal-100">{section?.title}</p>
               <h1 className="mt-1 text-2xl font-bold">{lesson.title}</h1>
             </div>
             {lessonProgress?.completed && (
@@ -686,7 +686,7 @@ export function LessonPage() {
           </div>
           <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200">
             <div
-              className="h-1.5 rounded-full bg-indigo-600 transition-all"
+              className="h-1.5 rounded-full bg-teal-600 transition-all"
               style={{ width: `${((currentLessonIndex + 1) / allLessons.length) * 100}%` }}
             />
           </div>
@@ -716,9 +716,9 @@ export function LessonPage() {
                     href={item.external_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-3 p-4 text-indigo-600 transition-colors hover:bg-indigo-50"
+                    className="flex items-center gap-3 p-4 text-teal-600 transition-colors hover:bg-teal-50"
                   >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-100">
                       <Play className="h-6 w-6" />
                     </div>
                     <span className="font-medium">{item.external_url}</span>
@@ -740,7 +740,7 @@ export function LessonPage() {
         <Card className="overflow-hidden">
           <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
             <div className="flex items-center gap-2">
-              <ListChecks className="h-5 w-5 text-indigo-600" />
+              <ListChecks className="h-5 w-5 text-teal-600" />
               <h2 className="font-semibold text-gray-900">Тесты и опросы</h2>
             </div>
           </div>
@@ -748,8 +748,8 @@ export function LessonPage() {
             {lessonQuizzes.map((quiz) => (
               <div key={quiz.id} className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100">
-                    <Award className="h-5 w-5 text-indigo-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100">
+                    <Award className="h-5 w-5 text-teal-600" />
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">{quiz.title}</p>
@@ -770,7 +770,7 @@ export function LessonPage() {
                 </div>
                 <button
                   onClick={() => setActiveQuiz(quiz)}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                  className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700"
                 >
                   Начать
                 </button>
@@ -803,7 +803,7 @@ export function LessonPage() {
         {prevLesson ? (
           <Link
             to={`/lms/courses/${courseId}/lessons/${prevLesson.id}`}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-indigo-300 hover:text-indigo-600"
+            className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-teal-300 hover:text-teal-600"
           >
             <ChevronLeft className="h-4 w-4" />
             <div className="text-left">
@@ -818,10 +818,10 @@ export function LessonPage() {
         {nextLesson ? (
           <Link
             to={`/lms/courses/${courseId}/lessons/${nextLesson.id}`}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700"
           >
             <div className="text-right">
-              <p className="text-xs text-indigo-200">Следующий урок</p>
+              <p className="text-xs text-teal-200">Следующий урок</p>
               <p className="truncate max-w-48">{nextLesson.title}</p>
             </div>
             <ChevronRight className="h-4 w-4" />
@@ -839,3 +839,4 @@ export function LessonPage() {
     </div>
   );
 }
+

@@ -139,7 +139,7 @@ export function ReportsPage() {
         </Card>
         <Card className="p-4">
           <p className="text-sm text-gray-500">LMS completion</p>
-          <p className="mt-2 text-2xl font-bold text-purple-700">{totals?.lmsCompletionRate ?? 0}%</p>
+          <p className="mt-2 text-2xl font-bold text-cyan-700">{totals?.lmsCompletionRate ?? 0}%</p>
         </Card>
       </div>
 
@@ -300,7 +300,7 @@ export function ReportsPage() {
                 setScheduleName("");
                 setScheduleRecipient("");
               }}
-              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700"
             >
               Добавить расписание
             </button>
@@ -318,7 +318,7 @@ export function ReportsPage() {
                   <span className="text-gray-500">след: {new Date(item.nextRunAt).toLocaleString()}</span>
                   <button
                     onClick={() => runSchedule.mutate(item.id)}
-                    className="rounded border border-indigo-300 px-2 py-1 text-indigo-700 hover:bg-indigo-50"
+                    className="rounded border border-teal-300 px-2 py-1 text-teal-700 hover:bg-teal-50"
                   >
                     Запустить сейчас
                   </button>
@@ -366,3 +366,4 @@ export function ReportsPage() {
     </div>
   );
 }
+

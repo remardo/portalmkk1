@@ -59,7 +59,7 @@ export function LMSPage() {
       return (
         <div className="flex h-64 items-center justify-center">
           <div className="text-center">
-            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-teal-200 border-t-teal-600" />
             <p className="text-sm text-gray-500">Загрузка курса...</p>
           </div>
         </div>
@@ -96,7 +96,7 @@ export function LMSPage() {
         {/* Back link */}
         <Link
           to="/lms"
-          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-indigo-600"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-teal-600"
         >
           <ChevronLeft className="h-4 w-4" />
           Назад к курсам
@@ -104,17 +104,17 @@ export function LMSPage() {
 
         {/* Course header */}
         <Card className="overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
-            <Badge variant="purple" className="mb-3 bg-white/20 text-white">
+          <div className="bg-gradient-to-r from-teal-500 to-cyan-600 p-6 text-white">
+            <Badge variant="cyan" className="mb-3 bg-white/20 text-white">
               {course.status === "published" ? "Опубликован" : course.status}
             </Badge>
             <h1 className="text-2xl font-bold">{course.title}</h1>
-            {course.description && <p className="mt-2 text-indigo-100">{course.description}</p>}
+            {course.description && <p className="mt-2 text-teal-100">{course.description}</p>}
             
             {/* Progress bar */}
             {totalLessons > 0 && (
               <div className="mt-4">
-                <div className="flex items-center justify-between text-sm text-indigo-100">
+                <div className="flex items-center justify-between text-sm text-teal-100">
                   <span>Прогресс курса</span>
                   <span>{completedLessons} из {totalLessons} уроков ({progressPercent}%)</span>
                 </div>
@@ -142,7 +142,7 @@ export function LMSPage() {
               <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-sm font-bold text-indigo-600">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 text-sm font-bold text-teal-600">
                       {section.sort_order || sectionIndex + 1}
                     </div>
                     <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
@@ -152,7 +152,7 @@ export function LMSPage() {
                       <span>{sectionCompleted}/{sectionTotal}</span>
                       <div className="h-2 w-16 rounded-full bg-gray-200">
                         <div
-                          className="h-2 rounded-full bg-indigo-600"
+                          className="h-2 rounded-full bg-teal-600"
                           style={{ width: `${sectionProgress}%` }}
                         />
                       </div>
@@ -171,7 +171,7 @@ export function LMSPage() {
                     <Link
                       key={subsection.id}
                       to={`/lms/courses/${courseId}/lessons/${subsection.id}`}
-                      className="flex items-center gap-4 p-4 transition-colors hover:bg-indigo-50"
+                      className="flex items-center gap-4 p-4 transition-colors hover:bg-teal-50"
                     >
                       <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
                         isCompleted 
@@ -237,7 +237,7 @@ export function LMSPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <Link
           to="/lms"
-          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-indigo-600"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-teal-600"
         >
           <ChevronLeft className="h-4 w-4" />
           Назад
@@ -245,14 +245,14 @@ export function LMSPage() {
 
         <Card className="overflow-hidden">
           {/* User header */}
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
+          <div className="bg-gradient-to-r from-teal-500 to-cyan-600 p-6 text-white">
             <div className="flex items-center gap-4">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 text-3xl backdrop-blur-sm">
                 {employee.avatar}
               </div>
               <div>
                 <h2 className="text-xl font-bold">{employee.name}</h2>
-                <p className="text-indigo-100">{employee.position}</p>
+                <p className="text-teal-100">{employee.position}</p>
                 <div className="mt-2 flex items-center gap-2">
                   <div className="flex items-center gap-1 rounded-full bg-white/20 px-3 py-1">
                     <Award className="h-4 w-4" />
@@ -273,8 +273,8 @@ export function LMSPage() {
               return (
                 <div key={attestation.id} className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100">
-                      <BookOpen className="h-4 w-4 text-indigo-600" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100">
+                      <BookOpen className="h-4 w-4 text-teal-600" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">{course?.title}</p>
@@ -344,7 +344,7 @@ export function LMSPage() {
 
       {lmsCoursesQuery.isLoading && (
         <div className="flex h-32 items-center justify-center">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-200 border-t-teal-600" />
         </div>
       )}
 
@@ -361,7 +361,7 @@ export function LMSPage() {
         {visibleCourses.map((course) => (
           <Card key={course.id} hover className="overflow-hidden">
             <div className="p-5">
-              <Badge variant="purple" className="mb-3">
+              <Badge variant="cyan" className="mb-3">
                 {course.status === "published" ? "Опубликован" : course.status}
               </Badge>
               <h3 className="font-semibold text-gray-900">{course.title}</h3>
@@ -370,7 +370,7 @@ export function LMSPage() {
               </p>
               <Link
                 to={`/lms/courses/${course.id}`}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700"
               >
                 <BookOpen className="h-4 w-4" />
                 Открыть курс
@@ -404,9 +404,9 @@ export function LMSPage() {
               <Link
                 key={String(employee.id)}
                 to={`/lms/users/${employee.id}`}
-                className="flex items-center gap-3 rounded-xl border border-gray-100 p-3 transition-all hover:border-indigo-200 hover:bg-indigo-50"
+                className="flex items-center gap-3 rounded-xl border border-gray-100 p-3 transition-all hover:border-teal-200 hover:bg-teal-50"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-sm text-white">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-sm text-white">
                   {employee.avatar}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -420,3 +420,4 @@ export function LMSPage() {
     </div>
   );
 }
+

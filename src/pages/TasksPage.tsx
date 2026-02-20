@@ -164,7 +164,7 @@ export function TasksPage() {
       <div className="mx-auto max-w-3xl space-y-6">
         <Link
           to="/tasks"
-          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-indigo-600"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-teal-600"
         >
           <ChevronLeft className="h-4 w-4" />
           Назад к списку
@@ -231,19 +231,19 @@ export function TasksPage() {
                 <input
                   value={editTitle}
                   onChange={(event) => setEditTitle(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                 />
                 <textarea
                   value={editDescription}
                   onChange={(event) => setEditDescription(event.target.value)}
                   rows={3}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <select
                     value={editOfficeId}
                     onChange={(event) => setEditOfficeId(event.target.value)}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   >
                     {availableOffices.map((officeItem) => (
                       <option key={officeItem.id} value={officeItem.id}>
@@ -254,7 +254,7 @@ export function TasksPage() {
                   <select
                     value={editAssigneeId}
                     onChange={(event) => setEditAssigneeId(event.target.value)}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   >
                     {editAssignees.map((u) => (
                       <option key={String(u.id)} value={String(u.id)}>
@@ -266,12 +266,12 @@ export function TasksPage() {
                     type="date"
                     value={editDueDate}
                     onChange={(event) => setEditDueDate(event.target.value)}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   />
                   <select
                     value={editPriority}
                     onChange={(event) => setEditPriority(event.target.value as "low" | "medium" | "high")}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   >
                     <option value="low">Низкий</option>
                     <option value="medium">Средний</option>
@@ -292,7 +292,7 @@ export function TasksPage() {
                     onClick={() => updateTaskStatus.mutate({ id: task.id, status })}
                     className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
                       task.status === status
-                        ? "bg-indigo-600 text-white"
+                        ? "bg-teal-600 text-white"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                   >
@@ -339,7 +339,7 @@ export function TasksPage() {
                       });
                       setEditMode(false);
                     }}
-                    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                    className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700"
                   >
                     Сохранить
                   </button>
@@ -382,7 +382,7 @@ export function TasksPage() {
         {canCreate && (
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+            className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700"
           >
             {showCreateForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
             {showCreateForm ? "Отмена" : "Новая задача"}
@@ -401,20 +401,20 @@ export function TasksPage() {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Название задачи"
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               rows={2}
               placeholder="Описание"
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <select
                 value={assigneeId}
                 onChange={(event) => setAssigneeId(event.target.value)}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
               >
                 <option value="">Выберите ответственного</option>
                 {availableAssignees.map((u) => (
@@ -426,7 +426,7 @@ export function TasksPage() {
               <select
                 value={priority}
                 onChange={(event) => setPriority(event.target.value as "low" | "medium" | "high")}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
               >
                 <option value="low">Низкий приоритет</option>
                 <option value="medium">Средний приоритет</option>
@@ -435,7 +435,7 @@ export function TasksPage() {
               <select
                 value={type}
                 onChange={(event) => setType(event.target.value as "order" | "checklist" | "auto")}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
               >
                 <option value="order">Поручение</option>
                 <option value="checklist">Чеклист</option>
@@ -459,7 +459,7 @@ export function TasksPage() {
                 setDescription("Новая задача");
                 setShowCreateForm(false);
               }}
-              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700"
             >
               Создать задачу
             </button>
@@ -473,7 +473,7 @@ export function TasksPage() {
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
         >
           <option value="">Все статусы</option>
           <option value="new">Новые</option>
@@ -556,3 +556,4 @@ export function TasksPage() {
     </div>
   );
 }
+

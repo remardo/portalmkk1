@@ -86,7 +86,7 @@ export function ShopPage() {
         </div>
         <Card className="px-4 py-3">
           <p className="text-xs uppercase text-gray-500">Ваш баланс</p>
-          <p className="text-xl font-bold text-indigo-700">{user.points} баллов</p>
+          <p className="text-xl font-bold text-teal-700">{user.points} баллов</p>
         </Card>
       </div>
 
@@ -129,10 +129,10 @@ export function ShopPage() {
                       <span>{product.stockQty === null ? "Без лимита" : `Остаток: ${product.stockQty}`}</span>
                     </div>
                     <div className="mt-3 flex items-center justify-between">
-                      <p className="text-sm font-bold text-indigo-700">{product.pricePoints} баллов</p>
+                      <p className="text-sm font-bold text-teal-700">{product.pricePoints} баллов</p>
                       <button
                         onClick={() => increment(product.id)}
-                        className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                        className="rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700"
                       >
                         Купить
                       </button>
@@ -187,7 +187,7 @@ export function ShopPage() {
           <button
             onClick={() => void checkout()}
             disabled={cartRows.length === 0 || createOrder.isPending}
-            className="mt-3 w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-3 w-full rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {createOrder.isPending ? "Оформление..." : "Оформить заказ"}
           </button>
@@ -229,3 +229,4 @@ export function ShopPage() {
     </div>
   );
 }
+

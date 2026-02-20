@@ -99,7 +99,7 @@ export function AppLayout() {
               setSidebarOpen(false);
             }}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white shadow-lg shadow-indigo-200">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 text-sm font-bold text-white shadow-lg shadow-teal-200">
               МФ
             </div>
             <div>
@@ -129,7 +129,7 @@ export function AppLayout() {
                   className={({ isActive }) =>
                     `group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                       isActive
-                        ? "bg-indigo-50 text-indigo-600"
+                        ? "bg-teal-50 text-teal-600"
                         : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     }`
                   }
@@ -138,7 +138,7 @@ export function AppLayout() {
                     <>
                       <div
                         className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                          isActive ? "bg-indigo-100" : "bg-gray-100 group-hover:bg-gray-200"
+                          isActive ? "bg-teal-100" : "bg-gray-100 group-hover:bg-gray-200"
                         }`}
                       >
                         <Icon className="h-4 w-4" />
@@ -159,7 +159,7 @@ export function AppLayout() {
               onClick={() => setShowUserMenu((prev) => !prev)}
               className="flex w-full items-center gap-3 rounded-xl bg-gray-50 px-3 py-3 transition-colors hover:bg-gray-100"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-lg text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-lg text-white">
                 {user.avatar}
               </div>
               <div className="min-w-0 flex-1 text-left">
@@ -227,7 +227,7 @@ export function AppLayout() {
                     navigate("/search");
                   }
                 }}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm transition-colors placeholder:text-gray-400 focus:border-indigo-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm transition-colors placeholder:text-gray-400 focus:border-teal-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-100"
               />
             </div>
           </div>
@@ -249,7 +249,7 @@ export function AppLayout() {
 
             {/* User avatar (desktop) */}
             <div className="hidden items-center gap-3 border-l border-gray-100 pl-4 sm:flex">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-sm text-white">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-sm text-white">
                 {user.avatar}
               </div>
               <div className="text-right">
@@ -272,3 +272,4 @@ export function AppLayout() {
     </div>
   );
 }
+

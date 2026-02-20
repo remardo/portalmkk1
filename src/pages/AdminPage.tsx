@@ -688,7 +688,7 @@ export function AdminPage() {
 
       {activeTab === "offices" ? (
       <div className="space-y-4">
-        <Card className="border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-sky-50 p-4">
+        <Card className="border border-gray-200 bg-gradient-to-r from-teal-50 via-white to-sky-50 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-semibold text-gray-900">Офисы</h2>
             <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm">
@@ -700,19 +700,19 @@ export function AdminPage() {
               value={newOffice.name}
               onChange={(event) => setNewOffice((prev) => ({ ...prev, name: event.target.value }))}
               placeholder="Название офиса"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-2"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
             />
             <input
               value={newOffice.city}
               onChange={(event) => setNewOffice((prev) => ({ ...prev, city: event.target.value }))}
               placeholder="Город"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             <input
               value={newOffice.address}
               onChange={(event) => setNewOffice((prev) => ({ ...prev, address: event.target.value }))}
               placeholder="Адрес"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-2"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
             />
             <input
               type="number"
@@ -720,12 +720,12 @@ export function AdminPage() {
               value={newOffice.rating}
               onChange={(event) => setNewOffice((prev) => ({ ...prev, rating: event.target.value }))}
               placeholder="Рейтинг"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             <select
               value={newOffice.headId}
               onChange={(event) => setNewOffice((prev) => ({ ...prev, headId: event.target.value }))}
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-3"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-3"
             >
               <option value="">Без руководителя</option>
               {officeHeadCandidates.map((employee) => (
@@ -738,7 +738,7 @@ export function AdminPage() {
               value={officeSearch}
               onChange={(event) => setOfficeSearch(event.target.value)}
               placeholder="Поиск: название, город, адрес"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-2"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
             />
             <div className="md:col-span-1">
               <button
@@ -766,7 +766,7 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                className="w-full rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-60"
                 disabled={createOffice.isPending}
               >
                 {createOffice.isPending ? "Создание..." : "Создать офис"}
@@ -801,7 +801,7 @@ export function AdminPage() {
                       }))
                     }
                     placeholder="Название офиса"
-                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   />
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <input
@@ -813,7 +813,7 @@ export function AdminPage() {
                         }))
                       }
                       placeholder="Город"
-                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     />
                     <input
                       type="number"
@@ -826,7 +826,7 @@ export function AdminPage() {
                         }))
                       }
                       placeholder="Рейтинг"
-                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     />
                   </div>
                   <input
@@ -838,7 +838,7 @@ export function AdminPage() {
                       }))
                     }
                     placeholder="Адрес"
-                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   />
                   <select
                     value={draft.headId}
@@ -848,7 +848,7 @@ export function AdminPage() {
                         [office.id]: { ...draft, headId: event.target.value },
                       }))
                     }
-                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   >
                     <option value="">Без руководителя</option>
                     {officeHeadCandidates.map((employee) => (
@@ -875,7 +875,7 @@ export function AdminPage() {
                         showToast("error", extractErrorMessage(error));
                       }
                     }}
-                    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                    className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-60"
                     disabled={updateOffice.isPending}
                   >
                     Сохранить
@@ -963,7 +963,7 @@ export function AdminPage() {
                   showToast("error", extractErrorMessage(error));
                 }
               }}
-              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700"
             >
               Добавить товар
             </button>
@@ -1281,7 +1281,7 @@ export function AdminPage() {
           {audit.data?.items.map((row) => (
             <div key={row.id} className="rounded-xl border border-gray-200 p-3 text-xs">
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <Badge className="bg-indigo-100 text-indigo-700">{row.action}</Badge>
+                <Badge className="bg-teal-100 text-teal-700">{row.action}</Badge>
                 <Badge className="bg-gray-100 text-gray-700">{row.entityType}:{row.entityId}</Badge>
                 <Badge className="bg-gray-100 text-gray-700">{RoleLabels[row.actorRole]}</Badge>
                 <span className="text-gray-500">{new Date(row.createdAt).toLocaleString()}</span>
@@ -1324,3 +1324,4 @@ export function AdminPage() {
     </div>
   );
 }
+

@@ -19,12 +19,12 @@ export function OrgPage() {
       <h1 className="text-2xl font-bold text-gray-900">Оргструктура и контакты</h1>
 
       {director ? (
-        <Card className="border-l-4 border-indigo-500 p-4">
+        <Card className="border-l-4 border-teal-500 p-4">
           <div className="flex items-center gap-3">
             <span className="text-3xl">{director.avatar}</span>
             <div>
               <p className="font-bold text-gray-900">{director.name}</p>
-              <p className="text-sm text-indigo-600">{director.position}</p>
+              <p className="text-sm text-teal-600">{director.position}</p>
               <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
                 <span>{director.email}</span>
                 <span>{director.phone}</span>
@@ -83,3 +83,4 @@ export function OrgPage() {
     </div>
   );
 }
+

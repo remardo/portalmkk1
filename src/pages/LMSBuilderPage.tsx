@@ -114,7 +114,7 @@ function StepIndicator({
               onClick={() => onStepClick(step.key)}
               className={`group flex items-center gap-2 rounded-lg px-4 py-2.5 transition-all duration-200 ${
                 isActive
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
+                  ? "bg-teal-600 text-white shadow-lg shadow-teal-200"
                   : isCompleted
                     ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                     : "bg-gray-50 text-gray-600 hover:bg-gray-100"
@@ -165,7 +165,7 @@ function CourseCard({
     <div
       className={`group relative cursor-pointer rounded-xl border p-3 transition-all duration-200 ${
         isSelected
-          ? "border-indigo-300 bg-gradient-to-r from-indigo-50 to-purple-50 shadow-md"
+          ? "border-teal-300 bg-gradient-to-r from-teal-50 to-cyan-50 shadow-md"
           : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
       }`}
       onClick={onSelect}
@@ -198,7 +198,7 @@ function CourseCard({
                     setShowMenu(false);
                   }}
                   className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 ${
-                    course.status === s ? "font-medium text-indigo-600" : "text-gray-700"
+                    course.status === s ? "font-medium text-teal-600" : "text-gray-700"
                   }`}
                 >
                   <StatusBadge status={s} />
@@ -258,7 +258,7 @@ function SectionItem({
       onDrop={() => onDrop(Number(section.id))}
       className={`rounded-lg transition-all duration-200 ${
         isDragging ? "opacity-50" : ""
-      } ${isSelected ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}
+      } ${isSelected ? "bg-teal-50 ring-1 ring-teal-200" : "hover:bg-gray-50"}`}
     >
       <div
         className={`flex items-center gap-2 rounded-lg p-2 ${draggedSectionId && !isDragging ? "cursor-grab" : ""}`}
@@ -278,10 +278,10 @@ function SectionItem({
             <ChevronRight className="h-4 w-4 text-gray-500" />
           )}
         </button>
-        <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-100 text-xs font-semibold text-indigo-600">
+        <span className="flex h-6 w-6 items-center justify-center rounded bg-teal-100 text-xs font-semibold text-teal-600">
           {section.sort_order}
         </span>
-        <span className={`flex-1 truncate font-medium ${isSelected ? "text-indigo-700" : "text-gray-700"}`}>
+        <span className={`flex-1 truncate font-medium ${isSelected ? "text-teal-700" : "text-gray-700"}`}>
           {section.title}
         </span>
         <Badge className="bg-gray-100 text-gray-600">{section.subsections.length}</Badge>
@@ -304,7 +304,7 @@ function SectionItem({
                   isSubDragging ? "opacity-50" : ""
                 } ${
                   selectedSubsectionId === Number(sub.id)
-                    ? "bg-white shadow-sm ring-1 ring-indigo-300"
+                    ? "bg-white shadow-sm ring-1 ring-teal-300"
                     : "hover:bg-white/50"
                 }`}
               >
@@ -596,7 +596,7 @@ export function LMSBuilderPage() {
                   value={courseSearch}
                   onChange={(e) => setCourseSearch(e.target.value)}
                   placeholder="Поиск курсов..."
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-sm transition-colors focus:border-indigo-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-sm transition-colors focus:border-teal-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-100"
                 />
               </div>
               <div className="mt-2 flex gap-2">
@@ -606,7 +606,7 @@ export function LMSBuilderPage() {
                     onClick={() => setCourseStatusFilter(status)}
                     className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                       courseStatusFilter === status
-                        ? "bg-indigo-100 text-indigo-700"
+                        ? "bg-teal-100 text-teal-700"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                   >
@@ -642,12 +642,12 @@ export function LMSBuilderPage() {
             {/* New course button */}
             <div className="border-t border-gray-100 p-4">
               {showNewCourseForm ? (
-                <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
+                <div className="space-y-3 rounded-lg border border-teal-200 bg-teal-50/50 p-3">
                   <input
                     value={newCourseTitle}
                     onChange={(e) => setNewCourseTitle(e.target.value)}
                     placeholder="Название курса"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     autoFocus
                   />
                   <textarea
@@ -655,13 +655,13 @@ export function LMSBuilderPage() {
                     onChange={(e) => setNewCourseDescription(e.target.value)}
                     placeholder="Описание курса"
                     rows={2}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={() => createCourseMutation.mutate()}
                       disabled={!newCourseTitle.trim() || createCourseMutation.isPending}
-                      className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                      className="flex-1 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
                     >
                       {createCourseMutation.isPending ? "Создание..." : "Создать"}
                     </button>
@@ -683,7 +683,7 @@ export function LMSBuilderPage() {
               ) : (
                 <button
                   onClick={() => setShowNewCourseForm(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-white py-3 text-sm font-medium text-gray-600 transition-colors hover:border-indigo-300 hover:text-indigo-600"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-white py-3 text-sm font-medium text-gray-600 transition-colors hover:border-teal-300 hover:text-teal-600"
                 >
                   <Plus className="h-4 w-4" />
                   Новый курс
@@ -726,7 +726,7 @@ export function LMSBuilderPage() {
                       value={basicTitle}
                       onChange={(e) => setBasicTitle(e.target.value)}
                       placeholder="Введите название"
-                      className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     />
                   </div>
                   <div>
@@ -736,7 +736,7 @@ export function LMSBuilderPage() {
                       onChange={(e) => setBasicDescription(e.target.value)}
                       placeholder="Опишите содержание курса"
                       rows={6}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     />
                   </div>
                   <div>
@@ -744,7 +744,7 @@ export function LMSBuilderPage() {
                     <select
                       value={basicStatus}
                       onChange={(e) => setBasicStatus(e.target.value as LmsStatus)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     >
                       <option value="draft">Черновик</option>
                       <option value="published">Опубликован</option>
@@ -762,7 +762,7 @@ export function LMSBuilderPage() {
                       })
                     }
                     disabled={!selectedCourseId || !basicTitle.trim() || updateCourseDetailsMutation.isPending}
-                    className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                    className="w-full rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
                   >
                     {updateCourseDetailsMutation.isPending ? "Сохранение..." : "Сохранить изменения"}
                   </button>
@@ -781,12 +781,12 @@ export function LMSBuilderPage() {
                         value={newSectionTitle}
                         onChange={(e) => setNewSectionTitle(e.target.value)}
                         placeholder="Название нового раздела"
-                        className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                       />
                       <button
                         onClick={() => createSectionMutation.mutate()}
                         disabled={!newSectionTitle.trim() || createSectionMutation.isPending}
-                        className="rounded-lg bg-indigo-600 px-3 py-2 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                        className="rounded-lg bg-teal-600 px-3 py-2 text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
                       >
                         <Plus className="h-4 w-4" />
                       </button>
@@ -824,25 +824,25 @@ export function LMSBuilderPage() {
 
                   {/* Add subsection form */}
                   {selectedSectionId && (
-                    <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
-                      <p className="mb-2 text-sm font-medium text-indigo-700">Новый урок</p>
+                    <div className="rounded-lg border border-teal-200 bg-teal-50/50 p-3">
+                      <p className="mb-2 text-sm font-medium text-teal-700">Новый урок</p>
                       <input
                         value={newSubsectionTitle}
                         onChange={(e) => setNewSubsectionTitle(e.target.value)}
                         placeholder="Название урока"
-                        className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                       />
                       <textarea
                         value={newSubsectionMarkdown}
                         onChange={(e) => setNewSubsectionMarkdown(e.target.value)}
                         placeholder="Содержание урока (markdown)"
                         rows={3}
-                        className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-xs focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-xs focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                       />
                       <button
                         onClick={() => createSubsectionMutation.mutate()}
                         disabled={!newSubsectionTitle.trim() || createSubsectionMutation.isPending}
-                        className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                        className="w-full rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
                       >
                         Добавить урок
                       </button>
@@ -857,11 +857,11 @@ export function LMSBuilderPage() {
                   {/* Stats */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-gray-200 bg-white p-4 text-center">
-                      <div className="text-2xl font-bold text-indigo-600">{sections.length}</div>
+                      <div className="text-2xl font-bold text-teal-600">{sections.length}</div>
                       <div className="text-xs text-gray-500">Разделов</div>
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-4 text-center">
-                      <div className="text-2xl font-bold text-indigo-600">{subsectionCount}</div>
+                      <div className="text-2xl font-bold text-teal-600">{subsectionCount}</div>
                       <div className="text-xs text-gray-500">Уроков</div>
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-4 text-center">
@@ -961,7 +961,7 @@ export function LMSBuilderPage() {
                   <button
                     onClick={() => setShowPreview(!showPreview)}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                      showPreview ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      showPreview ? "bg-teal-100 text-teal-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                   >
                     Предпросмотр
@@ -980,7 +980,7 @@ export function LMSBuilderPage() {
                         value={editorTitle}
                         onChange={(e) => setEditorTitle(e.target.value)}
                         placeholder="Введите название"
-                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                       />
                     </div>
                     <div>
@@ -990,7 +990,7 @@ export function LMSBuilderPage() {
                         onChange={(e) => setEditorMarkdown(e.target.value)}
                         placeholder="# Заголовок урока&#10;&#10;Введите содержание урока в формате Markdown..."
                         rows={16}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 font-mono text-sm leading-relaxed focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 font-mono text-sm leading-relaxed focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-100"
                       />
                     </div>
 
@@ -1019,7 +1019,7 @@ export function LMSBuilderPage() {
                               };
                               reader.readAsDataURL(file);
                             }}
-                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs file:mr-2 file:rounded file:border-0 file:bg-indigo-50 file:px-2 file:py-1 file:text-xs file:text-indigo-600"
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs file:mr-2 file:rounded file:border-0 file:bg-teal-50 file:px-2 file:py-1 file:text-xs file:text-teal-600"
                           />
                         </div>
                         <div>
@@ -1031,7 +1031,7 @@ export function LMSBuilderPage() {
                             value={videoUrl}
                             onChange={(e) => setVideoUrl(e.target.value)}
                             placeholder="https://youtube.com/..."
-                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:border-teal-300 focus:outline-none focus:ring-1 focus:ring-teal-100"
                           />
                         </div>
                       </div>
@@ -1041,7 +1041,7 @@ export function LMSBuilderPage() {
                             value={videoCaption}
                             onChange={(e) => setVideoCaption(e.target.value)}
                             placeholder="Подпись к видео"
-                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:border-teal-300 focus:outline-none focus:ring-1 focus:ring-teal-100"
                           />
                           <button
                             onClick={() => addVideoMutation.mutate()}
@@ -1064,7 +1064,7 @@ export function LMSBuilderPage() {
                         })
                       }
                       disabled={!editorTitle.trim() || updateSubsectionMutation.isPending}
-                      className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                      className="w-full rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
                     >
                       {updateSubsectionMutation.isPending ? "Сохранение..." : "Сохранить урок"}
                     </button>
@@ -1102,7 +1102,7 @@ export function LMSBuilderPage() {
                                   href={item.external_url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-2 text-indigo-600 hover:underline"
+                                  className="flex items-center gap-2 text-teal-600 hover:underline"
                                 >
                                   <Film className="h-4 w-4" />
                                   {item.external_url}
@@ -1124,3 +1124,4 @@ export function LMSBuilderPage() {
     </div>
   );
 }
+

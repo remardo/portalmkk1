@@ -1,13 +1,13 @@
 import type { ElementType } from "react";
 import { Card } from "./Card";
 
-type StatCardVariant = "indigo" | "emerald" | "amber" | "purple" | "sky" | "rose";
+type StatCardVariant = "teal" | "emerald" | "amber" | "cyan" | "sky" | "rose";
 
 const variantStyles: Record<StatCardVariant, { bg: string; iconBg: string }> = {
-  indigo: { bg: "bg-indigo-50", iconBg: "bg-indigo-500" },
+  teal: { bg: "bg-teal-50", iconBg: "bg-teal-500" },
   emerald: { bg: "bg-emerald-50", iconBg: "bg-emerald-500" },
   amber: { bg: "bg-amber-50", iconBg: "bg-amber-500" },
-  purple: { bg: "bg-purple-50", iconBg: "bg-purple-500" },
+  cyan: { bg: "bg-cyan-50", iconBg: "bg-cyan-500" },
   sky: { bg: "bg-sky-50", iconBg: "bg-sky-500" },
   rose: { bg: "bg-rose-50", iconBg: "bg-rose-500" },
 };
@@ -16,7 +16,7 @@ export function StatCard({
   icon: Icon,
   label,
   value,
-  variant = "indigo",
+  variant = "teal",
   sub,
   trend,
   onClick,
@@ -69,7 +69,7 @@ export function StatCardCompact({
   icon: Icon,
   label,
   value,
-  variant = "indigo",
+  variant = "teal",
 }: {
   icon: ElementType;
   label: string;
@@ -92,3 +92,4 @@ export function StatCardCompact({
     </div>
   );
 }
+

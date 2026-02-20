@@ -109,7 +109,7 @@ export function SystemGuidePage() {
 
       <Card className="p-4 sm:p-5">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-          <MousePointerClick className="h-4 w-4 text-indigo-600" />
+          <MousePointerClick className="h-4 w-4 text-teal-600" />
           С чего начать в первый день
         </h2>
         <ol className="mt-3 list-inside list-decimal space-y-2 text-sm text-gray-700">
@@ -137,12 +137,12 @@ export function SystemGuidePage() {
         ))}
       </div>
 
-      <Card className="border-indigo-100 bg-indigo-50 p-4 sm:p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-indigo-900">
+      <Card className="border-teal-100 bg-teal-50 p-4 sm:p-5">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-teal-900">
           <GraduationCap className="h-4 w-4" />
           Маленькое правило
         </h2>
-        <p className="mt-1 text-sm text-indigo-800">
+        <p className="mt-1 text-sm text-teal-800">
           Если сомневаешься, делай так: сначала читай уведомления и новости, потом выполняй задачи, и только после этого
           переходи к отчетам и настройкам.
         </p>
@@ -150,3 +150,4 @@ export function SystemGuidePage() {
     </div>
   );
 }
+

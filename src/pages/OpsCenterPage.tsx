@@ -183,7 +183,7 @@ export function OpsCenterPage() {
           <button
             onClick={() => runReminders.mutate()}
             disabled={runReminders.isPending}
-            className="rounded-lg bg-indigo-700 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {runReminders.isPending ? "Запуск..." : "Запустить напоминания"}
           </button>
@@ -497,7 +497,7 @@ export function OpsCenterPage() {
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">Открытые задачи</p>
-            <ListTodo className="h-4 w-4 text-indigo-500" />
+            <ListTodo className="h-4 w-4 text-teal-500" />
           </div>
           <p className="mt-2 text-2xl font-bold text-gray-900">{openTasks.length}</p>
         </Card>
@@ -518,9 +518,9 @@ export function OpsCenterPage() {
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">LMS просрочки</p>
-            <GraduationCap className="h-4 w-4 text-purple-500" />
+            <GraduationCap className="h-4 w-4 text-cyan-500" />
           </div>
-          <p className="mt-2 text-2xl font-bold text-purple-700">{overdueAssignments.length}</p>
+          <p className="mt-2 text-2xl font-bold text-cyan-700">{overdueAssignments.length}</p>
         </Card>
       </div>
 
@@ -528,7 +528,7 @@ export function OpsCenterPage() {
         <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Задачи с ближайшим SLA (2 дня)</h2>
-            <Link to="/tasks" className="text-xs text-indigo-600 hover:text-indigo-800">
+            <Link to="/tasks" className="text-xs text-teal-600 hover:text-teal-800">
               Открыть задачи
             </Link>
           </div>
@@ -551,7 +551,7 @@ export function OpsCenterPage() {
         <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">LMS дедлайны (3 дня)</h2>
-            <Link to="/lms" className="text-xs text-indigo-600 hover:text-indigo-800">
+            <Link to="/lms" className="text-xs text-teal-600 hover:text-teal-800">
               Открыть LMS
             </Link>
           </div>
@@ -562,7 +562,7 @@ export function OpsCenterPage() {
                   <p className="font-medium text-gray-900">
                     {data.courses.find((course) => course.id === item.courseId)?.title ?? `Курс #${item.courseId}`}
                   </p>
-                  <Badge className="bg-purple-100 text-purple-700">до {item.dueDate}</Badge>
+                  <Badge className="bg-cyan-100 text-cyan-700">до {item.dueDate}</Badge>
                 </div>
                 <p className="text-xs text-gray-500">
                   {data.users.find((u) => String(u.id) === String(item.userId))?.name ?? "Неизвестный сотрудник"}
@@ -580,7 +580,7 @@ export function OpsCenterPage() {
         <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Документы, требующие действий</h2>
-            <Link to="/docs" className="text-xs text-indigo-600 hover:text-indigo-800">
+            <Link to="/docs" className="text-xs text-teal-600 hover:text-teal-800">
               Открыть документы
             </Link>
           </div>
@@ -627,3 +627,4 @@ export function OpsCenterPage() {
     </div>
   );
 }
+
