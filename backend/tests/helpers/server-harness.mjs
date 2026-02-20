@@ -26,6 +26,7 @@ export async function startTestServer(options = {}) {
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_ANON_KEY: "smoke-anon-key",
       SUPABASE_SERVICE_ROLE_KEY: "smoke-service-role-key",
+      OPENROUTER_API_KEY: "",
       AUTO_ESCALATION_ENABLED: "false",
       AUTO_REMINDERS_ENABLED: "false",
       AUTO_REPORT_DELIVERY_ENABLED: "false",

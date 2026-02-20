@@ -561,6 +561,25 @@ export const backendApi = {
       model: string;
     }>("/api/kb/consult", { method: "POST", body: JSON.stringify(input) }),
 
+  agentChat: (input: {
+    question: string;
+    page: { path: string; title: string };
+    context: Record<string, unknown>;
+    history?: Array<{ role: "user" | "assistant"; content: string }>;
+  }) =>
+    apiRequest<{
+      answer: string;
+      sources: Array<{
+        articleId: number;
+        chunkId: number;
+        title: string;
+        category: string;
+        similarity: number;
+        excerpt: string;
+      }>;
+      model: string;
+    }>("/api/agent/chat", { method: "POST", body: JSON.stringify(input) }),
+
   createCourse: (input: {
     title: string;
     category: string;

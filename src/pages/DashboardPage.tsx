@@ -11,12 +11,16 @@ import {
   Sparkles,
   Clock,
   TrendingUp,
+  Target,
+  CheckCircle2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
 import { Badge } from "../components/ui/Badge";
 import { usePortalData } from "../hooks/usePortalData";
+import { useAuth } from "../contexts/useAuth";
+import { buildEmployeeAgentDigest } from "../lib/employeeAgent";
 
 function stripNewsImageTokens(text: string) {
   return text.replace(/\{\{news-image:\d+\}\}/g, " ").replace(/\s+/g, " ").trim();
@@ -24,9 +28,11 @@ function stripNewsImageTokens(text: string) {
 
 export function DashboardPage() {
   const { data } = usePortalData();
-  if (!data) {
+  const { user } = useAuth();
+  if (!data || !user) {
     return null;
   }
+  const digest = buildEmployeeAgentDigest(data, user);
 
   const totalTasks = data.tasks.length;
   const overdueTasks = data.tasks.filter((task) => task.status === "overdue").length;
@@ -38,35 +44,62 @@ export function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {/* Welcome banner */}
+      {/* Agent banner */}
       <Card className="overflow-hidden border-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 p-6 text-white shadow-xl shadow-indigo-200/50">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
-              <h2 className="text-lg font-semibold">Добро пожаловать в МФО Портал!</h2>
+              <h2 className="text-lg font-semibold">{digest.greeting}</h2>
             </div>
             <p className="mt-2 max-w-xl text-sm text-indigo-100">
-              Новичок в системе? Пройдите короткое обучение, чтобы узнать о всех возможностях портала.
+              {digest.focusLine}
             </p>
-            <Link
-              to="/system-guide"
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
-            >
-              Начать обучение
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                to="/tasks"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
+              >
+                Мои задачи
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                to="/lms"
+                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/25"
+              >
+                Прогресс обучения
+                <GraduationCap className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="mt-5 grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+              {digest.todayTasks.length > 0 ? (
+                digest.todayTasks.map((task) => (
+                  <div key={task.id} className="rounded-lg bg-white/10 px-3 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="line-clamp-2 text-indigo-50">{task.title}</p>
+                      <span className="rounded bg-white/20 px-2 py-0.5 text-xs uppercase tracking-wide">
+                        {task.priority === "high" ? "high" : task.priority === "medium" ? "mid" : "low"}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg bg-white/10 px-3 py-2 text-indigo-50">
+                  На сегодня нет активных задач. Можно взять новую.
+                </div>
+              )}
+            </div>
           </div>
           <div className="hidden lg:block">
             <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <GraduationCap className="h-12 w-12 text-white" />
+              <Target className="h-12 w-12 text-white" />
             </div>
           </div>
         </div>
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <StatCard
           icon={Building2}
           label="Офисов в сети"
@@ -94,6 +127,20 @@ export function DashboardPage() {
           value={pendingDocs}
           variant="purple"
           sub="документов"
+        />
+        <StatCard
+          icon={GraduationCap}
+          label="LMS прогресс"
+          value={`${digest.lms.completed}/${digest.lms.assigned}`}
+          variant="indigo"
+          sub={`${digest.lms.completionPercent}% завершено`}
+        />
+        <StatCard
+          icon={CheckCircle2}
+          label="Проекты"
+          value={`${digest.projects.completed}/${digest.projects.total}`}
+          variant="emerald"
+          sub={`${digest.projects.completionPercent}% реализации`}
         />
       </div>
 
@@ -237,6 +284,34 @@ export function DashboardPage() {
                 </div>
                 <p className="text-sm text-gray-500">Просроченных задач нет!</p>
               </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Learning focus */}
+        <Card className="overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
+              <GraduationCap className="h-4 w-4 text-indigo-600" />
+            </div>
+            <h2 className="font-semibold text-gray-900">Фокус по обучению</h2>
+          </div>
+          <div className="space-y-3 p-4">
+            <p className="text-sm text-gray-600">
+              Назначено курсов: <span className="font-semibold text-gray-900">{digest.lms.assigned}</span>, завершено:{" "}
+              <span className="font-semibold text-gray-900">{digest.lms.completed}</span> (
+              {digest.lms.completionPercent}%)
+            </p>
+            {digest.lms.nextCourses.length > 0 ? (
+              <div className="space-y-2">
+                {digest.lms.nextCourses.map((courseTitle) => (
+                  <div key={courseTitle} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                    {courseTitle}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-emerald-600">Все назначенные курсы закрыты. Отличная работа!</p>
             )}
           </div>
         </Card>

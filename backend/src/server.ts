@@ -4955,6 +4955,94 @@ async function completeKbConsultation(input: { question: string; matches: KbVect
   return text;
 }
 
+async function findKbMatchesForQuestion(input: { question: string; topK: number; minSimilarity: number }) {
+  const vector = await createEmbeddingWithOpenRouter(input.question);
+  const queryEmbeddingText = toPgVectorLiteral(vector);
+  const { data, error } = await supabaseAdmin.rpc("match_kb_article_chunks", {
+    query_embedding_text: queryEmbeddingText,
+    match_count: input.topK,
+    min_similarity: input.minSimilarity,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return (data ?? []) as KbVectorMatchRow[];
+}
+
+async function completeAgentChat(input: {
+  question: string;
+  page: { path: string; title: string };
+  context: Record<string, unknown>;
+  history: Array<{ role: "user" | "assistant"; content: string }>;
+  kbMatches: KbVectorMatchRow[];
+}) {
+  const compactContext = JSON.stringify(
+    {
+      page: input.page,
+      context: input.context,
+    },
+    null,
+    2,
+  ).slice(0, 8000);
+
+  const kbContext = input.kbMatches
+    .map(
+      (item, index) =>
+        `[${index + 1}] ${item.title} (${item.category}), relevance=${item.similarity.toFixed(3)}\n${item.content_chunk}`,
+    )
+    .join("\n\n");
+
+  const messages: OpenRouterChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "Ты ассистент сотрудника МФО. Отвечай по-русски, доброжелательно и конкретно. Используй контекст страницы/пользователя и задачи из данных. Если не хватает данных, скажи это явно и предложи следующий шаг. Не выдумывай факты.",
+    },
+    {
+      role: "system",
+      content: `Контекст с клиента:\n${compactContext}`,
+    },
+    ...(kbContext
+      ? [
+          {
+            role: "system" as const,
+            content: `Фрагменты базы знаний:\n${kbContext}`,
+          },
+        ]
+      : []),
+    ...input.history.slice(-8).map((item) => ({
+      role: item.role,
+      content: item.content.slice(0, 2000),
+    })),
+    {
+      role: "user",
+      content: input.question,
+    },
+  ];
+
+  const response = await fetch(`${normalizeOpenRouterBaseUrl()}/chat/completions`, {
+    method: "POST",
+    headers: getOpenRouterHeaders(),
+    body: JSON.stringify({
+      model: env.OPENROUTER_CHAT_MODEL,
+      messages,
+      temperature: 0.3,
+    }),
+  });
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`OpenRouter chat request failed (${response.status}): ${details}`);
+  }
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const text = extractChatMessageContent(payload.choices?.[0]?.message?.content);
+  if (!text) {
+    throw new Error("OpenRouter chat response is empty");
+  }
+  return text;
+}
+
 const createKbArticleSchema = z.object({
   title: z.string().min(2),
   category: z.string().min(2),
@@ -5208,18 +5296,11 @@ app.post("/api/kb/consult", requireAuth(), async (req, res) => {
   }
 
   try {
-    const vector = await createEmbeddingWithOpenRouter(parsed.data.question);
-    const queryEmbeddingText = toPgVectorLiteral(vector);
-    const { data, error } = await supabaseAdmin.rpc("match_kb_article_chunks", {
-      query_embedding_text: queryEmbeddingText,
-      match_count: parsed.data.topK,
-      min_similarity: parsed.data.minSimilarity,
+    const matches = await findKbMatchesForQuestion({
+      question: parsed.data.question,
+      topK: parsed.data.topK,
+      minSimilarity: parsed.data.minSimilarity,
     });
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    const matches = (data ?? []) as KbVectorMatchRow[];
     if (matches.length === 0) {
       return res.json({
         answer:
@@ -5252,6 +5333,66 @@ app.post("/api/kb/consult", requireAuth(), async (req, res) => {
   } catch (error) {
     return res.status(400).json({
       error: error instanceof Error ? error.message : "Failed to consult KB",
+    });
+  }
+});
+
+const agentChatSchema = z.object({
+  question: z.string().trim().min(2).max(2000),
+  page: z.object({
+    path: z.string().trim().min(1).max(300),
+    title: z.string().trim().min(1).max(200),
+  }),
+  context: z.record(z.string(), z.unknown()).default({}),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().trim().min(1).max(4000),
+      }),
+    )
+    .max(20)
+    .default([]),
+});
+
+app.post("/api/agent/chat", requireAuth(), async (req, res) => {
+  const parsed = agentChatSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  if (!env.OPENROUTER_API_KEY) {
+    return res.status(503).json({ error: "OPENROUTER_API_KEY is not configured" });
+  }
+
+  try {
+    const matches = await findKbMatchesForQuestion({
+      question: parsed.data.question,
+      topK: 4,
+      minSimilarity: Math.max(0.35, env.KB_VECTOR_MIN_SIMILARITY_DEFAULT - 0.1),
+    });
+    const answer = await completeAgentChat({
+      question: parsed.data.question,
+      page: parsed.data.page,
+      context: parsed.data.context,
+      history: parsed.data.history,
+      kbMatches: matches,
+    });
+
+    return res.json({
+      answer,
+      sources: matches.map((item) => ({
+        articleId: Number(item.article_id),
+        chunkId: Number(item.chunk_id),
+        title: item.title,
+        category: item.category,
+        similarity: Number(item.similarity),
+        excerpt: item.content_chunk.slice(0, 220),
+      })),
+      model: env.OPENROUTER_CHAT_MODEL,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to get agent response",
     });
   }
 });

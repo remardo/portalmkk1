@@ -85,6 +85,47 @@ test("POST /api/kb/consult returns 503 when OpenRouter is not configured", async
   }
 });
 
+test("POST /api/agent/chat returns 401 without token", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/agent/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: "Что мне делать сегодня?",
+        page: { path: "/", title: "Дашборд" },
+        context: { userRole: "operator" },
+      }),
+    });
+    assert.equal(response.status, 401);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("POST /api/agent/chat returns 503 when OpenRouter is not configured", async () => {
+  const server = await startTestServer();
+  try {
+    const response = await fetch(`${server.baseUrl}/api/agent/chat`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${server.smokeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        question: "Что мне делать сегодня?",
+        page: { path: "/", title: "Дашборд" },
+        context: { userRole: "admin" },
+      }),
+    });
+    assert.equal(response.status, 503);
+    const data = await response.json();
+    assert.match(String(data?.error ?? ""), /OPENROUTER_API_KEY/i);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("POST /api/ops/reminders/run?dryRun=true returns dry-run payload for smoke token", async () => {
   const server = await startTestServer();
   try {

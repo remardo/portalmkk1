@@ -25,6 +25,7 @@ import { RoleLabels } from "../../domain/models";
 import { useAuth } from "../../contexts/useAuth";
 import { canAccessAdmin, canAccessReports, canManageLMS } from "../../lib/permissions";
 import { usePortalData } from "../../hooks/usePortalData";
+import { AgentChatWidget } from "../assistant/AgentChatWidget";
 
 export interface LayoutOutletContext {
   searchQuery: string;
@@ -264,6 +265,7 @@ export function AppLayout() {
           <Outlet context={outletContext} />
         </div>
       </main>
+      <AgentChatWidget />
     </div>
   );
 }
