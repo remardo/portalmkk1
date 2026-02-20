@@ -511,8 +511,8 @@ export function LMSBuilderPage() {
     },
   });
 
-  const courses = coursesQuery.data ?? [];
   const filteredCourses = useMemo(() => {
+    const courses = coursesQuery.data ?? [];
     return courses
       .filter((course) => {
         if (courseStatusFilter !== "all" && course.status !== courseStatusFilter) return false;
@@ -521,7 +521,7 @@ export function LMSBuilderPage() {
         return course.title.toLowerCase().includes(q) || (course.description ?? "").toLowerCase().includes(q);
       })
       .sort((a, b) => Number(b.id) - Number(a.id));
-  }, [courses, courseSearch, courseStatusFilter]);
+  }, [coursesQuery.data, courseSearch, courseStatusFilter]);
 
   const sections = courseTreeQuery.data?.sections ?? [];
   const subsectionCount = sections.reduce((sum, section) => sum + section.subsections.length, 0);

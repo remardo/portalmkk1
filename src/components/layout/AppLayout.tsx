@@ -12,7 +12,6 @@ import {
   X,
   ChevronDown,
   Shield,
-  Siren,
   ChartNoAxesColumn,
   Settings2,
   Search,
@@ -46,8 +45,6 @@ const baseNavItems: NavItem[] = [
   { to: "/docs", label: "Документы", icon: FileText },
   { to: "/tasks", label: "Задачи", icon: ListTodo },
   { to: "/shop", label: "Магазин", icon: ShoppingCart },
-  { to: "/search", label: "Поиск", icon: Search },
-  { to: "/ops", label: "Оперцентр", icon: Siren },
   { to: "/org", label: "Оргструктура", icon: Building2 },
   { to: "/ratings", label: "Рейтинги", icon: Trophy },
 ];

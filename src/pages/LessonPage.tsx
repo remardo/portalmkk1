@@ -12,7 +12,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { backendApi } from "../services/apiClient";
@@ -162,7 +162,7 @@ function QuizPlayer({
   const [showResults, setShowResults] = useState(false);
   const [submittedResults, setSubmittedResults] = useState<QuizAttempt | null>(null);
 
-  const questions = quiz.questions || [];
+  const questions = useMemo(() => quiz.questions ?? [], [quiz.questions]);
   const currentQuestion = questions[currentQuestionIndex];
 
   // Initialize answers from existing attempt or create new

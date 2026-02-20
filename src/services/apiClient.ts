@@ -540,6 +540,27 @@ export const backendApi = {
   restoreKbArticleVersion: (id: number, version: number) =>
     apiRequest(`/api/kb-articles/${id}/restore/${version}`, { method: "POST" }),
 
+  reindexKbArticle: (id: number) =>
+    apiRequest<{ ok: boolean; articleId: number; chunksIndexed: number }>(`/api/kb-articles/${id}/reindex`, {
+      method: "POST",
+    }),
+
+  consultKb: (input: { question: string; topK?: number; minSimilarity?: number }) =>
+    apiRequest<{
+      answer: string;
+      sources: Array<{
+        articleId: number;
+        chunkId: number;
+        title: string;
+        category: string;
+        similarity: number;
+        excerpt: string;
+      }>;
+      topK: number;
+      minSimilarity?: number;
+      model: string;
+    }>("/api/kb/consult", { method: "POST", body: JSON.stringify(input) }),
+
   createCourse: (input: {
     title: string;
     category: string;

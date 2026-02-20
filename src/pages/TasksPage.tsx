@@ -90,7 +90,7 @@ export function TasksPage() {
       ? data.tasks.filter((task) => String(task.assigneeId) === String(user.id))
       : data.tasks;
     return roleScopedTasks.filter((task) => !statusFilter || task.status === statusFilter);
-  }, [data, managedOfficeIds, statusFilter, user]);
+  }, [data, statusFilter, user]);
 
   if (!data || !user) {
     return null;

@@ -12,6 +12,15 @@ const envSchema = z.object({
   SUPABASE_URL: z.url(),
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_BASE_URL: z.string().url().default("https://openrouter.ai/api/v1"),
+  OPENROUTER_CHAT_MODEL: z.string().default("openai/gpt-4o-mini"),
+  OPENROUTER_EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
+  OPENROUTER_SITE_URL: z.string().url().optional(),
+  OPENROUTER_APP_NAME: z.string().optional(),
+  KB_EMBEDDING_DIMENSIONS: z.coerce.number().int().min(64).max(8192).default(1536),
+  KB_VECTOR_TOP_K_DEFAULT: z.coerce.number().int().min(1).max(20).default(6),
+  KB_VECTOR_MIN_SIMILARITY_DEFAULT: z.coerce.number().min(0).max(1).default(0.55),
   AUTO_ESCALATION_ENABLED: z
     .string()
     .optional()
@@ -4717,6 +4726,235 @@ app.get("/api/documents/:id/file", requireAuth(), async (req, res) => {
   return res.send(binary);
 });
 
+type KbVectorMatchRow = {
+  article_id: number;
+  chunk_id: number;
+  title: string;
+  category: string;
+  content_chunk: string;
+  similarity: number;
+};
+
+type OpenRouterChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+function getOpenRouterHeaders() {
+  if (!env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is not configured");
+  }
+  return {
+    Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+    "Content-Type": "application/json",
+    ...(env.OPENROUTER_SITE_URL ? { "HTTP-Referer": env.OPENROUTER_SITE_URL } : {}),
+    ...(env.OPENROUTER_APP_NAME ? { "X-Title": env.OPENROUTER_APP_NAME } : {}),
+  };
+}
+
+function normalizeOpenRouterBaseUrl() {
+  return env.OPENROUTER_BASE_URL.replace(/\/$/, "");
+}
+
+function splitTextToKbChunks(text: string, maxChars = 900, overlapChars = 180) {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [];
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const chunks: string[] = [];
+
+  for (const paragraph of paragraphs) {
+    if (paragraph.length <= maxChars) {
+      chunks.push(paragraph);
+      continue;
+    }
+    const sentences = paragraph
+      .split(/(?<=[.!?])\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    let current = "";
+    for (const sentence of sentences) {
+      const candidate = current ? `${current} ${sentence}` : sentence;
+      if (candidate.length <= maxChars) {
+        current = candidate;
+        continue;
+      }
+      if (current) {
+        chunks.push(current);
+      }
+      current = sentence.length <= maxChars ? sentence : sentence.slice(0, maxChars);
+    }
+    if (current) {
+      chunks.push(current);
+    }
+  }
+
+  if (chunks.length <= 1 || overlapChars <= 0) {
+    return chunks;
+  }
+
+  const withOverlap: string[] = [];
+  for (let i = 0; i < chunks.length; i += 1) {
+    const prevTail = i > 0 ? chunks[i - 1].slice(-overlapChars).trim() : "";
+    const chunk = chunks[i].trim();
+    withOverlap.push(prevTail ? `${prevTail}\n${chunk}` : chunk);
+  }
+  return withOverlap;
+}
+
+function toPgVectorLiteral(values: number[]) {
+  return `[${values.map((value) => Number(value).toFixed(8)).join(",")}]`;
+}
+
+function extractChatMessageContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (!part || typeof part !== "object") return "";
+        const maybeText = "text" in part ? (part as { text?: unknown }).text : "";
+        return typeof maybeText === "string" ? maybeText : "";
+      })
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
+async function createEmbeddingWithOpenRouter(input: string) {
+  const response = await fetch(`${normalizeOpenRouterBaseUrl()}/embeddings`, {
+    method: "POST",
+    headers: getOpenRouterHeaders(),
+    body: JSON.stringify({
+      model: env.OPENROUTER_EMBEDDING_MODEL,
+      input,
+    }),
+  });
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`OpenRouter embeddings request failed (${response.status}): ${details}`);
+  }
+  const payload = (await response.json()) as { data?: Array<{ embedding?: number[] }> };
+  const vector = payload.data?.[0]?.embedding;
+  if (!Array.isArray(vector) || vector.length === 0) {
+    throw new Error("OpenRouter embeddings response is missing embedding vector");
+  }
+  if (vector.length !== env.KB_EMBEDDING_DIMENSIONS) {
+    throw new Error(
+      `Embedding dimensions mismatch: got ${vector.length}, expected ${env.KB_EMBEDDING_DIMENSIONS}`,
+    );
+  }
+  return vector;
+}
+
+async function indexKbArticleEmbeddings(articleId: number) {
+  const { data: article, error: articleError } = await supabaseAdmin
+    .from("kb_articles")
+    .select("id,title,category,content,status")
+    .eq("id", articleId)
+    .single();
+  if (articleError || !article) {
+    throw new Error(articleError?.message ?? "KB article not found");
+  }
+
+  await supabaseAdmin.from("kb_article_chunks").delete().eq("article_id", articleId);
+
+  const baseText = `# ${article.title}\nКатегория: ${article.category}\n\n${article.content}`;
+  const chunks = splitTextToKbChunks(baseText);
+  if (chunks.length === 0) {
+    return { articleId, chunksIndexed: 0 };
+  }
+
+  const rows: Array<{
+    article_id: number;
+    chunk_no: number;
+    content_chunk: string;
+    embedding: string;
+    embedding_model: string;
+  }> = [];
+
+  for (let i = 0; i < chunks.length; i += 1) {
+    const chunk = chunks[i]!;
+    const embedding = await createEmbeddingWithOpenRouter(chunk);
+    rows.push({
+      article_id: articleId,
+      chunk_no: i + 1,
+      content_chunk: chunk,
+      embedding: toPgVectorLiteral(embedding),
+      embedding_model: env.OPENROUTER_EMBEDDING_MODEL,
+    });
+  }
+
+  const { error: insertError } = await supabaseAdmin.from("kb_article_chunks").insert(rows);
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+  return { articleId, chunksIndexed: rows.length };
+}
+
+async function tryIndexKbArticleEmbeddings(articleId: number) {
+  if (!env.OPENROUTER_API_KEY) {
+    return;
+  }
+  try {
+    await indexKbArticleEmbeddings(articleId);
+  } catch (error) {
+    console.error(
+      `[kb-vector] failed to index article ${articleId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
+async function completeKbConsultation(input: { question: string; matches: KbVectorMatchRow[] }) {
+  const context = input.matches
+    .map(
+      (item, index) =>
+        `[${index + 1}] ${item.title} (${item.category}), relevance=${item.similarity.toFixed(3)}\n${item.content_chunk}`,
+    )
+    .join("\n\n");
+
+  const messages: OpenRouterChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "Ты корпоративный консультант МФО. Отвечай только на базе переданного контекста. Если данных недостаточно, так и скажи и предложи уточнить вопрос. Ответ дай на русском языке, структурированно и кратко.",
+    },
+    {
+      role: "user",
+      content: `Вопрос: ${input.question}\n\nКонтекст базы знаний:\n${context}`,
+    },
+  ];
+
+  const response = await fetch(`${normalizeOpenRouterBaseUrl()}/chat/completions`, {
+    method: "POST",
+    headers: getOpenRouterHeaders(),
+    body: JSON.stringify({
+      model: env.OPENROUTER_CHAT_MODEL,
+      messages,
+      temperature: 0.2,
+    }),
+  });
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`OpenRouter chat request failed (${response.status}): ${details}`);
+  }
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const text = extractChatMessageContent(payload.choices?.[0]?.message?.content);
+  if (!text) {
+    throw new Error("OpenRouter chat response is empty");
+  }
+  return text;
+}
+
 const createKbArticleSchema = z.object({
   title: z.string().min(2),
   category: z.string().min(2),
@@ -4765,6 +5003,8 @@ app.post("/api/kb-articles", requireAuth(), requireRole(["director", "admin"]), 
     entityId: String(data.id),
     payload,
   });
+
+  await tryIndexKbArticleEmbeddings(Number(data.id));
 
   return res.status(201).json(data);
 });
@@ -4837,6 +5077,8 @@ app.patch("/api/kb-articles/:id", requireAuth(), requireRole(["director", "admin
     entityId: String(articleId),
     payload: updatePayload,
   });
+
+  await tryIndexKbArticleEmbeddings(articleId);
 
   return res.json(data);
 });
@@ -4926,7 +5168,92 @@ app.post("/api/kb-articles/:id/restore/:version", requireAuth(), requireRole(["d
     payload: { restoredVersion: version, nextVersion },
   });
 
+  await tryIndexKbArticleEmbeddings(articleId);
+
   return res.json(data);
+});
+
+app.post("/api/kb-articles/:id/reindex", requireAuth(), requireRole(["director", "admin"]), async (req, res) => {
+  if (!env.OPENROUTER_API_KEY) {
+    return res.status(503).json({ error: "OPENROUTER_API_KEY is not configured" });
+  }
+  const articleId = Number(req.params.id);
+  if (Number.isNaN(articleId)) {
+    return res.status(400).json({ error: "Invalid article id" });
+  }
+
+  try {
+    const result = await indexKbArticleEmbeddings(articleId);
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to reindex article",
+    });
+  }
+});
+
+const kbConsultSchema = z.object({
+  question: z.string().trim().min(5).max(1000),
+  topK: z.number().int().min(1).max(12).default(env.KB_VECTOR_TOP_K_DEFAULT),
+  minSimilarity: z.number().min(0).max(1).default(env.KB_VECTOR_MIN_SIMILARITY_DEFAULT),
+});
+
+app.post("/api/kb/consult", requireAuth(), async (req, res) => {
+  const parsed = kbConsultSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  if (!env.OPENROUTER_API_KEY) {
+    return res.status(503).json({ error: "OPENROUTER_API_KEY is not configured" });
+  }
+
+  try {
+    const vector = await createEmbeddingWithOpenRouter(parsed.data.question);
+    const queryEmbeddingText = toPgVectorLiteral(vector);
+    const { data, error } = await supabaseAdmin.rpc("match_kb_article_chunks", {
+      query_embedding_text: queryEmbeddingText,
+      match_count: parsed.data.topK,
+      min_similarity: parsed.data.minSimilarity,
+    });
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    const matches = (data ?? []) as KbVectorMatchRow[];
+    if (matches.length === 0) {
+      return res.json({
+        answer:
+          "По текущей базе знаний релевантные материалы не найдены. Уточните вопрос или обновите статьи для индексации.",
+        sources: [],
+        topK: parsed.data.topK,
+        model: env.OPENROUTER_CHAT_MODEL,
+      });
+    }
+
+    const answer = await completeKbConsultation({
+      question: parsed.data.question,
+      matches,
+    });
+
+    return res.json({
+      answer,
+      sources: matches.map((item) => ({
+        articleId: Number(item.article_id),
+        chunkId: Number(item.chunk_id),
+        title: item.title,
+        category: item.category,
+        similarity: Number(item.similarity),
+        excerpt: item.content_chunk.slice(0, 280),
+      })),
+      topK: parsed.data.topK,
+      minSimilarity: parsed.data.minSimilarity,
+      model: env.OPENROUTER_CHAT_MODEL,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to consult KB",
+    });
+  }
 });
 
 const createCourseSchema = z.object({

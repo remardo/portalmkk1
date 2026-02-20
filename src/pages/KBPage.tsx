@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../contexts/useAuth";
 import { canManageKB } from "../lib/permissions";
 import { useState } from "react";
+import { backendApi } from "../services/apiClient";
 
 export function KBPage() {
   const { data } = usePortalData();
@@ -30,6 +31,20 @@ export function KBPage() {
   const [editCategory, setEditCategory] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editStatus, setEditStatus] = useState<"draft" | "review" | "published" | "archived">("published");
+  const [consultQuestion, setConsultQuestion] = useState("");
+  const [consultAnswer, setConsultAnswer] = useState("");
+  const [consultSources, setConsultSources] = useState<
+    Array<{
+      articleId: number;
+      chunkId: number;
+      title: string;
+      category: string;
+      similarity: number;
+      excerpt: string;
+    }>
+  >([]);
+  const [consultLoading, setConsultLoading] = useState(false);
+  const [consultError, setConsultError] = useState("");
 
   if (!data) {
     return null;
@@ -128,6 +143,72 @@ export function KBPage() {
               )}
             </div>
           ) : null}
+        </Card>
+        <Card className="p-4">
+          <h3 className="mb-2 font-semibold">Консультация по базе знаний</h3>
+          <div className="space-y-2">
+            <textarea
+              rows={3}
+              value={consultQuestion}
+              onChange={(event) => setConsultQuestion(event.target.value)}
+              placeholder="Например: Какие обязательные шаги KYC перед выдачей займа?"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  const question = consultQuestion.trim();
+                  if (!question) return;
+                  setConsultLoading(true);
+                  setConsultError("");
+                  try {
+                    const result = await backendApi.consultKb({ question, topK: 6, minSimilarity: 0.55 });
+                    setConsultAnswer(result.answer);
+                    setConsultSources(result.sources);
+                  } catch (error) {
+                    setConsultAnswer("");
+                    setConsultSources([]);
+                    setConsultError(error instanceof Error ? error.message : "Ошибка консультации");
+                  } finally {
+                    setConsultLoading(false);
+                  }
+                }}
+                disabled={consultLoading || !consultQuestion.trim()}
+                className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {consultLoading ? "Обработка..." : "Спросить консультанта"}
+              </button>
+              {canManage ? (
+                <button
+                  onClick={async () => {
+                    try {
+                      await backendApi.reindexKbArticle(article.id);
+                    } catch {
+                      // Ignore for now, user still can use consult without explicit reindex action.
+                    }
+                  }}
+                  className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                  Реиндексировать статью
+                </button>
+              ) : null}
+            </div>
+            {consultError ? <p className="text-sm text-red-600">{consultError}</p> : null}
+            {consultAnswer ? <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">{consultAnswer}</p> : null}
+            {consultSources.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Источники</p>
+                {consultSources.map((source) => (
+                  <div key={`${source.chunkId}`} className="rounded border border-gray-200 bg-gray-50 p-2">
+                    <p className="text-xs font-medium text-gray-700">
+                      {source.title} • {source.category} • релевантность {source.similarity.toFixed(3)}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-600">{source.excerpt}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </Card>
 
         <Card className="p-4">

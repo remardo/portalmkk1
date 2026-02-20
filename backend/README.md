@@ -4,6 +4,7 @@
 - Auth через Supabase (`/auth/sign-up`, `/auth/sign-in`, `/auth/refresh`, `/auth/me`)
 - Встроенный rate limit для `/api/*` и усиленные лимиты для auth-эндпоинтов
 - CRUD API для `news`, `tasks`, `documents`
+- RAG-консультации по базе знаний (`/api/kb/consult`) через OpenRouter + векторный поиск
 - Endpoint `/api/bootstrap` для загрузки набора данных
 - Admin API (`/api/admin/users`) для создания и управления пользователями
 - LMS Builder версии: автоснимки и откат курса
@@ -113,6 +114,15 @@ npm run dev
    - `SUPABASE_URL=...`
    - `SUPABASE_ANON_KEY=...`
    - `SUPABASE_SERVICE_ROLE_KEY=...`
+   - `OPENROUTER_API_KEY=...`
+   - `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`
+   - `OPENROUTER_CHAT_MODEL=openai/gpt-4o-mini`
+   - `OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small`
+   - `OPENROUTER_SITE_URL=https://<frontend-domain>` (опционально)
+   - `OPENROUTER_APP_NAME=Portal MKK` (опционально)
+   - `KB_EMBEDDING_DIMENSIONS=1536`
+   - `KB_VECTOR_TOP_K_DEFAULT=6`
+   - `KB_VECTOR_MIN_SIMILARITY_DEFAULT=0.55`
    - `AUTO_ESCALATION_ENABLED=false`
    - `AUTO_ESCALATION_INTERVAL_MINUTES=60`
    - `AUTO_ESCALATION_SYSTEM_ACTOR_USER_ID=<uuid профиля админа, опционально>`
@@ -168,6 +178,8 @@ ADMIN_EMAIL=admin@company.com ADMIN_PASSWORD='<strong-password>' ADMIN_FULL_NAME
 - `POST /api/documents/:id/submit` / `POST /api/documents/:id/approve` / `POST /api/documents/:id/reject` / `GET /api/documents/:id/history`
 - `GET /api/notifications` / `POST /api/notifications/:id/read` / `POST /api/notifications/read-all`
 - `POST /api/kb-articles` / `PATCH /api/kb-articles/:id` / `GET /api/kb-articles/:id/versions` / `POST /api/kb-articles/:id/restore/:version`
+- `POST /api/kb-articles/:id/reindex` (manual reindex embeddings)
+- `POST /api/kb/consult` (RAG консультация по KB)
 - `POST /api/courses` / `PATCH /api/courses/:id`
 - `POST /api/courses/:id/assignments` / `GET /api/courses/:id/assignments`
 - `POST /api/courses/:id/attempts` / `GET /api/courses/:id/attempts`
