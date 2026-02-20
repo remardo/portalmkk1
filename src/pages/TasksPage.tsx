@@ -107,8 +107,23 @@ export function TasksPage() {
         : data.offices
       : data.offices;
 
+  const headquartersOfficeIds = new Set(
+    data.offices
+      .filter((office) => {
+        const head = data.users.find((u) => String(u.id) === String(office.headId));
+        return head?.role === "director";
+      })
+      .map((office) => Number(office.id)),
+  );
+
   const availableAssignees = data.users.filter((u) => {
-    if (u.role === "admin" || u.role === "director") {
+    if (u.role === "admin") {
+      return false;
+    }
+    if (
+      u.role === "director"
+      && !(user.role === "director" && headquartersOfficeIds.has(Number(u.officeId)))
+    ) {
       return false;
     }
     if (user.role === "office_head") {

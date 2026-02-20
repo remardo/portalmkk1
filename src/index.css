@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+@layer base {
+  body {
+    background:
+      radial-gradient(circle at 0% 0%, #ecfeff 0%, transparent 35%),
+      radial-gradient(circle at 100% 0%, #eef2ff 0%, transparent 30%),
+      #f8fafc;
+    color: #0f172a;
+  }
+
+  input,
+  select,
+  textarea {
+    transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+  }
+}

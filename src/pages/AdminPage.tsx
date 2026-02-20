@@ -1,3 +1,4 @@
+import { Building2, ClipboardList, ScrollText, Users } from "lucide-react";
 import { useState } from "react";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -122,6 +123,8 @@ export function AdminPage() {
     Record<string, { fullName: string; email: string; role: Role; officeId: string; phone: string; position: string }>
   >({});
   const [userPasswordDrafts, setUserPasswordDrafts] = useState<Record<string, string>>({});
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState<Role | "all">("all");
   const [officeDrafts, setOfficeDrafts] = useState<
     Record<number, { name: string; city: string; address: string; rating: string; headId: string }>
   >({});
@@ -260,6 +263,18 @@ export function AdminPage() {
     );
   }
 
+  function userHasUnsavedChanges(item: User) {
+    const draft = getUserDraft(item);
+    return (
+      draft.fullName !== item.name
+      || draft.email !== (item.email ?? "")
+      || draft.phone !== (item.phone ?? "")
+      || draft.position !== (item.position ?? "")
+      || draft.role !== item.role
+      || draft.officeId !== (item.officeId ? String(item.officeId) : "")
+    );
+  }
+
   function officeHasUnsavedChanges(item: Office) {
     const draft = getOfficeDraft(item);
     return (
@@ -272,6 +287,18 @@ export function AdminPage() {
   }
 
   const officeHeadCandidates = data.users.filter((employee) => employee.role === "office_head");
+  const filteredUsers = data.users.filter((item) => {
+    if (userRoleFilter !== "all" && item.role !== userRoleFilter) {
+      return false;
+    }
+    const query = userSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      item.name.toLowerCase().includes(query)
+      || (item.email ?? "").toLowerCase().includes(query)
+      || (item.position ?? "").toLowerCase().includes(query)
+    );
+  });
   const filteredOffices = data.offices.filter((office) => {
     const q = officeSearch.trim().toLowerCase();
     if (!q) return true;
@@ -297,40 +324,47 @@ export function AdminPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">Админка</h1>
-      <Card className="p-2">
+      <Card className="border border-gray-200 bg-gradient-to-r from-slate-50 via-white to-cyan-50 p-4">
+        <div className="mb-3">
+          <h1 className="text-2xl font-bold text-gray-900">Админка</h1>
+          <p className="mt-1 text-sm text-gray-600">Управление сотрудниками, офисами и служебными настройками</p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => switchTab("users")}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              activeTab === "users" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+              activeTab === "users" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
             }`}
           >
+            <Users className="h-4 w-4" />
             Пользователи ({data.users.length})
           </button>
           <button
             onClick={() => switchTab("offices")}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              activeTab === "offices" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+              activeTab === "offices" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
             }`}
           >
+            <Building2 className="h-4 w-4" />
             Офисы ({data.offices.length})
           </button>
           <button
             onClick={() => switchTab("other")}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              activeTab === "other" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+              activeTab === "other" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
             }`}
           >
+            <ScrollText className="h-4 w-4" />
             Другое (журнал)
           </button>
           {canViewShopOrders ? (
             <button
               onClick={() => switchTab("orders")}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-                activeTab === "orders" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                activeTab === "orders" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
               }`}
             >
+              <ClipboardList className="h-4 w-4" />
               Заказы магазина ({data.shopOrders.length})
             </button>
           ) : null}
@@ -350,32 +384,35 @@ export function AdminPage() {
       </div>
 
       {activeTab === "users" && canCreateUsers ? (
-      <Card className="p-4">
-        <h2 className="mb-3 font-semibold">Создать пользователя</h2>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+      <Card className="border border-gray-200 bg-gradient-to-r from-cyan-50 via-white to-teal-50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">Создать пользователя</h2>
+          <Badge className="bg-white text-gray-700">Шаг 1: регистрация</Badge>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           <input
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
             placeholder="ФИО"
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
           />
           <input
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="Email"
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
           />
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="Пароль"
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            placeholder="Пароль (мин. 8)"
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
           />
           <select
             value={role}
             onChange={(event) => setRole(event.target.value as Role)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
           >
             {createUserRoleOptions.map((item) => (
               <option key={item} value={item}>
@@ -387,7 +424,7 @@ export function AdminPage() {
             value={user.role === "office_head" ? String(user.officeId) : officeId}
             onChange={(event) => setOfficeId(event.target.value)}
             disabled={user.role === "office_head"}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 disabled:bg-gray-100"
           >
             {user.role === "office_head" ? null : <option value="">Без офиса</option>}
             {data.offices
@@ -398,50 +435,76 @@ export function AdminPage() {
               </option>
             ))}
           </select>
+          <button
+            onClick={async () => {
+              if (!email.trim() || !password.trim() || !fullName.trim()) {
+                showToast("error", "Заполните ФИО, email и пароль");
+                return;
+              }
+              if (password.trim().length < 8) {
+                showToast("error", "Пароль должен быть не короче 8 символов");
+                return;
+              }
+              try {
+                await createUser.mutateAsync({
+                  email: email.trim(),
+                  password: password.trim(),
+                  fullName: fullName.trim(),
+                  role,
+                  officeId: user.role === "office_head" ? user.officeId : (officeId ? Number(officeId) : null),
+                });
+                setEmail("");
+                setPassword("");
+                setFullName("");
+                setOfficeId("");
+                setRole("operator");
+                showToast("success", "Сотрудник создан");
+              } catch (error) {
+                showToast("error", extractErrorMessage(error));
+              }
+            }}
+            className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700 disabled:opacity-60"
+            disabled={createUser.isPending}
+          >
+            {createUser.isPending ? "Создание..." : "Создать пользователя"}
+          </button>
         </div>
-        <button
-          onClick={async () => {
-            if (!email.trim() || !password.trim() || !fullName.trim()) {
-              showToast("error", "Заполните ФИО, email и пароль");
-              return;
-            }
-            if (password.trim().length < 8) {
-              showToast("error", "Пароль должен быть не короче 8 символов");
-              return;
-            }
-            try {
-              await createUser.mutateAsync({
-                email: email.trim(),
-                password: password.trim(),
-                fullName: fullName.trim(),
-                role,
-                officeId: user.role === "office_head" ? user.officeId : (officeId ? Number(officeId) : null),
-              });
-              setEmail("");
-              setPassword("");
-              setFullName("");
-              setOfficeId("");
-              setRole("operator");
-              showToast("success", "Сотрудник создан");
-            } catch (error) {
-              showToast("error", extractErrorMessage(error));
-            }
-          }}
-          className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          Создать
-        </button>
       </Card>
       ) : null}
 
       {activeTab === "users" ? (
-      <div className="space-y-2">
-        {data.users.map((item) => (
-          <Card key={String(item.id)} className="p-4">
+      <div className="space-y-3">
+        <Card className="border border-gray-200 p-3">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            <input
+              value={userSearch}
+              onChange={(event) => setUserSearch(event.target.value)}
+              placeholder="Поиск: ФИО, email, должность"
+              className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 md:col-span-2"
+            />
+            <select
+              value={userRoleFilter}
+              onChange={(event) => setUserRoleFilter(event.target.value as Role | "all")}
+              className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+            >
+              <option value="all">Все роли</option>
+              {roleOptions.map((option) => (
+                <option key={option} value={option}>
+                  {RoleLabels[option]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </Card>
+        {filteredUsers.map((item) => (
+          <Card key={String(item.id)} className="rounded-2xl border border-gray-200 p-4 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">Сотрудник</span>
+              <span className="font-medium text-gray-900">{item.name}</span>
               <Badge className="bg-gray-100 text-gray-700">{item.email || "без email"}</Badge>
-              <Badge className="bg-indigo-100 text-indigo-700">{RoleLabels[item.role]}</Badge>
+              <Badge className="bg-cyan-100 text-cyan-700">{RoleLabels[item.role]}</Badge>
+              {userHasUnsavedChanges(item) ? (
+                <Badge className="bg-amber-100 text-amber-700">Есть изменения</Badge>
+              ) : null}
             </div>
             <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
               <input
@@ -453,7 +516,7 @@ export function AdminPage() {
                   }))
                 }
                 placeholder="ФИО"
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
               />
               <input
                 value={getUserDraft(item).email}
@@ -464,7 +527,7 @@ export function AdminPage() {
                   }))
                 }
                 placeholder="Логин (email)"
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
               />
               <input
                 value={getUserDraft(item).phone}
@@ -475,7 +538,7 @@ export function AdminPage() {
                   }))
                 }
                 placeholder="Телефон"
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
               />
               <input
                 value={getUserDraft(item).position}
@@ -486,7 +549,7 @@ export function AdminPage() {
                   }))
                 }
                 placeholder="Должность"
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
               />
               <select
                 value={getUserDraft(item).role}
@@ -496,7 +559,7 @@ export function AdminPage() {
                     [String(item.id)]: { ...getUserDraft(item), role: event.target.value as Role },
                   }))
                 }
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
               >
                 {roleOptions.map((option) => (
                   <option key={option} value={option}>
@@ -512,7 +575,7 @@ export function AdminPage() {
                     [String(item.id)]: { ...getUserDraft(item), officeId: event.target.value },
                   }))
                 }
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
               >
                 <option value="">Без офиса</option>
                 {data.offices.map((office) => (
@@ -540,7 +603,8 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+                className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-60"
+                disabled={updateUser.isPending}
               >
                 Сохранить сотрудника
               </button>
@@ -561,7 +625,7 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
               >
                 Сбросить логин
               </button>
@@ -572,7 +636,7 @@ export function AdminPage() {
                   setUserPasswordDrafts((prev) => ({ ...prev, [String(item.id)]: event.target.value }))
                 }
                 placeholder="Новый пароль (мин. 8)"
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm"
               />
               <button
                 onClick={async () => {
@@ -592,7 +656,7 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
               >
                 Сбросить пароль
               </button>
@@ -609,13 +673,16 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
               >
                 Сгенерировать пароль
               </button>
             </div>
           </Card>
         ))}
+        {filteredUsers.length === 0 ? (
+          <Card className="p-6 text-center text-sm text-gray-500">По текущим фильтрам сотрудники не найдены.</Card>
+        ) : null}
       </div>
       ) : null}
 

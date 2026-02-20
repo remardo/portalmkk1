@@ -75,7 +75,7 @@ export function AppLayout() {
   const unreadNotifications = data?.notifications?.filter((item) => !item.isRead).length ?? 0;
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-slate-50">
       {/* Mobile overlay */}
       {sidebarOpen ? (
         <div
@@ -205,7 +205,7 @@ export function AppLayout() {
       {/* Main content */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-gray-100 bg-white px-4 lg:px-6">
+        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-gray-100 bg-white/90 px-4 backdrop-blur-sm lg:px-6">
           <button
             onClick={() => setSidebarOpen(true)}
             className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
@@ -261,8 +261,11 @@ export function AppLayout() {
         </header>
 
         {/* Page content */}
-        <div className="flex-1 overflow-auto bg-gray-50 p-4 sm:p-6 lg:p-8">
-          <Outlet context={outletContext} />
+        <div className="relative flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.08),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(99,102,241,0.08),transparent_35%)]" />
+          <div className="relative mx-auto max-w-[1320px]">
+            <Outlet context={outletContext} />
+          </div>
         </div>
       </main>
       <AgentChatWidget />
