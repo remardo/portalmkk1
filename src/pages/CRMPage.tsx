@@ -12,6 +12,7 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
+import type { DragEvent } from "react";
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import { useAuth } from "../contexts/useAuth";
@@ -100,6 +101,10 @@ export function CRMPage() {
   const [query, setQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<number | undefined>(undefined);
   const [showCreatePanel, setShowCreatePanel] = useState(true);
+  const [draggingClientId, setDraggingClientId] = useState<number | null>(null);
+  const [draggingClientFromStatus, setDraggingClientFromStatus] = useState<CrmClientStatus | null>(null);
+  const [dropStatus, setDropStatus] = useState<CrmClientStatus | null>(null);
+  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<number, CrmClientStatus>>({});
 
   const clientsQuery = useCrmClientsQuery({
     q: query.trim() || undefined,
@@ -155,10 +160,12 @@ export function CRMPage() {
       do_not_call: [],
     };
     for (const client of clientsQuery.data?.items ?? []) {
-      map[client.status].push(client);
+      const optimisticStatus = optimisticStatuses[client.id];
+      const effectiveStatus = optimisticStatus ?? client.status;
+      map[effectiveStatus].push(client);
     }
     return map;
-  }, [clientsQuery.data?.items]);
+  }, [clientsQuery.data?.items, optimisticStatuses]);
 
   const selectedClient = clientQuery.data?.client;
 
@@ -190,7 +197,56 @@ export function CRMPage() {
   }
 
   async function handleStatusChange(clientId: number, status: CrmClientStatus) {
+    setOptimisticStatuses((prev) => ({ ...prev, [clientId]: status }));
     await updateClient.mutateAsync({ id: clientId, status });
+    setOptimisticStatuses((prev) => {
+      const next = { ...prev };
+      delete next[clientId];
+      return next;
+    });
+  }
+
+  function handleCardDragStart(event: DragEvent<HTMLButtonElement>, clientId: number, status: CrmClientStatus) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(clientId));
+    setDraggingClientId(clientId);
+    setDraggingClientFromStatus(status);
+  }
+
+  function handleCardDragEnd() {
+    setDraggingClientId(null);
+    setDraggingClientFromStatus(null);
+    setDropStatus(null);
+  }
+
+  function handleColumnDragOver(event: DragEvent<HTMLDivElement>, status: CrmClientStatus) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropStatus(status);
+  }
+
+  async function handleColumnDrop(event: DragEvent<HTMLDivElement>, status: CrmClientStatus) {
+    event.preventDefault();
+    const fallbackId = Number(event.dataTransfer.getData("text/plain"));
+    const clientId = draggingClientId ?? (Number.isFinite(fallbackId) ? fallbackId : null);
+    const fromStatus = draggingClientFromStatus;
+
+    setDropStatus(null);
+    setDraggingClientId(null);
+    setDraggingClientFromStatus(null);
+
+    if (!clientId || !fromStatus || fromStatus === status) {
+      return;
+    }
+    try {
+      await handleStatusChange(clientId, status);
+    } catch {
+      setOptimisticStatuses((prev) => {
+        const next = { ...prev };
+        delete next[clientId];
+        return next;
+      });
+    }
   }
 
   async function handleAddManualCall() {
@@ -312,7 +368,17 @@ export function CRMPage() {
         {statusColumns.map((column) => {
           const columnClients = grouped[column.value] ?? [];
           return (
-            <div key={column.value} className={`min-h-[62vh] rounded-2xl border bg-white ${column.borderClass}`}>
+            <div
+              key={column.value}
+              onDragOver={(event) => handleColumnDragOver(event, column.value)}
+              onDrop={(event) => {
+                void handleColumnDrop(event, column.value);
+              }}
+              onDragLeave={() => setDropStatus((prev) => (prev === column.value ? null : prev))}
+              className={`min-h-[62vh] rounded-2xl border bg-white transition ${
+                dropStatus === column.value ? "ring-2 ring-cyan-300" : ""
+              } ${column.borderClass}`}
+            >
               <div className="sticky top-0 z-10 rounded-t-2xl border-b border-slate-100 bg-white/95 px-3 py-3 backdrop-blur">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold text-slate-800">{column.label}</h3>
@@ -329,8 +395,13 @@ export function CRMPage() {
                     <button
                       key={client.id}
                       type="button"
+                      draggable
+                      onDragStart={(event) => handleCardDragStart(event, client.id, client.status)}
+                      onDragEnd={handleCardDragEnd}
                       onClick={() => setSelectedClientId(client.id)}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-cyan-300 hover:bg-white"
+                      className={`w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-cyan-300 hover:bg-white ${
+                        draggingClientId === client.id ? "opacity-60" : ""
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="line-clamp-2 text-sm font-semibold text-slate-800">{client.fullName}</p>
