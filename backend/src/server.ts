@@ -4210,15 +4210,17 @@ app.get("/api/crm/clients", requireAuth(), async (req, res) => {
   let query = supabaseAdmin
     .from("crm_clients")
     .select("*", { count: "exact" })
-    .order("updated_at", { ascending: false })
-    .range(parsed.data.offset, parsed.data.offset + parsed.data.limit - 1);
+    .order("updated_at", { ascending: false });
 
   if (parsed.data.status) query = query.eq("status", parsed.data.status);
   if (parsed.data.officeId) query = query.eq("office_id", parsed.data.officeId);
   if (parsed.data.assignedUserId) query = query.eq("assigned_user_id", parsed.data.assignedUserId);
-  if (parsed.data.q) {
-    const q = parsed.data.q.replace(/[%,]/g, " ").trim();
-    query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%,source.ilike.%${q}%`);
+
+  if (!parsed.data.q) {
+    query = query.range(parsed.data.offset, parsed.data.offset + parsed.data.limit - 1);
+  } else {
+    // Keep larger window for safe in-memory search with phone symbols like '+'.
+    query = query.range(0, 999);
   }
 
   const { data, error, count } = await query;
@@ -4226,7 +4228,19 @@ app.get("/api/crm/clients", requireAuth(), async (req, res) => {
     return res.status(400).json({ error: error.message });
   }
 
-  const rows = data ?? [];
+  let rows = data ?? [];
+  let filteredTotal = rows.length;
+  if (parsed.data.q) {
+    const needle = parsed.data.q.trim().toLowerCase();
+    rows = rows.filter((row) =>
+      String(row.full_name ?? "").toLowerCase().includes(needle)
+      || String(row.phone ?? "").toLowerCase().includes(needle)
+      || String(row.source ?? "").toLowerCase().includes(needle)
+      || normalizePhoneDigits(String(row.phone ?? "")).includes(normalizePhoneDigits(needle)));
+    filteredTotal = rows.length;
+    rows = rows.slice(parsed.data.offset, parsed.data.offset + parsed.data.limit);
+  }
+
   const allowedRows: typeof rows = [];
   for (const row of rows) {
     // Sequential by design to keep access checks simple and explicit.
@@ -4237,12 +4251,16 @@ app.get("/api/crm/clients", requireAuth(), async (req, res) => {
     }
   }
 
+  const effectiveTotal = parsed.data.q
+    ? filteredTotal
+    : (count ?? allowedRows.length);
+
   return res.json({
     items: allowedRows,
-    total: count ?? allowedRows.length,
+    total: effectiveTotal,
     limit: parsed.data.limit,
     offset: parsed.data.offset,
-    hasMore: (count ?? 0) > parsed.data.offset + allowedRows.length,
+    hasMore: effectiveTotal > parsed.data.offset + allowedRows.length,
   });
 });
 
@@ -4336,9 +4354,23 @@ app.post("/api/crm/clients", requireAuth(), requireRole(["operator", "office_hea
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabaseAdmin.from("crm_clients").insert(payload).select("*").single();
-  if (error || !data) {
-    return res.status(400).json({ error: error?.message ?? "Failed to create CRM client" });
+  const { error: insertError } = await supabaseAdmin.from("crm_clients").insert(payload);
+  if (insertError) {
+    return res.status(400).json({ error: insertError.message });
+  }
+
+  const { data: dataRows, error: fetchError } = await supabaseAdmin
+    .from("crm_clients")
+    .select("*")
+    .eq("phone", payload.phone)
+    .order("id", { ascending: false })
+    .limit(1);
+  if (fetchError) {
+    return res.status(201).json({ ok: true });
+  }
+  const data = dataRows?.[0];
+  if (!data) {
+    return res.status(201).json({ ok: true });
   }
 
   await writeAuditLog({
