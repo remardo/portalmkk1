@@ -22,6 +22,8 @@ import {
   type CreateKbArticleInput,
   type CreateNewsInput,
   type CreateCourseInput,
+  type CreateCrmCallInput,
+  type CreateCrmClientInput,
   type DocumentDecisionInput,
   type CreateShopOrderInput,
   type UploadNewsImageInput,
@@ -31,6 +33,7 @@ import {
   type UpdateKbArticleInput,
   type UpdateShopOrderStatusInput,
   type UpdateCourseInput,
+  type UpdateCrmClientInput,
   type UpdateTaskInput,
 } from "../services/portalRepository";
 
@@ -41,6 +44,103 @@ export function usePortalData(enabled = true) {
     queryKey: portalDataQueryKey,
     queryFn: () => portalRepository.getData(),
     enabled,
+  });
+}
+
+export function useCrmClientsQuery(input?: {
+  q?: string;
+  status?: "sleeping" | "in_progress" | "reactivated" | "lost" | "do_not_call";
+  officeId?: number;
+  assignedUserId?: string;
+  limit?: number;
+  offset?: number;
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: ["crm-clients", input?.q ?? "", input?.status ?? "", input?.officeId ?? "", input?.assignedUserId ?? "", input?.limit ?? 50, input?.offset ?? 0],
+    queryFn: () =>
+      portalRepository.getCrmClients({
+        q: input?.q,
+        status: input?.status,
+        officeId: input?.officeId,
+        assignedUserId: input?.assignedUserId,
+        limit: input?.limit,
+        offset: input?.offset,
+      }),
+    enabled: input?.enabled ?? true,
+  });
+}
+
+export function useCrmClientQuery(clientId?: number, enabled = true) {
+  return useQuery({
+    queryKey: ["crm-client", clientId ?? 0],
+    queryFn: () => {
+      if (!clientId) {
+        throw new Error("Missing client id");
+      }
+      return portalRepository.getCrmClient(clientId);
+    },
+    enabled: enabled && Boolean(clientId),
+  });
+}
+
+export function useCreateCrmClientMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateCrmClientInput) => portalRepository.createCrmClient(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm-clients"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+    },
+  });
+}
+
+export function useImportCrmClientsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { clients: CreateCrmClientInput[] }) => portalRepository.importCrmClients(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm-clients"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+    },
+  });
+}
+
+export function useUpdateCrmClientMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateCrmClientInput) => portalRepository.updateCrmClient(input),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["crm-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-client", variables.id] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+    },
+  });
+}
+
+export function useCreateCrmCallMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateCrmCallInput) => portalRepository.createCrmCall(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm-clients"] });
+    },
+  });
+}
+
+export function useAnalyzeCrmCallMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { callId: number; transcriptRaw?: string; scriptContext?: string; createTasks?: boolean }) =>
+      portalRepository.analyzeCrmCall(input),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["crm-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-client"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+      if (variables.callId) {
+        queryClient.invalidateQueries({ queryKey: ["crm-call", variables.callId] });
+      }
+    },
   });
 }
 

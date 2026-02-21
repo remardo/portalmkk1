@@ -21,6 +21,17 @@ const envSchema = z.object({
   KB_EMBEDDING_DIMENSIONS: z.coerce.number().int().min(64).max(8192).default(1536),
   KB_VECTOR_TOP_K_DEFAULT: z.coerce.number().int().min(1).max(20).default(6),
   KB_VECTOR_MIN_SIMILARITY_DEFAULT: z.coerce.number().min(0).max(1).default(0.55),
+  CRM_INTAKE_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "1" || value?.toLowerCase() === "true")
+    .default(false),
+  CRM_INTAKE_SHARED_SECRET: z.string().optional(),
+  CRM_INTAKE_AUTO_ANALYZE_DEFAULT: z
+    .string()
+    .optional()
+    .transform((value) => value === "1" || value?.toLowerCase() === "true")
+    .default(false),
   AUTO_ESCALATION_ENABLED: z
     .string()
     .optional()
@@ -3672,6 +3683,987 @@ app.delete("/api/tasks/:id", requireAuth(), requireRole(["director", "admin"]), 
   });
 
   return res.status(204).send();
+});
+
+const crmClientStatusSchema = z.enum(["sleeping", "in_progress", "reactivated", "lost", "do_not_call"]);
+const crmCallProviderSchema = z.enum(["asterisk", "fmc", "manual"]);
+
+const crmCreateClientSchema = z.object({
+  fullName: z.string().trim().min(2).max(160),
+  phone: z.string().trim().min(5).max(40),
+  status: crmClientStatusSchema.default("sleeping"),
+  officeId: z.number().int().positive().nullable().optional(),
+  assignedUserId: z.string().uuid().nullable().optional(),
+  source: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(5000).optional(),
+  extra: z.record(z.string(), z.unknown()).optional(),
+});
+
+const crmImportClientsSchema = z.object({
+  clients: z.array(crmCreateClientSchema).min(1).max(2000),
+});
+
+const crmUpdateClientSchema = z.object({
+  fullName: z.string().trim().min(2).max(160).optional(),
+  phone: z.string().trim().min(5).max(40).optional(),
+  status: crmClientStatusSchema.optional(),
+  officeId: z.number().int().positive().nullable().optional(),
+  assignedUserId: z.string().uuid().nullable().optional(),
+  source: z.string().trim().max(200).nullable().optional(),
+  notes: z.string().trim().max(5000).nullable().optional(),
+  extra: z.record(z.string(), z.unknown()).optional(),
+  lastContactedAt: z.string().datetime().nullable().optional(),
+});
+
+const crmListClientsQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  status: crmClientStatusSchema.optional(),
+  officeId: z.coerce.number().int().positive().optional(),
+  assignedUserId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+const crmCreateCallSchema = z.object({
+  clientId: z.number().int().positive(),
+  provider: crmCallProviderSchema.default("manual"),
+  externalCallId: z.string().trim().max(200).optional(),
+  startedAt: z.string().datetime().optional(),
+  endedAt: z.string().datetime().optional(),
+  durationSec: z.number().int().min(0).max(24 * 60 * 60).optional(),
+  recordingUrl: z.string().trim().url().max(2000).optional(),
+  transcriptRaw: z.string().trim().max(120_000).optional(),
+  employeeUserId: z.string().uuid().optional(),
+  officeId: z.number().int().positive().optional(),
+});
+
+const crmAnalyzeCallSchema = z.object({
+  transcriptRaw: z.string().trim().min(10).max(120_000).optional(),
+  scriptContext: z.string().trim().max(20_000).optional(),
+  createTasks: z.boolean().default(true),
+});
+
+const crmIntakeSchema = z.object({
+  provider: crmCallProviderSchema,
+  externalCallId: z.string().trim().min(1).max(200),
+  eventType: z.enum(["call_finished", "transcript_ready", "recording_ready"]).default("call_finished"),
+  clientPhone: z.string().trim().min(5).max(40),
+  clientName: z.string().trim().max(160).optional(),
+  officeId: z.number().int().positive().optional(),
+  employeeUserId: z.string().uuid().optional(),
+  employeePhone: z.string().trim().max(40).optional(),
+  startedAt: z.string().datetime().optional(),
+  endedAt: z.string().datetime().optional(),
+  durationSec: z.number().int().min(0).max(24 * 60 * 60).optional(),
+  recordingUrl: z.string().trim().url().max(2000).optional(),
+  transcriptRaw: z.string().trim().max(120_000).optional(),
+  scriptContext: z.string().trim().max(20_000).optional(),
+  source: z.string().trim().max(200).optional(),
+  autoAnalyze: z.boolean().optional(),
+  createTasks: z.boolean().default(true),
+});
+
+const crmAiAnalysisSchema = z.object({
+  shortSummary: z.string().trim().min(1).max(1000),
+  fullSummary: z.string().trim().min(1).max(12000),
+  overallScore: z.number().int().min(0).max(100),
+  scriptComplianceScore: z.number().int().min(0).max(100),
+  deliveryScore: z.number().int().min(0).max(100),
+  scriptFindings: z.string().trim().min(1).max(6000),
+  recommendations: z.array(z.string().trim().min(1).max(1000)).max(10).default([]),
+  suggestedTasks: z
+    .array(
+      z.object({
+        title: z.string().trim().min(2).max(200),
+        description: z.string().trim().min(2).max(2000),
+        priority: z.enum(["low", "medium", "high"]).default("medium"),
+        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      }),
+    )
+    .max(8)
+    .default([]),
+});
+
+async function canAccessCrmClient(session: Session, client: { office_id: number | null; assigned_user_id: string | null }) {
+  if (session.profile.role === "admin" || session.profile.role === "director") {
+    return true;
+  }
+  if (session.profile.role === "office_head") {
+    const managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
+    if (managedOfficeIds.length > 0) {
+      return client.office_id !== null && managedOfficeIds.includes(Number(client.office_id));
+    }
+    if (session.profile.office_id && client.office_id !== null) {
+      return Number(client.office_id) === Number(session.profile.office_id);
+    }
+    return client.assigned_user_id === session.profile.id;
+  }
+  if (session.profile.role === "operator") {
+    if (client.assigned_user_id && client.assigned_user_id === session.profile.id) {
+      return true;
+    }
+    if (session.profile.office_id && client.office_id !== null) {
+      return Number(client.office_id) === Number(session.profile.office_id);
+    }
+    return false;
+  }
+  return false;
+}
+
+async function completeCrmCallAnalysis(input: {
+  transcript: string;
+  scriptContext?: string;
+}) {
+  if (!env.OPENROUTER_API_KEY) {
+    const shortSummary = input.transcript.slice(0, 240);
+    return {
+      shortSummary,
+      fullSummary: input.transcript.slice(0, 2400),
+      overallScore: 70,
+      scriptComplianceScore: 65,
+      deliveryScore: 75,
+      scriptFindings: "OpenRouter API key is missing. Returned fallback analysis without model scoring.",
+      recommendations: ["Set OPENROUTER_API_KEY to enable AI-driven quality analysis."],
+      suggestedTasks: [],
+    };
+  }
+
+  const messages = [
+    {
+      role: "system",
+      content: `You are a CRM call QA assistant for a Russian-speaking team.
+Return strictly valid JSON (no markdown, no comments) with fields:
+{
+  "shortSummary": "string",
+  "fullSummary": "string",
+  "overallScore": 0-100,
+  "scriptComplianceScore": 0-100,
+  "deliveryScore": 0-100,
+  "scriptFindings": "string",
+  "recommendations": ["string"],
+  "suggestedTasks": [{"title":"string","description":"string","priority":"low|medium|high","dueDate":"YYYY-MM-DD|null"}]
+}
+Focus on factual conversation content and practical coaching feedback.`,
+    },
+    {
+      role: "user",
+      content: `Script/context:\n${input.scriptContext ?? "Нет дополнительного скрипта."}\n\nTranscript:\n${input.transcript}`,
+    },
+  ];
+
+  const response = await fetch(`${normalizeOpenRouterBaseUrl()}/chat/completions`, {
+    method: "POST",
+    headers: getOpenRouterHeaders(),
+    body: JSON.stringify({
+      model: env.OPENROUTER_CHAT_MODEL,
+      messages,
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+    }),
+  });
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`OpenRouter chat request failed (${response.status}): ${details}`);
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const raw = extractChatMessageContent(payload.choices?.[0]?.message?.content);
+  if (!raw) {
+    throw new Error("OpenRouter chat response is empty");
+  }
+  const jsonCandidate = extractJsonFromModelOutput(raw);
+  if (!jsonCandidate) {
+    throw new Error("Model did not return valid JSON");
+  }
+  const parsed = crmAiAnalysisSchema.safeParse(JSON.parse(jsonCandidate));
+  if (!parsed.success) {
+    throw new Error("Invalid AI analysis response shape");
+  }
+  return parsed.data;
+}
+
+function normalizePhoneDigits(phone: string) {
+  const digits = phone.replace(/\D+/g, "");
+  if (digits.length === 11 && digits.startsWith("8")) {
+    return `7${digits.slice(1)}`;
+  }
+  return digits;
+}
+
+function isCrmIntakeSecretValid(req: express.Request) {
+  const configured = env.CRM_INTAKE_SHARED_SECRET;
+  if (!configured) {
+    return true;
+  }
+  const headerSecret = req.headers["x-crm-intake-secret"]?.toString();
+  if (headerSecret && headerSecret === configured) {
+    return true;
+  }
+  const auth = req.headers.authorization;
+  if (auth?.startsWith("Bearer ") && auth.slice("Bearer ".length) === configured) {
+    return true;
+  }
+  return false;
+}
+
+async function resolveCrmIntakeEmployee(input: { employeeUserId?: string; employeePhone?: string }) {
+  if (input.employeeUserId) {
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id,office_id")
+      .eq("id", input.employeeUserId)
+      .single();
+    if (!error && data) {
+      return { userId: data.id as string, officeId: (data.office_id as number | null) ?? null };
+    }
+  }
+
+  if (!input.employeePhone) {
+    return { userId: null as string | null, officeId: null as number | null };
+  }
+
+  const phoneDigits = normalizePhoneDigits(input.employeePhone);
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id,office_id,phone")
+    .limit(100);
+  if (error || !data) {
+    return { userId: null as string | null, officeId: null as number | null };
+  }
+
+  const matched = data.find((row) => normalizePhoneDigits(row.phone ?? "") === phoneDigits);
+  if (!matched) {
+    return { userId: null as string | null, officeId: null as number | null };
+  }
+  return { userId: matched.id as string, officeId: (matched.office_id as number | null) ?? null };
+}
+
+async function findCrmClientByPhone(phone: string) {
+  const normalized = normalizePhoneDigits(phone);
+  const { data: exactRows } = await supabaseAdmin
+    .from("crm_clients")
+    .select("*")
+    .eq("phone", phone)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (exactRows?.[0]) {
+    return exactRows[0];
+  }
+
+  const tail = normalized.slice(-10);
+  if (!tail) {
+    return null;
+  }
+  const { data: likeRows } = await supabaseAdmin
+    .from("crm_clients")
+    .select("*")
+    .ilike("phone", `%${tail}%`)
+    .order("updated_at", { ascending: false })
+    .limit(50);
+  if (!likeRows?.length) {
+    return null;
+  }
+  return likeRows.find((row) => normalizePhoneDigits(row.phone ?? "").endsWith(tail)) ?? null;
+}
+
+async function createTasksFromCrmSuggestions(input: {
+  callId: number;
+  client: { id: number; office_id: number | null; assigned_user_id: string | null };
+  suggestedTasks: Array<{ title: string; description: string; priority: "low" | "medium" | "high"; dueDate?: string | null }>;
+  createdByUserId?: string | null;
+}) {
+  const nowIso = new Date().toISOString();
+  const createdTaskIds: number[] = [];
+  for (const task of input.suggestedTasks) {
+    const taskPayload = {
+      title: task.title,
+      description: task.description,
+      office_id: input.client.office_id,
+      assignee_id: input.client.assigned_user_id,
+      status: "new",
+      type: "auto",
+      priority: task.priority,
+      due_date: task.dueDate ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      created_date: nowIso.slice(0, 10),
+      created_by: input.createdByUserId ?? undefined,
+    };
+    if (!taskPayload.office_id || !taskPayload.assignee_id) {
+      continue;
+    }
+    // eslint-disable-next-line no-await-in-loop
+    let taskInsert = await supabaseAdmin.from("tasks").insert(taskPayload).select("*").single();
+    if (
+      taskInsert.error
+      && (isMissingCreatedByColumnError(taskInsert.error) || isCreatedByForeignKeyError(taskInsert.error))
+    ) {
+      const { created_by: _createdBy, ...legacyPayload } = taskPayload;
+      // eslint-disable-next-line no-await-in-loop
+      taskInsert = await supabaseAdmin.from("tasks").insert(legacyPayload).select("*").single();
+    }
+    if (taskInsert.error || !taskInsert.data) {
+      continue;
+    }
+    createdTaskIds.push(Number(taskInsert.data.id));
+    // eslint-disable-next-line no-await-in-loop
+    await supabaseAdmin.from("crm_call_tasks").upsert(
+      {
+        call_id: input.callId,
+        task_id: taskInsert.data.id,
+      },
+      { onConflict: "call_id,task_id" },
+    );
+  }
+  return createdTaskIds;
+}
+
+app.post("/api/crm/intake/calls", createRateLimitMiddleware({
+  windowMs: 60_000,
+  maxRequests: 120,
+  keyPrefix: "crm-intake",
+}), async (req, res) => {
+  if (!env.CRM_INTAKE_ENABLED) {
+    return res.status(404).json({ error: "CRM intake is disabled" });
+  }
+  if (!isCrmIntakeSecretValid(req)) {
+    return res.status(401).json({ error: "Invalid CRM intake secret" });
+  }
+
+  const parsed = crmIntakeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+
+  const intake = parsed.data;
+  const employee = await resolveCrmIntakeEmployee({
+    employeeUserId: intake.employeeUserId,
+    employeePhone: intake.employeePhone,
+  });
+  const resolvedOfficeId = intake.officeId ?? employee.officeId ?? null;
+
+  let client = await findCrmClientByPhone(intake.clientPhone);
+  if (!client) {
+    const clientPayload = {
+      full_name: intake.clientName?.trim() || `Клиент ${intake.clientPhone}`,
+      phone: intake.clientPhone.trim(),
+      status: "in_progress" as const,
+      office_id: resolvedOfficeId,
+      assigned_user_id: employee.userId,
+      source: intake.source?.trim() || `intake:${intake.provider}`,
+      notes: null,
+      extra: {
+        intakeProvider: intake.provider,
+        externalCallId: intake.externalCallId,
+      },
+      updated_at: new Date().toISOString(),
+    };
+    const { data: createdClient, error: clientError } = await supabaseAdmin
+      .from("crm_clients")
+      .insert(clientPayload)
+      .select("*")
+      .single();
+    if (clientError || !createdClient) {
+      return res.status(400).json({ error: clientError?.message ?? "Failed to create CRM client" });
+    }
+    client = createdClient;
+  }
+
+  let existingCall: Record<string, unknown> | null = null;
+  if (intake.externalCallId) {
+    const { data: callRows, error: existingCallError } = await supabaseAdmin
+      .from("crm_calls")
+      .select("*")
+      .eq("provider", intake.provider)
+      .eq("external_call_id", intake.externalCallId)
+      .order("id", { ascending: false })
+      .limit(1);
+    if (existingCallError) {
+      return res.status(400).json({ error: existingCallError.message });
+    }
+    existingCall = (callRows?.[0] as Record<string, unknown> | undefined) ?? null;
+  }
+
+  const nowIso = new Date().toISOString();
+  const callPayload = {
+    client_id: Number(client.id),
+    employee_user_id: employee.userId,
+    office_id: resolvedOfficeId ?? client.office_id ?? null,
+    provider: intake.provider,
+    external_call_id: intake.externalCallId,
+    started_at: intake.startedAt ?? null,
+    ended_at: intake.endedAt ?? null,
+    duration_sec: intake.durationSec ?? null,
+    recording_url: intake.recordingUrl?.trim() || null,
+    transcript_raw: intake.transcriptRaw?.trim() || null,
+    transcription_status: intake.transcriptRaw ? "ready" : "pending",
+    analysis_status: "pending",
+    updated_at: nowIso,
+  };
+
+  let callId: number;
+  if (existingCall?.id) {
+    const { data: updatedCall, error: updateCallError } = await supabaseAdmin
+      .from("crm_calls")
+      .update(callPayload)
+      .eq("id", existingCall.id as number)
+      .select("id")
+      .single();
+    if (updateCallError || !updatedCall) {
+      return res.status(400).json({ error: updateCallError?.message ?? "Failed to update CRM call" });
+    }
+    callId = Number(updatedCall.id);
+  } else {
+    const { data: insertedCall, error: insertCallError } = await supabaseAdmin
+      .from("crm_calls")
+      .insert(callPayload)
+      .select("id")
+      .single();
+    if (insertCallError || !insertedCall) {
+      return res.status(400).json({ error: insertCallError?.message ?? "Failed to create CRM call" });
+    }
+    callId = Number(insertedCall.id);
+  }
+
+  let analysisResult: null | {
+    overallScore: number;
+    createdTaskIds: number[];
+  } = null;
+  const shouldAutoAnalyze = intake.autoAnalyze ?? env.CRM_INTAKE_AUTO_ANALYZE_DEFAULT;
+  if (shouldAutoAnalyze && intake.transcriptRaw && intake.transcriptRaw.trim().length >= 10) {
+    try {
+      const analysis = await completeCrmCallAnalysis({
+        transcript: intake.transcriptRaw,
+        scriptContext: intake.scriptContext,
+      });
+      await supabaseAdmin
+        .from("crm_calls")
+        .update({
+          transcription_status: "ready",
+          analysis_status: "ready",
+          transcript_summary_short: analysis.shortSummary,
+          transcript_summary_full: analysis.fullSummary,
+          updated_at: nowIso,
+        })
+        .eq("id", callId);
+
+      await supabaseAdmin.from("crm_call_evaluations").upsert({
+        call_id: callId,
+        overall_score: analysis.overallScore,
+        script_compliance_score: analysis.scriptComplianceScore,
+        delivery_score: analysis.deliveryScore,
+        script_findings: analysis.scriptFindings,
+        recommendations: analysis.recommendations,
+        suggested_tasks: analysis.suggestedTasks,
+        updated_at: nowIso,
+      }, { onConflict: "call_id" });
+
+      const createdTaskIds = intake.createTasks
+        ? await createTasksFromCrmSuggestions({
+          callId,
+          client: {
+            id: Number(client.id),
+            office_id: client.office_id,
+            assigned_user_id: client.assigned_user_id,
+          },
+          suggestedTasks: analysis.suggestedTasks,
+          createdByUserId: env.AUTO_ESCALATION_SYSTEM_ACTOR_USER_ID ?? employee.userId,
+        })
+        : [];
+      analysisResult = { overallScore: analysis.overallScore, createdTaskIds };
+    } catch {
+      await supabaseAdmin
+        .from("crm_calls")
+        .update({ analysis_status: "failed", updated_at: nowIso })
+        .eq("id", callId);
+    }
+  }
+
+  await supabaseAdmin
+    .from("crm_clients")
+    .update({
+      status: "in_progress",
+      last_contacted_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("id", client.id);
+
+  return res.json({
+    ok: true,
+    clientId: Number(client.id),
+    callId,
+    provider: intake.provider,
+    deduplicated: Boolean(existingCall),
+    analyzed: Boolean(analysisResult),
+    overallScore: analysisResult?.overallScore ?? null,
+    createdTaskIds: analysisResult?.createdTaskIds ?? [],
+  });
+});
+
+app.get("/api/crm/clients", requireAuth(), async (req, res) => {
+  const parsed = crmListClientsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+
+  let query = supabaseAdmin
+    .from("crm_clients")
+    .select("*", { count: "exact" })
+    .order("updated_at", { ascending: false })
+    .range(parsed.data.offset, parsed.data.offset + parsed.data.limit - 1);
+
+  if (parsed.data.status) query = query.eq("status", parsed.data.status);
+  if (parsed.data.officeId) query = query.eq("office_id", parsed.data.officeId);
+  if (parsed.data.assignedUserId) query = query.eq("assigned_user_id", parsed.data.assignedUserId);
+  if (parsed.data.q) {
+    const q = parsed.data.q.replace(/[%,]/g, " ").trim();
+    query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%,source.ilike.%${q}%`);
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  const rows = data ?? [];
+  const allowedRows: typeof rows = [];
+  for (const row of rows) {
+    // Sequential by design to keep access checks simple and explicit.
+    // eslint-disable-next-line no-await-in-loop
+    const allowed = await canAccessCrmClient(session, row);
+    if (allowed) {
+      allowedRows.push(row);
+    }
+  }
+
+  return res.json({
+    items: allowedRows,
+    total: count ?? allowedRows.length,
+    limit: parsed.data.limit,
+    offset: parsed.data.offset,
+    hasMore: (count ?? 0) > parsed.data.offset + allowedRows.length,
+  });
+});
+
+app.get("/api/crm/clients/:id", requireAuth(), async (req, res) => {
+  const clientId = Number(req.params.id);
+  if (Number.isNaN(clientId)) {
+    return res.status(400).json({ error: "Invalid client id" });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  const { data: client, error } = await supabaseAdmin.from("crm_clients").select("*").eq("id", clientId).single();
+  if (error || !client) {
+    return res.status(404).json({ error: "Client not found" });
+  }
+  const allowed = await canAccessCrmClient(session, client);
+  if (!allowed) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const { data: calls, error: callsError } = await supabaseAdmin
+    .from("crm_calls")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false });
+  if (callsError) {
+    return res.status(400).json({ error: callsError.message });
+  }
+
+  const callIds = (calls ?? []).map((row) => Number(row.id)).filter((value) => Number.isFinite(value));
+  let evaluations: Array<Record<string, unknown>> = [];
+  if (callIds.length > 0) {
+    const { data: evalRows, error: evalError } = await supabaseAdmin
+      .from("crm_call_evaluations")
+      .select("*")
+      .in("call_id", callIds);
+    if (evalError) {
+      return res.status(400).json({ error: evalError.message });
+    }
+    evaluations = (evalRows ?? []) as Array<Record<string, unknown>>;
+  }
+
+  return res.json({ client, calls: calls ?? [], evaluations });
+});
+
+app.post("/api/crm/clients", requireAuth(), requireRole(["operator", "office_head", "director", "admin"]), async (req, res) => {
+  const parsed = crmCreateClientSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  let resolvedOfficeId = parsed.data.officeId ?? session.profile.office_id ?? null;
+  const resolvedAssigneeId = parsed.data.assignedUserId ?? session.profile.id;
+
+  if (session.profile.role === "office_head") {
+    const managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
+    if (resolvedOfficeId !== null) {
+      const allowedByScope = managedOfficeIds.length > 0
+        ? managedOfficeIds.includes(Number(resolvedOfficeId))
+        : Number(resolvedOfficeId) === Number(session.profile.office_id);
+      if (!allowedByScope) {
+        return res.status(403).json({ error: "Office head can create CRM clients only within managed offices" });
+      }
+    }
+  }
+  if (session.profile.role === "operator" && resolvedOfficeId !== null && session.profile.office_id !== null) {
+    if (Number(resolvedOfficeId) !== Number(session.profile.office_id)) {
+      return res.status(403).json({ error: "Operator can create CRM clients only in own office" });
+    }
+  }
+
+  if (resolvedOfficeId === null && parsed.data.assignedUserId) {
+    const { data: assignee, error: assigneeError } = await supabaseAdmin
+      .from("profiles")
+      .select("office_id")
+      .eq("id", parsed.data.assignedUserId)
+      .single();
+    if (assigneeError) {
+      return res.status(400).json({ error: assigneeError.message });
+    }
+    resolvedOfficeId = assignee?.office_id ?? null;
+  }
+
+  const payload = {
+    full_name: parsed.data.fullName,
+    phone: parsed.data.phone,
+    status: parsed.data.status,
+    office_id: resolvedOfficeId,
+    assigned_user_id: resolvedAssigneeId,
+    source: parsed.data.source?.trim() || null,
+    notes: parsed.data.notes?.trim() || null,
+    extra: parsed.data.extra ?? {},
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin.from("crm_clients").insert(payload).select("*").single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to create CRM client" });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "crm_clients.create",
+    entityType: "crm_clients",
+    entityId: String(data.id),
+    payload,
+  });
+
+  return res.status(201).json(data);
+});
+
+app.post("/api/crm/clients/import", requireAuth(), requireRole(["office_head", "director", "admin"]), async (req, res) => {
+  const parsed = crmImportClientsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+
+  const payloadRows = parsed.data.clients.map((item) => ({
+    full_name: item.fullName,
+    phone: item.phone,
+    status: item.status,
+    office_id: item.officeId ?? session.profile.office_id ?? null,
+    assigned_user_id: item.assignedUserId ?? session.profile.id,
+    source: item.source?.trim() || null,
+    notes: item.notes?.trim() || null,
+    extra: item.extra ?? {},
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { data, error } = await supabaseAdmin.from("crm_clients").insert(payloadRows).select("id");
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "crm_clients.import",
+    entityType: "crm_clients",
+    entityId: String(data?.[0]?.id ?? "batch"),
+    payload: { count: payloadRows.length },
+  });
+
+  return res.status(201).json({ created: payloadRows.length, ids: (data ?? []).map((row) => row.id) });
+});
+
+app.patch("/api/crm/clients/:id", requireAuth(), requireRole(["operator", "office_head", "director", "admin"]), async (req, res) => {
+  const parsed = crmUpdateClientSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const clientId = Number(req.params.id);
+  if (Number.isNaN(clientId)) {
+    return res.status(400).json({ error: "Invalid client id" });
+  }
+  if (Object.keys(parsed.data).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const { data: currentClient, error: currentError } = await supabaseAdmin
+    .from("crm_clients")
+    .select("*")
+    .eq("id", clientId)
+    .single();
+  if (currentError || !currentClient) {
+    return res.status(404).json({ error: "Client not found" });
+  }
+  const allowed = await canAccessCrmClient(session, currentClient);
+  if (!allowed) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const updatePayload: Record<string, unknown> = {};
+  if (parsed.data.fullName !== undefined) updatePayload.full_name = parsed.data.fullName;
+  if (parsed.data.phone !== undefined) updatePayload.phone = parsed.data.phone;
+  if (parsed.data.status !== undefined) updatePayload.status = parsed.data.status;
+  if (parsed.data.officeId !== undefined) updatePayload.office_id = parsed.data.officeId;
+  if (parsed.data.assignedUserId !== undefined) updatePayload.assigned_user_id = parsed.data.assignedUserId;
+  if (parsed.data.source !== undefined) updatePayload.source = parsed.data.source?.trim() || null;
+  if (parsed.data.notes !== undefined) updatePayload.notes = parsed.data.notes?.trim() || null;
+  if (parsed.data.extra !== undefined) updatePayload.extra = parsed.data.extra;
+  if (parsed.data.lastContactedAt !== undefined) updatePayload.last_contacted_at = parsed.data.lastContactedAt;
+  updatePayload.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("crm_clients")
+    .update(updatePayload)
+    .eq("id", clientId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to update CRM client" });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "crm_clients.update",
+    entityType: "crm_clients",
+    entityId: String(clientId),
+    payload: updatePayload,
+  });
+
+  return res.json(data);
+});
+
+app.post("/api/crm/calls", requireAuth(), requireRole(["operator", "office_head", "director", "admin"]), async (req, res) => {
+  const parsed = crmCreateCallSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+
+  const { data: client, error: clientError } = await supabaseAdmin
+    .from("crm_clients")
+    .select("id, office_id, assigned_user_id")
+    .eq("id", parsed.data.clientId)
+    .single();
+  if (clientError || !client) {
+    return res.status(404).json({ error: "Client not found" });
+  }
+  const allowed = await canAccessCrmClient(session, client);
+  if (!allowed) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const payload = {
+    client_id: parsed.data.clientId,
+    provider: parsed.data.provider,
+    external_call_id: parsed.data.externalCallId?.trim() || null,
+    started_at: parsed.data.startedAt ?? null,
+    ended_at: parsed.data.endedAt ?? null,
+    duration_sec: parsed.data.durationSec ?? null,
+    recording_url: parsed.data.recordingUrl?.trim() || null,
+    transcript_raw: parsed.data.transcriptRaw ?? null,
+    transcription_status: parsed.data.transcriptRaw ? "ready" : "pending",
+    analysis_status: "pending",
+    employee_user_id: parsed.data.employeeUserId ?? session.profile.id,
+    office_id: parsed.data.officeId ?? client.office_id ?? session.profile.office_id ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin.from("crm_calls").insert(payload).select("*").single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to create CRM call" });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "crm_calls.create",
+    entityType: "crm_calls",
+    entityId: String(data.id),
+    payload: { clientId: parsed.data.clientId, provider: parsed.data.provider },
+  });
+
+  return res.status(201).json(data);
+});
+
+app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "office_head", "director", "admin"]), async (req, res) => {
+  const parsed = crmAnalyzeCallSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const callId = Number(req.params.id);
+  if (Number.isNaN(callId)) {
+    return res.status(400).json({ error: "Invalid call id" });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+
+  const { data: call, error: callError } = await supabaseAdmin
+    .from("crm_calls")
+    .select("*")
+    .eq("id", callId)
+    .single();
+  if (callError || !call) {
+    return res.status(404).json({ error: "Call not found" });
+  }
+  const { data: client, error: clientError } = await supabaseAdmin
+    .from("crm_clients")
+    .select("id, office_id, assigned_user_id")
+    .eq("id", call.client_id)
+    .single();
+  if (clientError || !client) {
+    return res.status(404).json({ error: "Client not found" });
+  }
+  const allowed = await canAccessCrmClient(session, client);
+  if (!allowed) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const transcript = parsed.data.transcriptRaw ?? call.transcript_raw;
+  if (!transcript || transcript.trim().length < 10) {
+    return res.status(400).json({ error: "Transcript is required for call analysis" });
+  }
+
+  let analysis;
+  try {
+    analysis = await completeCrmCallAnalysis({
+      transcript,
+      scriptContext: parsed.data.scriptContext,
+    });
+  } catch (error) {
+    await supabaseAdmin
+      .from("crm_calls")
+      .update({ analysis_status: "failed", updated_at: new Date().toISOString() })
+      .eq("id", callId);
+    return res.status(400).json({ error: error instanceof Error ? error.message : "Failed to analyze call" });
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updateCallError } = await supabaseAdmin
+    .from("crm_calls")
+    .update({
+      transcript_raw: transcript,
+      transcription_status: "ready",
+      analysis_status: "ready",
+      transcript_summary_short: analysis.shortSummary,
+      transcript_summary_full: analysis.fullSummary,
+      updated_at: nowIso,
+    })
+    .eq("id", callId);
+  if (updateCallError) {
+    return res.status(400).json({ error: updateCallError.message });
+  }
+
+  const evalPayload = {
+    call_id: callId,
+    overall_score: analysis.overallScore,
+    script_compliance_score: analysis.scriptComplianceScore,
+    delivery_score: analysis.deliveryScore,
+    script_findings: analysis.scriptFindings,
+    recommendations: analysis.recommendations,
+    suggested_tasks: analysis.suggestedTasks,
+    updated_at: nowIso,
+  };
+
+  const { data: evaluation, error: evalError } = await supabaseAdmin
+    .from("crm_call_evaluations")
+    .upsert(evalPayload, { onConflict: "call_id" })
+    .select("*")
+    .single();
+  if (evalError || !evaluation) {
+    return res.status(400).json({ error: evalError?.message ?? "Failed to save call evaluation" });
+  }
+
+  const createdTaskIds: number[] = [];
+  if (parsed.data.createTasks && analysis.suggestedTasks.length > 0) {
+    for (const task of analysis.suggestedTasks) {
+      const taskPayload = {
+        title: task.title,
+        description: task.description,
+        office_id: client.office_id ?? session.profile.office_id ?? null,
+        assignee_id: client.assigned_user_id ?? session.profile.id,
+        status: "new",
+        type: "auto",
+        priority: task.priority,
+        due_date: task.dueDate ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        created_date: nowIso.slice(0, 10),
+        created_by: session.profile.id,
+      };
+      if (!taskPayload.office_id || !taskPayload.assignee_id) {
+        continue;
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      let taskInsert = await supabaseAdmin.from("tasks").insert(taskPayload).select("*").single();
+      if (
+        taskInsert.error
+        && (isMissingCreatedByColumnError(taskInsert.error) || isCreatedByForeignKeyError(taskInsert.error))
+      ) {
+        const { created_by: _createdBy, ...legacyPayload } = taskPayload;
+        // eslint-disable-next-line no-await-in-loop
+        taskInsert = await supabaseAdmin.from("tasks").insert(legacyPayload).select("*").single();
+      }
+      if (taskInsert.error || !taskInsert.data) {
+        continue;
+      }
+      createdTaskIds.push(Number(taskInsert.data.id));
+
+      // eslint-disable-next-line no-await-in-loop
+      await supabaseAdmin.from("crm_call_tasks").upsert(
+        {
+          call_id: callId,
+          task_id: taskInsert.data.id,
+        },
+        { onConflict: "call_id,task_id" },
+      );
+    }
+  }
+
+  await supabaseAdmin
+    .from("crm_clients")
+    .update({
+      last_contacted_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("id", client.id);
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "crm_calls.analyze",
+    entityType: "crm_calls",
+    entityId: String(callId),
+    payload: {
+      overallScore: analysis.overallScore,
+      createdTasks: createdTaskIds.length,
+    },
+  });
+
+  return res.json({
+    callId,
+    evaluation,
+    summaries: {
+      short: analysis.shortSummary,
+      full: analysis.fullSummary,
+    },
+    createdTaskIds,
+  });
 });
 
 const createShopOrderSchema = z.object({

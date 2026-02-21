@@ -15,7 +15,8 @@
     "check:schema-sync": "node scripts/check-schema-sync.mjs",
     "smoke:api": "node scripts/smoke-api.mjs",
     "check:smoke-summary": "node scripts/assert-smoke-summary.mjs",
-    "print:smoke-summary": "node scripts/print-smoke-summary.mjs"
+    "print:smoke-summary": "node scripts/print-smoke-summary.mjs",
+    "crm:intake:sample": "node scripts/crm-intake-sample.mjs"
   },
   "engines": {
     "node": ">=20.19.0"

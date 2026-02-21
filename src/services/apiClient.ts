@@ -427,6 +427,172 @@ export const backendApi = {
 
   deleteTask: (id: number) => apiRequest(`/api/tasks/${id}`, { method: "DELETE" }),
 
+  getCrmClients: (input?: {
+    q?: string;
+    status?: "sleeping" | "in_progress" | "reactivated" | "lost" | "do_not_call";
+    officeId?: number;
+    assignedUserId?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (input?.q) params.set("q", input.q);
+    if (input?.status) params.set("status", input.status);
+    if (input?.officeId) params.set("officeId", String(input.officeId));
+    if (input?.assignedUserId) params.set("assignedUserId", input.assignedUserId);
+    if (input?.limit) params.set("limit", String(input.limit));
+    if (input?.offset) params.set("offset", String(input.offset));
+    const qs = params.toString();
+    return apiRequest<{
+      items: Array<{
+        id: number;
+        full_name: string;
+        phone: string;
+        status: "sleeping" | "in_progress" | "reactivated" | "lost" | "do_not_call";
+        office_id: number | null;
+        assigned_user_id: string | null;
+        source: string | null;
+        notes: string | null;
+        extra: Record<string, unknown>;
+        last_contacted_at: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    }>(`/api/crm/clients${qs ? `?${qs}` : ""}`);
+  },
+
+  getCrmClient: (id: number) =>
+    apiRequest<{
+      client: {
+        id: number;
+        full_name: string;
+        phone: string;
+        status: "sleeping" | "in_progress" | "reactivated" | "lost" | "do_not_call";
+        office_id: number | null;
+        assigned_user_id: string | null;
+        source: string | null;
+        notes: string | null;
+        extra: Record<string, unknown>;
+        last_contacted_at: string | null;
+        created_at: string;
+        updated_at: string;
+      };
+      calls: Array<{
+        id: number;
+        client_id: number;
+        employee_user_id: string | null;
+        office_id: number | null;
+        provider: "asterisk" | "fmc" | "manual";
+        external_call_id: string | null;
+        started_at: string | null;
+        ended_at: string | null;
+        duration_sec: number | null;
+        recording_url: string | null;
+        transcript_raw: string | null;
+        transcription_status: "pending" | "ready" | "failed";
+        analysis_status: "pending" | "ready" | "failed";
+        transcript_summary_short: string | null;
+        transcript_summary_full: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      evaluations: Array<{
+        id: number;
+        call_id: number;
+        overall_score: number;
+        script_compliance_score: number;
+        delivery_score: number;
+        script_findings: string;
+        recommendations: string[];
+        suggested_tasks: Array<Record<string, unknown>>;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>(`/api/crm/clients/${id}`),
+
+  createCrmClient: (input: {
+    fullName: string;
+    phone: string;
+    status?: "sleeping" | "in_progress" | "reactivated" | "lost" | "do_not_call";
+    officeId?: number | null;
+    assignedUserId?: string | null;
+    source?: string;
+    notes?: string;
+    extra?: Record<string, unknown>;
+  }) => apiRequest("/api/crm/clients", { method: "POST", body: JSON.stringify(input) }),
+
+  importCrmClients: (input: {
+    clients: Array<{
+      fullName: string;
+      phone: string;
+      status?: "sleeping" | "in_progress" | "reactivated" | "lost" | "do_not_call";
+      officeId?: number | null;
+      assignedUserId?: string | null;
+      source?: string;
+      notes?: string;
+      extra?: Record<string, unknown>;
+    }>;
+  }) => apiRequest<{ created: number; ids: number[] }>("/api/crm/clients/import", { method: "POST", body: JSON.stringify(input) }),
+
+  updateCrmClient: (
+    id: number,
+    input: {
+      fullName?: string;
+      phone?: string;
+      status?: "sleeping" | "in_progress" | "reactivated" | "lost" | "do_not_call";
+      officeId?: number | null;
+      assignedUserId?: string | null;
+      source?: string | null;
+      notes?: string | null;
+      extra?: Record<string, unknown>;
+      lastContactedAt?: string | null;
+    },
+  ) => apiRequest(`/api/crm/clients/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  createCrmCall: (input: {
+    clientId: number;
+    provider?: "asterisk" | "fmc" | "manual";
+    externalCallId?: string;
+    startedAt?: string;
+    endedAt?: string;
+    durationSec?: number;
+    recordingUrl?: string;
+    transcriptRaw?: string;
+    employeeUserId?: string;
+    officeId?: number;
+  }) =>
+    apiRequest<{
+      id: number;
+    }>("/api/crm/calls", { method: "POST", body: JSON.stringify(input) }),
+
+  analyzeCrmCall: (
+    id: number,
+    input?: {
+      transcriptRaw?: string;
+      scriptContext?: string;
+      createTasks?: boolean;
+    },
+  ) =>
+    apiRequest<{
+      callId: number;
+      evaluation: {
+        id: number;
+        call_id: number;
+        overall_score: number;
+        script_compliance_score: number;
+        delivery_score: number;
+        script_findings: string;
+        recommendations: string[];
+        suggested_tasks: Array<Record<string, unknown>>;
+      };
+      summaries: { short: string; full: string };
+      createdTaskIds: number[];
+    }>(`/api/crm/calls/${id}/analyze`, { method: "POST", body: JSON.stringify(input ?? {}) }),
+
   createDocument: (input: {
     title: string;
     type: "incoming" | "outgoing" | "internal";

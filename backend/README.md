@@ -5,6 +5,7 @@
 - Встроенный rate limit для `/api/*` и усиленные лимиты для auth-эндпоинтов
 - CRUD API для `news`, `tasks`, `documents`
 - RAG-консультации по базе знаний (`/api/kb/consult`) через OpenRouter + векторный поиск
+- CRM intake webhook для телефонии (`/api/crm/intake/calls`) с авто-анализом разговоров
 - Endpoint `/api/bootstrap` для загрузки набора данных
 - Admin API (`/api/admin/users`) для создания и управления пользователями
 - LMS Builder версии: автоснимки и откат курса
@@ -123,6 +124,9 @@ npm run dev
    - `KB_EMBEDDING_DIMENSIONS=1536`
    - `KB_VECTOR_TOP_K_DEFAULT=6`
    - `KB_VECTOR_MIN_SIMILARITY_DEFAULT=0.55`
+   - `CRM_INTAKE_ENABLED=false`
+   - `CRM_INTAKE_SHARED_SECRET=<длинный секрет для webhook>`
+   - `CRM_INTAKE_AUTO_ANALYZE_DEFAULT=false`
    - `AUTO_ESCALATION_ENABLED=false`
    - `AUTO_ESCALATION_INTERVAL_MINUTES=60`
    - `AUTO_ESCALATION_SYSTEM_ACTOR_USER_ID=<uuid профиля админа, опционально>`
@@ -180,6 +184,7 @@ ADMIN_EMAIL=admin@company.com ADMIN_PASSWORD='<strong-password>' ADMIN_FULL_NAME
 - `POST /api/kb-articles` / `PATCH /api/kb-articles/:id` / `GET /api/kb-articles/:id/versions` / `POST /api/kb-articles/:id/restore/:version`
 - `POST /api/kb-articles/:id/reindex` (manual reindex embeddings)
 - `POST /api/kb/consult` (RAG консультация по KB)
+- `POST /api/crm/intake/calls` (webhook intake для Asterisk/FMC)
 - `POST /api/courses` / `PATCH /api/courses/:id`
 - `POST /api/courses/:id/assignments` / `GET /api/courses/:id/assignments`
 - `POST /api/courses/:id/attempts` / `GET /api/courses/:id/attempts`
@@ -212,3 +217,7 @@ ADMIN_EMAIL=admin@company.com ADMIN_PASSWORD='<strong-password>' ADMIN_FULL_NAME
 Примечание по pagination:
 - По умолчанию `GET /api/tasks|news|documents` возвращают массив (backward-compatible) c hard cap `1000`.
 - Для серверной пагинации используйте `paginated=true`, тогда ответ: `{ items, total, limit, offset, hasMore }`.
+
+## CRM telephony integration
+- Готовые шаблоны для Asterisk/FMC: `backend/docs/crm-intake-telephony.md`
+- Локальный smoke для intake: `npm run crm:intake:sample`

@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "../components/layout/AppLayout";
 import { DashboardPage } from "../pages/DashboardPage";
 import { DocsPage } from "../pages/DocsPage";
+import { CRMPage } from "../pages/CRMPage";
 import { KBPage } from "../pages/KBPage";
 import { LessonPage } from "../pages/LessonPage";
 import { LMSPage } from "../pages/LMSPage";
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
           { path: "lms/users/:userId", element: <LMSPage /> },
           { path: "lms-builder", element: <LMSBuilderPage /> },
           { path: "docs", element: <DocsPage /> },
+          { path: "crm", element: <CRMPage /> },
           { path: "tasks", element: <TasksPage /> },
           { path: "tasks/:taskId", element: <TasksPage /> },
           { path: "shop", element: <ShopPage /> },

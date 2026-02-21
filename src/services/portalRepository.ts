@@ -92,6 +92,100 @@ export interface CreateTaskInput {
   dueDate: string;
 }
 
+export type CrmClientStatus = "sleeping" | "in_progress" | "reactivated" | "lost" | "do_not_call";
+
+export interface CrmClient {
+  id: number;
+  fullName: string;
+  phone: string;
+  status: CrmClientStatus;
+  officeId: number | null;
+  assignedUserId: string | null;
+  source: string | null;
+  notes: string | null;
+  extra: Record<string, unknown>;
+  lastContactedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmCall {
+  id: number;
+  clientId: number;
+  employeeUserId: string | null;
+  officeId: number | null;
+  provider: "asterisk" | "fmc" | "manual";
+  externalCallId: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  durationSec: number | null;
+  recordingUrl: string | null;
+  transcriptRaw: string | null;
+  transcriptionStatus: "pending" | "ready" | "failed";
+  analysisStatus: "pending" | "ready" | "failed";
+  transcriptSummaryShort: string | null;
+  transcriptSummaryFull: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmCallEvaluation {
+  id: number;
+  callId: number;
+  overallScore: number;
+  scriptComplianceScore: number;
+  deliveryScore: number;
+  scriptFindings: string;
+  recommendations: string[];
+  suggestedTasks: Array<Record<string, unknown>>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateCrmClientInput {
+  fullName: string;
+  phone: string;
+  status?: CrmClientStatus;
+  officeId?: number | null;
+  assignedUserId?: string | null;
+  source?: string;
+  notes?: string;
+  extra?: Record<string, unknown>;
+}
+
+export interface UpdateCrmClientInput {
+  id: number;
+  fullName?: string;
+  phone?: string;
+  status?: CrmClientStatus;
+  officeId?: number | null;
+  assignedUserId?: string | null;
+  source?: string | null;
+  notes?: string | null;
+  extra?: Record<string, unknown>;
+  lastContactedAt?: string | null;
+}
+
+export interface CreateCrmCallInput {
+  clientId: number;
+  provider?: "asterisk" | "fmc" | "manual";
+  externalCallId?: string;
+  startedAt?: string;
+  endedAt?: string;
+  durationSec?: number;
+  recordingUrl?: string;
+  transcriptRaw?: string;
+  employeeUserId?: string;
+  officeId?: number;
+}
+
+export interface AnalyzeCrmCallInput {
+  callId: number;
+  transcriptRaw?: string;
+  scriptContext?: string;
+  createTasks?: boolean;
+}
+
 export interface UpdateTaskInput {
   id: number;
   title?: string;
@@ -689,6 +783,145 @@ export const portalRepository = {
 
   async createTask(input: CreateTaskInput): Promise<void> {
     await backendApi.createTask(input);
+  },
+
+  async getCrmClients(input?: {
+    q?: string;
+    status?: CrmClientStatus;
+    officeId?: number;
+    assignedUserId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: CrmClient[]; total: number; limit: number; offset: number; hasMore: boolean }> {
+    const response = await backendApi.getCrmClients(input);
+    return {
+      items: response.items.map((item) => ({
+        id: Number(item.id),
+        fullName: item.full_name,
+        phone: item.phone,
+        status: item.status,
+        officeId: item.office_id === null ? null : Number(item.office_id),
+        assignedUserId: item.assigned_user_id,
+        source: item.source,
+        notes: item.notes,
+        extra: item.extra ?? {},
+        lastContactedAt: item.last_contacted_at,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      })),
+      total: response.total,
+      limit: response.limit,
+      offset: response.offset,
+      hasMore: response.hasMore,
+    };
+  },
+
+  async getCrmClient(id: number): Promise<{ client: CrmClient; calls: CrmCall[]; evaluations: CrmCallEvaluation[] }> {
+    const response = await backendApi.getCrmClient(id);
+    return {
+      client: {
+        id: Number(response.client.id),
+        fullName: response.client.full_name,
+        phone: response.client.phone,
+        status: response.client.status,
+        officeId: response.client.office_id === null ? null : Number(response.client.office_id),
+        assignedUserId: response.client.assigned_user_id,
+        source: response.client.source,
+        notes: response.client.notes,
+        extra: response.client.extra ?? {},
+        lastContactedAt: response.client.last_contacted_at,
+        createdAt: response.client.created_at,
+        updatedAt: response.client.updated_at,
+      },
+      calls: response.calls.map((call) => ({
+        id: Number(call.id),
+        clientId: Number(call.client_id),
+        employeeUserId: call.employee_user_id,
+        officeId: call.office_id === null ? null : Number(call.office_id),
+        provider: call.provider,
+        externalCallId: call.external_call_id,
+        startedAt: call.started_at,
+        endedAt: call.ended_at,
+        durationSec: call.duration_sec,
+        recordingUrl: call.recording_url,
+        transcriptRaw: call.transcript_raw,
+        transcriptionStatus: call.transcription_status,
+        analysisStatus: call.analysis_status,
+        transcriptSummaryShort: call.transcript_summary_short,
+        transcriptSummaryFull: call.transcript_summary_full,
+        createdAt: call.created_at,
+        updatedAt: call.updated_at,
+      })),
+      evaluations: response.evaluations.map((item) => ({
+        id: Number(item.id),
+        callId: Number(item.call_id),
+        overallScore: Number(item.overall_score),
+        scriptComplianceScore: Number(item.script_compliance_score),
+        deliveryScore: Number(item.delivery_score),
+        scriptFindings: item.script_findings,
+        recommendations: item.recommendations ?? [],
+        suggestedTasks: item.suggested_tasks ?? [],
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      })),
+    };
+  },
+
+  async createCrmClient(input: CreateCrmClientInput): Promise<void> {
+    await backendApi.createCrmClient(input);
+  },
+
+  async importCrmClients(input: { clients: CreateCrmClientInput[] }): Promise<{ created: number; ids: number[] }> {
+    return backendApi.importCrmClients(input);
+  },
+
+  async updateCrmClient(input: UpdateCrmClientInput): Promise<void> {
+    await backendApi.updateCrmClient(input.id, {
+      fullName: input.fullName,
+      phone: input.phone,
+      status: input.status,
+      officeId: input.officeId,
+      assignedUserId: input.assignedUserId,
+      source: input.source,
+      notes: input.notes,
+      extra: input.extra,
+      lastContactedAt: input.lastContactedAt,
+    });
+  },
+
+  async createCrmCall(input: CreateCrmCallInput): Promise<{ id: number }> {
+    const row = await backendApi.createCrmCall(input);
+    return { id: Number((row as { id: number }).id) };
+  },
+
+  async analyzeCrmCall(input: AnalyzeCrmCallInput): Promise<{
+    callId: number;
+    evaluation: CrmCallEvaluation;
+    summaries: { short: string; full: string };
+    createdTaskIds: number[];
+  }> {
+    const response = await backendApi.analyzeCrmCall(input.callId, {
+      transcriptRaw: input.transcriptRaw,
+      scriptContext: input.scriptContext,
+      createTasks: input.createTasks,
+    });
+    return {
+      callId: response.callId,
+      evaluation: {
+        id: Number(response.evaluation.id),
+        callId: Number(response.evaluation.call_id),
+        overallScore: Number(response.evaluation.overall_score),
+        scriptComplianceScore: Number(response.evaluation.script_compliance_score),
+        deliveryScore: Number(response.evaluation.delivery_score),
+        scriptFindings: response.evaluation.script_findings,
+        recommendations: response.evaluation.recommendations ?? [],
+        suggestedTasks: response.evaluation.suggested_tasks ?? [],
+        createdAt: "",
+        updatedAt: "",
+      },
+      summaries: response.summaries,
+      createdTaskIds: response.createdTaskIds,
+    };
   },
 
   async createNews(input: CreateNewsInput): Promise<void> {
