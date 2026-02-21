@@ -6,6 +6,9 @@ import {
   type AdminUpdateShopProductInput,
   type AdminAuditList,
   type AdminCreateUserInput,
+  type PointsCampaign,
+  type PointsRule,
+  type PointsTrackedAction,
   type AdminSloStatus,
   type AdminUpdateOfficeInput,
   type AdminUpdateUserInput,
@@ -394,6 +397,119 @@ export function useAdminCreateOfficeMutation() {
   return useMutation({
     mutationFn: (input: AdminCreateOfficeInput) => portalRepository.adminCreateOffice(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: portalDataQueryKey }),
+  });
+}
+
+export function usePointsActionsQuery(enabled = true) {
+  return useQuery<PointsTrackedAction[]>({
+    queryKey: ["points-actions"],
+    queryFn: () => portalRepository.getPointsActions(),
+    enabled,
+  });
+}
+
+export function usePointsRulesQuery(enabled = true) {
+  return useQuery<PointsRule[]>({
+    queryKey: ["points-rules"],
+    queryFn: () => portalRepository.getPointsRules(),
+    enabled,
+  });
+}
+
+export function useCreatePointsRuleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      actionKey: string;
+      title: string;
+      description?: string;
+      basePoints: number;
+      isActive?: boolean;
+      isAuto?: boolean;
+    }) => portalRepository.createPointsRule(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["points-rules"] }),
+  });
+}
+
+export function useUpdatePointsRuleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: number;
+      patch: {
+        title?: string;
+        description?: string | null;
+        basePoints?: number;
+        isActive?: boolean;
+        isAuto?: boolean;
+      };
+    }) => portalRepository.updatePointsRule(input.id, input.patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["points-rules"] }),
+  });
+}
+
+export function usePointsCampaignsQuery(enabled = true) {
+  return useQuery<PointsCampaign[]>({
+    queryKey: ["points-campaigns"],
+    queryFn: () => portalRepository.getPointsCampaigns(),
+    enabled,
+  });
+}
+
+export function useCreatePointsCampaignMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      description?: string;
+      actionKey?: string | null;
+      bonusPoints?: number;
+      multiplier?: number;
+      startsAt: string;
+      endsAt: string;
+      isActive?: boolean;
+    }) => portalRepository.createPointsCampaign(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["points-campaigns"] }),
+  });
+}
+
+export function useUpdatePointsCampaignMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: number;
+      patch: {
+        name?: string;
+        description?: string | null;
+        actionKey?: string | null;
+        bonusPoints?: number;
+        multiplier?: number;
+        startsAt?: string;
+        endsAt?: string;
+        isActive?: boolean;
+      };
+    }) => portalRepository.updatePointsCampaign(input.id, input.patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["points-campaigns"] }),
+  });
+}
+
+export function usePointsEventsQuery(input?: { userId?: string; actionKey?: string; limit?: number; offset?: number; enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["points-events", input?.userId ?? "", input?.actionKey ?? "", input?.limit ?? 50, input?.offset ?? 0],
+    queryFn: () => portalRepository.getPointsEvents(input),
+    enabled: input?.enabled ?? true,
+  });
+}
+
+export function useAwardPointsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { userId: string; actionKey?: string; basePoints: number; comment?: string }) =>
+      portalRepository.awardPoints(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["points-events"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+    },
   });
 }
 

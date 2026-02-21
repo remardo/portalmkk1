@@ -395,6 +395,59 @@ export interface AdminAuditList {
   hasMore: boolean;
 }
 
+export interface PointsTrackedAction {
+  actionKey: string;
+  title: string;
+  description: string;
+  source: string;
+  isAuto: boolean;
+}
+
+export interface PointsRule {
+  id: number;
+  actionKey: string;
+  title: string;
+  description: string | null;
+  basePoints: number;
+  isActive: boolean;
+  isAuto: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PointsCampaign {
+  id: number;
+  name: string;
+  description: string | null;
+  actionKey: string | null;
+  bonusPoints: number;
+  multiplier: number;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PointsEvent {
+  id: number;
+  userId: string;
+  actionKey: string;
+  ruleId: number | null;
+  basePoints: number;
+  bonusPoints: number;
+  multiplier: number;
+  totalPoints: number;
+  entityType: string | null;
+  entityId: string | null;
+  meta: Record<string, unknown>;
+  awardedBy: string | null;
+  dedupeKey: string | null;
+  createdAt: string;
+}
+
 export interface UnifiedSearchResult {
   query: string;
   documents: Array<{
@@ -1119,6 +1172,138 @@ export const portalRepository = {
       headId: input.headId,
       rating: input.rating,
     });
+  },
+
+  async getPointsActions(): Promise<PointsTrackedAction[]> {
+    return backendApi.getAdminPointsActions();
+  },
+
+  async getPointsRules(): Promise<PointsRule[]> {
+    const rows = await backendApi.getAdminPointsRules();
+    return rows.map((row) => ({
+      id: Number(row.id),
+      actionKey: row.action_key,
+      title: row.title,
+      description: row.description,
+      basePoints: Number(row.base_points),
+      isActive: row.is_active,
+      isAuto: row.is_auto,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  },
+
+  async createPointsRule(input: {
+    actionKey: string;
+    title: string;
+    description?: string;
+    basePoints: number;
+    isActive?: boolean;
+    isAuto?: boolean;
+  }): Promise<void> {
+    await backendApi.createAdminPointsRule(input);
+  },
+
+  async updatePointsRule(
+    id: number,
+    input: {
+      title?: string;
+      description?: string | null;
+      basePoints?: number;
+      isActive?: boolean;
+      isAuto?: boolean;
+    },
+  ): Promise<void> {
+    await backendApi.updateAdminPointsRule(id, input);
+  },
+
+  async getPointsCampaigns(): Promise<PointsCampaign[]> {
+    const rows = await backendApi.getAdminPointsCampaigns();
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      description: row.description,
+      actionKey: row.action_key,
+      bonusPoints: Number(row.bonus_points),
+      multiplier: Number(row.multiplier),
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      isActive: row.is_active,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  },
+
+  async createPointsCampaign(input: {
+    name: string;
+    description?: string;
+    actionKey?: string | null;
+    bonusPoints?: number;
+    multiplier?: number;
+    startsAt: string;
+    endsAt: string;
+    isActive?: boolean;
+  }): Promise<void> {
+    await backendApi.createAdminPointsCampaign(input);
+  },
+
+  async updatePointsCampaign(
+    id: number,
+    input: {
+      name?: string;
+      description?: string | null;
+      actionKey?: string | null;
+      bonusPoints?: number;
+      multiplier?: number;
+      startsAt?: string;
+      endsAt?: string;
+      isActive?: boolean;
+    },
+  ): Promise<void> {
+    await backendApi.updateAdminPointsCampaign(id, input);
+  },
+
+  async getPointsEvents(input?: { userId?: string; actionKey?: string; limit?: number; offset?: number }): Promise<{
+    items: PointsEvent[];
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  }> {
+    const response = await backendApi.getAdminPointsEvents(input);
+    return {
+      items: response.items.map((item) => ({
+        id: Number(item.id),
+        userId: item.user_id,
+        actionKey: item.action_key,
+        ruleId: item.rule_id === null ? null : Number(item.rule_id),
+        basePoints: Number(item.base_points),
+        bonusPoints: Number(item.bonus_points),
+        multiplier: Number(item.multiplier),
+        totalPoints: Number(item.total_points),
+        entityType: item.entity_type,
+        entityId: item.entity_id,
+        meta: item.meta ?? {},
+        awardedBy: item.awarded_by,
+        dedupeKey: item.dedupe_key,
+        createdAt: item.created_at,
+      })),
+      total: response.total,
+      limit: response.limit,
+      offset: response.offset,
+      hasMore: response.hasMore,
+    };
+  },
+
+  async awardPoints(input: { userId: string; actionKey?: string; basePoints: number; comment?: string }): Promise<{
+    ok: boolean;
+    duplicated: boolean;
+    totalPoints: number;
+    eventId: number;
+  }> {
+    return backendApi.awardAdminPoints(input);
   },
 
   async adminGetAudit(input?: {

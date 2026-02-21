@@ -1090,6 +1090,135 @@ export const backendApi = {
     rating?: number;
   }) => apiRequest("/api/admin/offices", { method: "POST", body: JSON.stringify(input) }),
 
+  getAdminPointsActions: () =>
+    apiRequest<
+      Array<{
+        actionKey: string;
+        title: string;
+        description: string;
+        source: string;
+        isAuto: boolean;
+      }>
+    >("/api/admin/points/actions"),
+
+  getAdminPointsRules: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        action_key: string;
+        title: string;
+        description: string | null;
+        base_points: number;
+        is_active: boolean;
+        is_auto: boolean;
+        created_by: string | null;
+        created_at: string;
+        updated_at: string;
+      }>
+    >("/api/admin/points/rules"),
+
+  createAdminPointsRule: (input: {
+    actionKey: string;
+    title: string;
+    description?: string;
+    basePoints: number;
+    isActive?: boolean;
+    isAuto?: boolean;
+  }) => apiRequest("/api/admin/points/rules", { method: "POST", body: JSON.stringify(input) }),
+
+  updateAdminPointsRule: (
+    id: number,
+    input: {
+      title?: string;
+      description?: string | null;
+      basePoints?: number;
+      isActive?: boolean;
+      isAuto?: boolean;
+    },
+  ) => apiRequest(`/api/admin/points/rules/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  getAdminPointsCampaigns: () =>
+    apiRequest<
+      Array<{
+        id: number;
+        name: string;
+        description: string | null;
+        action_key: string | null;
+        bonus_points: number;
+        multiplier: number;
+        starts_at: string;
+        ends_at: string;
+        is_active: boolean;
+        created_by: string | null;
+        created_at: string;
+        updated_at: string;
+      }>
+    >("/api/admin/points/campaigns"),
+
+  createAdminPointsCampaign: (input: {
+    name: string;
+    description?: string;
+    actionKey?: string | null;
+    bonusPoints?: number;
+    multiplier?: number;
+    startsAt: string;
+    endsAt: string;
+    isActive?: boolean;
+  }) => apiRequest("/api/admin/points/campaigns", { method: "POST", body: JSON.stringify(input) }),
+
+  updateAdminPointsCampaign: (
+    id: number,
+    input: {
+      name?: string;
+      description?: string | null;
+      actionKey?: string | null;
+      bonusPoints?: number;
+      multiplier?: number;
+      startsAt?: string;
+      endsAt?: string;
+      isActive?: boolean;
+    },
+  ) => apiRequest(`/api/admin/points/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  getAdminPointsEvents: (input?: { userId?: string; actionKey?: string; limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (input?.userId) params.set("userId", input.userId);
+    if (input?.actionKey) params.set("actionKey", input.actionKey);
+    if (input?.limit) params.set("limit", String(input.limit));
+    if (input?.offset !== undefined) params.set("offset", String(input.offset));
+    const query = params.toString();
+    return apiRequest<{
+      items: Array<{
+        id: number;
+        user_id: string;
+        action_key: string;
+        rule_id: number | null;
+        base_points: number;
+        bonus_points: number;
+        multiplier: number;
+        total_points: number;
+        entity_type: string | null;
+        entity_id: string | null;
+        meta: Record<string, unknown>;
+        awarded_by: string | null;
+        dedupe_key: string | null;
+        created_at: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    }>(`/api/admin/points/events${query ? `?${query}` : ""}`);
+  },
+
+  awardAdminPoints: (input: { userId: string; actionKey?: string; basePoints: number; comment?: string }) =>
+    apiRequest<{
+      ok: boolean;
+      duplicated: boolean;
+      totalPoints: number;
+      eventId: number;
+    }>("/api/admin/points/award", { method: "POST", body: JSON.stringify(input) }),
+
   getAdminAudit: (input?: {
     limit?: number;
     offset?: number;

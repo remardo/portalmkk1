@@ -766,6 +766,151 @@ async function writeAuditLog(input: {
   });
 }
 
+const trackedPointsActionsCatalog = [
+  {
+    actionKey: "task_completed",
+    title: "Задача выполнена",
+    description: "Автоматически при переводе задачи в done",
+    source: "tasks.update_status",
+    isAuto: true,
+  },
+  {
+    actionKey: "lms_course_passed",
+    title: "Курс пройден",
+    description: "Автоматически при успешной сдаче LMS курса",
+    source: "courses.attempt.grade",
+    isAuto: true,
+  },
+  {
+    actionKey: "shop_purchase",
+    title: "Покупка в магазине",
+    description: "Автоматическое списание баллов за заказ",
+    source: "shop_orders.create",
+    isAuto: true,
+  },
+  {
+    actionKey: "manual_bonus",
+    title: "Ручное начисление",
+    description: "Ручная корректировка баллов руководителем",
+    source: "admin.points.award",
+    isAuto: false,
+  },
+] as const;
+
+async function awardPointsByAction(input: {
+  userId: string;
+  actionKey: string;
+  actorUserId?: string;
+  entityType?: string;
+  entityId?: string;
+  dedupeKey?: string;
+  basePointsOverride?: number;
+  meta?: Record<string, unknown>;
+  applyToProfile?: boolean;
+}) {
+  if (input.dedupeKey) {
+    const { data: existing } = await supabaseAdmin
+      .from("points_events")
+      .select("id,total_points")
+      .eq("dedupe_key", input.dedupeKey)
+      .maybeSingle();
+    if (existing) {
+      return { ok: true as const, duplicated: true, totalPoints: Number(existing.total_points), eventId: Number(existing.id) };
+    }
+  }
+
+  const { data: rule, error: ruleError } = await supabaseAdmin
+    .from("points_action_rules")
+    .select("id,base_points,is_active")
+    .eq("action_key", input.actionKey)
+    .maybeSingle();
+  if (ruleError) {
+    throw new Error(ruleError.message);
+  }
+  if (!rule || !rule.is_active) {
+    return { ok: false as const, reason: "rule_inactive_or_missing" };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { data: campaigns, error: campaignsError } = await supabaseAdmin
+    .from("points_campaigns")
+    .select("id,action_key,bonus_points,multiplier")
+    .eq("is_active", true)
+    .lte("starts_at", nowIso)
+    .gte("ends_at", nowIso);
+  if (campaignsError) {
+    throw new Error(campaignsError.message);
+  }
+  const matchedCampaigns = (campaigns ?? []).filter((campaign) => !campaign.action_key || campaign.action_key === input.actionKey);
+  const bonusPoints = matchedCampaigns.reduce((sum, campaign) => sum + Number(campaign.bonus_points ?? 0), 0);
+  const multiplier = matchedCampaigns.reduce((max, campaign) => Math.max(max, Number(campaign.multiplier ?? 1)), 1);
+
+  const basePoints = input.basePointsOverride ?? Number(rule.base_points ?? 0);
+  const totalPoints = Math.round(basePoints * multiplier + bonusPoints);
+
+  const shouldApplyToProfile = input.applyToProfile !== false;
+  let currentPoints = 0;
+  if (shouldApplyToProfile) {
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("id,points")
+      .eq("id", input.userId)
+      .single();
+    if (profileError || !profile) {
+      throw new Error(profileError?.message ?? "Profile not found");
+    }
+    currentPoints = Number(profile.points ?? 0);
+    const nextPoints = currentPoints + totalPoints;
+    const { error: updateError } = await supabaseAdmin
+      .from("profiles")
+      .update({ points: nextPoints })
+      .eq("id", input.userId);
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+  }
+
+  const eventPayload = {
+    user_id: input.userId,
+    action_key: input.actionKey,
+    rule_id: Number(rule.id),
+    base_points: basePoints,
+    bonus_points: bonusPoints,
+    multiplier,
+    total_points: totalPoints,
+    entity_type: input.entityType ?? null,
+    entity_id: input.entityId ?? null,
+    meta: input.meta ?? {},
+    awarded_by: input.actorUserId ?? null,
+    dedupe_key: input.dedupeKey ?? null,
+    created_at: nowIso,
+  };
+
+  const { data: eventRow, error: insertError } = await supabaseAdmin
+    .from("points_events")
+    .insert(eventPayload)
+    .select("id")
+    .single();
+  if (insertError || !eventRow) {
+    if (shouldApplyToProfile) {
+      await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", input.userId);
+    }
+    if (insertError?.code === "23505" && input.dedupeKey) {
+      const { data: existing } = await supabaseAdmin
+        .from("points_events")
+        .select("id,total_points")
+        .eq("dedupe_key", input.dedupeKey)
+        .maybeSingle();
+      if (existing) {
+        return { ok: true as const, duplicated: true, totalPoints: Number(existing.total_points), eventId: Number(existing.id) };
+      }
+    }
+    throw new Error(insertError?.message ?? "Failed to save points event");
+  }
+
+  return { ok: true as const, duplicated: false, totalPoints, eventId: Number(eventRow.id) };
+}
+
 async function createNotification(input: {
   recipientUserId: string;
   level: "info" | "warning" | "critical";
@@ -1708,6 +1853,307 @@ app.patch("/api/admin/offices/:id", requireAuth(), requireRole(["admin", "direct
   });
 
   return res.json(data);
+});
+
+const pointsRulesCreateSchema = z.object({
+  actionKey: z.string().trim().min(2).max(80).regex(/^[a-z0-9_]+$/),
+  title: z.string().trim().min(2).max(200),
+  description: z.string().trim().max(500).optional(),
+  basePoints: z.number().int().min(-100000).max(100000),
+  isActive: z.boolean().default(true),
+  isAuto: z.boolean().default(false),
+});
+
+const pointsRulesUpdateSchema = z.object({
+  title: z.string().trim().min(2).max(200).optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+  basePoints: z.number().int().min(-100000).max(100000).optional(),
+  isActive: z.boolean().optional(),
+  isAuto: z.boolean().optional(),
+});
+
+const pointsCampaignCreateSchema = z.object({
+  name: z.string().trim().min(2).max(200),
+  description: z.string().trim().max(500).optional(),
+  actionKey: z.string().trim().min(2).max(80).regex(/^[a-z0-9_]+$/).nullable().optional(),
+  bonusPoints: z.number().int().min(-100000).max(100000).default(0),
+  multiplier: z.number().min(0).max(10).default(1),
+  startsAt: z.string().datetime(),
+  endsAt: z.string().datetime(),
+  isActive: z.boolean().default(true),
+});
+
+const pointsCampaignUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(200).optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+  actionKey: z.string().trim().min(2).max(80).regex(/^[a-z0-9_]+$/).nullable().optional(),
+  bonusPoints: z.number().int().min(-100000).max(100000).optional(),
+  multiplier: z.number().min(0).max(10).optional(),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.string().datetime().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const pointsAwardSchema = z.object({
+  userId: z.string().uuid(),
+  actionKey: z.string().trim().min(2).max(80).regex(/^[a-z0-9_]+$/).default("manual_bonus"),
+  basePoints: z.number().int().min(-100000).max(100000),
+  comment: z.string().trim().max(1000).optional(),
+});
+
+const pointsEventsQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+  actionKey: z.string().trim().min(2).max(80).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+app.get("/api/admin/points/actions", requireAuth(), requireRole(["admin", "director", "office_head"]), async (_req, res) => {
+  return res.json(trackedPointsActionsCatalog);
+});
+
+app.get("/api/admin/points/rules", requireAuth(), requireRole(["admin", "director", "office_head"]), async (_req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("points_action_rules")
+    .select("*")
+    .order("action_key");
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.post("/api/admin/points/rules", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = pointsRulesCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    action_key: parsed.data.actionKey,
+    title: parsed.data.title,
+    description: parsed.data.description?.trim() || null,
+    base_points: parsed.data.basePoints,
+    is_active: parsed.data.isActive,
+    is_auto: parsed.data.isAuto,
+    created_by: session.profile.id,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabaseAdmin
+    .from("points_action_rules")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to create points rule" });
+  }
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "admin.points.rules.create",
+    entityType: "points_action_rules",
+    entityId: String(data.id),
+    payload,
+  });
+  return res.status(201).json(data);
+});
+
+app.patch("/api/admin/points/rules/:id", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = pointsRulesUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const ruleId = Number(req.params.id);
+  if (Number.isNaN(ruleId)) {
+    return res.status(400).json({ error: "Invalid rule id" });
+  }
+  const updatePayload: Record<string, unknown> = {};
+  if (parsed.data.title !== undefined) updatePayload.title = parsed.data.title;
+  if (parsed.data.description !== undefined) updatePayload.description = parsed.data.description?.trim() || null;
+  if (parsed.data.basePoints !== undefined) updatePayload.base_points = parsed.data.basePoints;
+  if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
+  if (parsed.data.isAuto !== undefined) updatePayload.is_auto = parsed.data.isAuto;
+  if (Object.keys(updatePayload).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+  updatePayload.updated_at = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("points_action_rules")
+    .update(updatePayload)
+    .eq("id", ruleId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to update points rule" });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "admin.points.rules.update",
+    entityType: "points_action_rules",
+    entityId: String(ruleId),
+    payload: updatePayload,
+  });
+  return res.json(data);
+});
+
+app.get("/api/admin/points/campaigns", requireAuth(), requireRole(["admin", "director", "office_head"]), async (_req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("points_campaigns")
+    .select("*")
+    .order("starts_at", { ascending: false });
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json(data ?? []);
+});
+
+app.post("/api/admin/points/campaigns", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = pointsCampaignCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  if (new Date(parsed.data.endsAt).getTime() <= new Date(parsed.data.startsAt).getTime()) {
+    return res.status(400).json({ error: "endsAt must be greater than startsAt" });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  const payload = {
+    name: parsed.data.name,
+    description: parsed.data.description?.trim() || null,
+    action_key: parsed.data.actionKey ?? null,
+    bonus_points: parsed.data.bonusPoints,
+    multiplier: parsed.data.multiplier,
+    starts_at: parsed.data.startsAt,
+    ends_at: parsed.data.endsAt,
+    is_active: parsed.data.isActive,
+    created_by: session.profile.id,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabaseAdmin
+    .from("points_campaigns")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to create points campaign" });
+  }
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "admin.points.campaigns.create",
+    entityType: "points_campaigns",
+    entityId: String(data.id),
+    payload,
+  });
+  return res.status(201).json(data);
+});
+
+app.patch("/api/admin/points/campaigns/:id", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = pointsCampaignUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const campaignId = Number(req.params.id);
+  if (Number.isNaN(campaignId)) {
+    return res.status(400).json({ error: "Invalid campaign id" });
+  }
+  const updatePayload: Record<string, unknown> = {};
+  if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+  if (parsed.data.description !== undefined) updatePayload.description = parsed.data.description?.trim() || null;
+  if (parsed.data.actionKey !== undefined) updatePayload.action_key = parsed.data.actionKey;
+  if (parsed.data.bonusPoints !== undefined) updatePayload.bonus_points = parsed.data.bonusPoints;
+  if (parsed.data.multiplier !== undefined) updatePayload.multiplier = parsed.data.multiplier;
+  if (parsed.data.startsAt !== undefined) updatePayload.starts_at = parsed.data.startsAt;
+  if (parsed.data.endsAt !== undefined) updatePayload.ends_at = parsed.data.endsAt;
+  if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
+  if (Object.keys(updatePayload).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+  updatePayload.updated_at = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("points_campaigns")
+    .update(updatePayload)
+    .eq("id", campaignId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    return res.status(400).json({ error: error?.message ?? "Failed to update points campaign" });
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "admin.points.campaigns.update",
+    entityType: "points_campaigns",
+    entityId: String(campaignId),
+    payload: updatePayload,
+  });
+  return res.json(data);
+});
+
+app.get("/api/admin/points/events", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = pointsEventsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const { userId, actionKey, limit, offset } = parsed.data;
+  let query = supabaseAdmin
+    .from("points_events")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (userId) query = query.eq("user_id", userId);
+  if (actionKey) query = query.eq("action_key", actionKey);
+  const { data, error, count } = await query;
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.json({
+    items: data ?? [],
+    total: count ?? 0,
+    limit,
+    offset,
+    hasMore: (count ?? 0) > offset + (data?.length ?? 0),
+  });
+});
+
+app.post("/api/admin/points/award", requireAuth(), requireRole(["admin", "director", "office_head"]), async (req, res) => {
+  const parsed = pointsAwardSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  const session = (req as express.Request & { session: Session }).session;
+  if (session.profile.role === "office_head") {
+    const allowed = await ensureOfficeHeadCanAssignAssignee(session.profile, parsed.data.userId);
+    if (!allowed.ok) {
+      return res.status(403).json({ error: allowed.error });
+    }
+  }
+
+  const result = await awardPointsByAction({
+    userId: parsed.data.userId,
+    actionKey: parsed.data.actionKey,
+    actorUserId: session.profile.id,
+    entityType: "manual_points_award",
+    entityId: parsed.data.userId,
+    basePointsOverride: parsed.data.basePoints,
+    meta: { comment: parsed.data.comment ?? null },
+  });
+  if (!result.ok) {
+    return res.status(400).json({ error: "Points rule is inactive or missing" });
+  }
+
+  await writeAuditLog({
+    actorUserId: session.profile.id,
+    actorRole: session.profile.role,
+    action: "admin.points.award",
+    entityType: "points_events",
+    entityId: String(result.eventId),
+    payload: parsed.data,
+  });
+
+  return res.status(201).json(result);
 });
 
 const adminAuditQuerySchema = z.object({
@@ -3638,6 +4084,15 @@ app.patch("/api/tasks/:id/status", requireAuth(), async (req, res) => {
     return res.status(400).json({ error: "Invalid task id" });
   }
 
+  const { data: currentTask, error: currentTaskError } = await supabaseAdmin
+    .from("tasks")
+    .select("id,status,assignee_id")
+    .eq("id", taskId)
+    .single();
+  if (currentTaskError || !currentTask) {
+    return res.status(404).json({ error: currentTaskError?.message ?? "Task not found" });
+  }
+
   const { data, error } = await supabaseAdmin
     .from("tasks")
     .update({ status: parsed.data.status })
@@ -3658,6 +4113,21 @@ app.patch("/api/tasks/:id/status", requireAuth(), async (req, res) => {
     entityId: String(taskId),
     payload: { status: parsed.data.status },
   });
+
+  if (currentTask.status !== "done" && parsed.data.status === "done" && currentTask.assignee_id) {
+    try {
+      await awardPointsByAction({
+        userId: currentTask.assignee_id,
+        actionKey: "task_completed",
+        actorUserId: session.profile.id,
+        entityType: "tasks",
+        entityId: String(taskId),
+        dedupeKey: `task_completed:${taskId}`,
+      });
+    } catch (awardError) {
+      console.error(`[points] task_completed failed for task=${taskId}: ${awardError instanceof Error ? awardError.message : String(awardError)}`);
+    }
+  }
 
   return res.json(data);
 });
@@ -5072,6 +5542,29 @@ app.post("/api/shop/orders", requireAuth(), async (req, res) => {
       comment: payload.comment,
     },
   });
+
+  try {
+    await awardPointsByAction({
+      userId: session.profile.id,
+      actionKey: "shop_purchase",
+      actorUserId: session.profile.id,
+      entityType: "shop_orders",
+      entityId: String(order.id),
+      dedupeKey: `shop_purchase:${order.id}`,
+      basePointsOverride: -totalPoints,
+      applyToProfile: false,
+      meta: {
+        orderId: Number(order.id),
+        totalPoints,
+      },
+    });
+  } catch (awardError) {
+    console.error(
+      `[points] shop_purchase event failed for order=${order.id}: ${
+        awardError instanceof Error ? awardError.message : String(awardError)
+      }`,
+    );
+  }
 
   return res.status(201).json({ order, items: createdItems ?? [] });
 });
@@ -6877,6 +7370,26 @@ app.post("/api/courses/:id/attempts/grade", requireAuth(), async (req, res) => {
     payload: { courseId, userId: targetUserId, score, passed, attemptNo, correct, total },
   });
 
+  if (passed) {
+    try {
+      await awardPointsByAction({
+        userId: targetUserId,
+        actionKey: "lms_course_passed",
+        actorUserId: session.profile.id,
+        entityType: "course_attempts",
+        entityId: String(attempt.id),
+        dedupeKey: `lms_course_passed:${courseId}:${targetUserId}`,
+        meta: { courseId, attemptId: Number(attempt.id), score, passed },
+      });
+    } catch (awardError) {
+      console.error(
+        `[points] lms_course_passed failed for attempt=${attempt.id}: ${
+          awardError instanceof Error ? awardError.message : String(awardError)
+        }`,
+      );
+    }
+  }
+
   return res.status(201).json({
     attemptId: attempt.id,
     score,
@@ -6954,6 +7467,26 @@ app.post("/api/courses/:id/attempts", requireAuth(), async (req, res) => {
     entityId: String(data.id),
     payload: { courseId, userId: targetUserId, score: parsed.data.score, passed, attemptNo },
   });
+
+  if (passed) {
+    try {
+      await awardPointsByAction({
+        userId: targetUserId,
+        actionKey: "lms_course_passed",
+        actorUserId: session.profile.id,
+        entityType: "course_attempts",
+        entityId: String(data.id),
+        dedupeKey: `lms_course_passed:${courseId}:${targetUserId}`,
+        meta: { courseId, attemptId: Number(data.id), score: parsed.data.score, passed },
+      });
+    } catch (awardError) {
+      console.error(
+        `[points] lms_course_passed failed for attempt=${data.id}: ${
+          awardError instanceof Error ? awardError.message : String(awardError)
+        }`,
+      );
+    }
+  }
 
   return res.status(201).json(data);
 });

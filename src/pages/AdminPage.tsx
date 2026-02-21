@@ -1,4 +1,4 @@
-import { Building2, ClipboardList, ScrollText, Users } from "lucide-react";
+import { Building2, ClipboardList, Coins, ScrollText, Users } from "lucide-react";
 import { useState } from "react";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -14,7 +14,16 @@ import {
   useAdminUpdateShopProductMutation,
   useUpdateShopOrderStatusMutation,
   useAdminUpdateUserMutation,
+  useAwardPointsMutation,
+  useCreatePointsCampaignMutation,
+  useCreatePointsRuleMutation,
+  usePointsActionsQuery,
+  usePointsCampaignsQuery,
+  usePointsEventsQuery,
+  usePointsRulesQuery,
   usePortalData,
+  useUpdatePointsCampaignMutation,
+  useUpdatePointsRuleMutation,
 } from "../hooks/usePortalData";
 import { canAccessAdmin } from "../lib/permissions";
 import { RoleLabels, type Office, type Role, type ShopProduct, type User } from "../domain/models";
@@ -22,7 +31,7 @@ import { useSearchParams } from "react-router-dom";
 
 const roleOptions: Role[] = ["operator", "office_head", "director", "admin"];
 type ToastItem = { id: number; kind: "success" | "error"; message: string };
-type AdminTab = "users" | "offices" | "orders" | "other";
+type AdminTab = "users" | "offices" | "points" | "orders" | "other";
 const shopOrderStatusOptions: Array<{ value: "new" | "processing" | "shipped" | "delivered" | "cancelled"; label: string }> = [
   { value: "new", label: "Новый" },
   { value: "processing", label: "В обработке" },
@@ -105,6 +114,15 @@ export function AdminPage() {
   const updateShopOrderStatus = useUpdateShopOrderStatusMutation();
   const createShopProduct = useAdminCreateShopProductMutation();
   const updateShopProduct = useAdminUpdateShopProductMutation();
+  const pointsActions = usePointsActionsQuery(Boolean(user && canAccessAdmin(user.role)));
+  const pointsRules = usePointsRulesQuery(Boolean(user && canAccessAdmin(user.role)));
+  const pointsCampaigns = usePointsCampaignsQuery(Boolean(user && canAccessAdmin(user.role)));
+  const pointsEvents = usePointsEventsQuery({ limit: 50, enabled: Boolean(user && canAccessAdmin(user.role)) });
+  const createPointsRule = useCreatePointsRuleMutation();
+  const updatePointsRule = useUpdatePointsRuleMutation();
+  const createPointsCampaign = useCreatePointsCampaignMutation();
+  const updatePointsCampaign = useUpdatePointsCampaignMutation();
+  const awardPoints = useAwardPointsMutation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -155,9 +173,30 @@ export function AdminPage() {
   });
   const [newShopProductImageFile, setNewShopProductImageFile] = useState<File | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [pointsRuleDraft, setPointsRuleDraft] = useState({
+    actionKey: "",
+    title: "",
+    description: "",
+    basePoints: "5",
+  });
+  const [pointsCampaignDraft, setPointsCampaignDraft] = useState({
+    name: "",
+    description: "",
+    actionKey: "",
+    bonusPoints: "0",
+    multiplier: "1",
+    startsAt: "",
+    endsAt: "",
+  });
+  const [pointsAwardDraft, setPointsAwardDraft] = useState({
+    userId: "",
+    actionKey: "manual_bonus",
+    basePoints: "0",
+    comment: "",
+  });
   const initialTab = (() => {
     const raw = searchParams.get("tab");
-    if (raw === "users" || raw === "offices" || raw === "orders" || raw === "other") return raw as AdminTab;
+    if (raw === "users" || raw === "offices" || raw === "points" || raw === "orders" || raw === "other") return raw as AdminTab;
     return "users";
   })();
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
@@ -347,6 +386,15 @@ export function AdminPage() {
           >
             <Building2 className="h-4 w-4" />
             Офисы ({data.offices.length})
+          </button>
+          <button
+            onClick={() => switchTab("points")}
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+              activeTab === "points" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            <Coins className="h-4 w-4" />
+            Баллы
           </button>
           <button
             onClick={() => switchTab("other")}
@@ -1189,6 +1237,248 @@ export function AdminPage() {
           ) : null}
         </div>
       </Card>
+      ) : null}
+
+      {activeTab === "points" ? (
+      <div className="space-y-4">
+        <Card className="border border-cyan-200 bg-gradient-to-r from-cyan-50 to-teal-50 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Настройка баллов и условий начисления</h2>
+            <button
+              onClick={() => {
+                pointsActions.refetch();
+                pointsRules.refetch();
+                pointsCampaigns.refetch();
+                pointsEvents.refetch();
+              }}
+              className="rounded-lg border border-cyan-300 bg-white px-3 py-1.5 text-sm text-cyan-700 hover:bg-cyan-50"
+            >
+              Обновить
+            </button>
+          </div>
+          <p className="text-sm text-gray-600">Руководитель может менять правила, запускать акции и вручную корректировать баллы сотрудников.</p>
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="mb-3 font-semibold text-gray-900">Новое правило начисления</h3>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+            <input
+              value={pointsRuleDraft.actionKey}
+              onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, actionKey: event.target.value }))}
+              placeholder="action_key (например task_completed)"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              value={pointsRuleDraft.title}
+              onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, title: event.target.value }))}
+              placeholder="Название"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              value={pointsRuleDraft.basePoints}
+              onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, basePoints: event.target.value }))}
+              placeholder="Баллы"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <button
+              onClick={async () => {
+                try {
+                  await createPointsRule.mutateAsync({
+                    actionKey: pointsRuleDraft.actionKey.trim(),
+                    title: pointsRuleDraft.title.trim(),
+                    description: pointsRuleDraft.description.trim() || undefined,
+                    basePoints: Number(pointsRuleDraft.basePoints),
+                    isActive: true,
+                    isAuto: false,
+                  });
+                  setPointsRuleDraft({ actionKey: "", title: "", description: "", basePoints: "5" });
+                  showToast("success", "Правило добавлено");
+                } catch (error) {
+                  showToast("error", extractErrorMessage(error));
+                }
+              }}
+              className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+            >
+              Добавить правило
+            </button>
+          </div>
+          <textarea
+            value={pointsRuleDraft.description}
+            onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, description: event.target.value }))}
+            placeholder="Описание правила"
+            className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="mb-3 font-semibold text-gray-900">Правила начисления</h3>
+          <div className="space-y-2">
+            {(pointsRules.data ?? []).map((rule) => (
+              <div key={rule.id} className="grid grid-cols-1 gap-2 rounded-lg border border-gray-200 p-3 md:grid-cols-[1.3fr_1fr_auto_auto]">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{rule.title}</p>
+                  <p className="text-xs text-gray-500">{rule.actionKey} {rule.isAuto ? "• авто" : "• вручную"}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    defaultValue={String(rule.basePoints)}
+                    onBlur={(event) => {
+                      void updatePointsRule.mutateAsync({
+                        id: rule.id,
+                        patch: { basePoints: Number(event.target.value) },
+                      });
+                    }}
+                    className="w-28 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                  <span className="text-xs text-gray-500">баллов</span>
+                </div>
+                <button
+                  onClick={() => {
+                    void updatePointsRule.mutateAsync({ id: rule.id, patch: { isActive: !rule.isActive } });
+                  }}
+                  className={`rounded-lg px-3 py-1.5 text-sm ${rule.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}
+                >
+                  {rule.isActive ? "Вкл" : "Выкл"}
+                </button>
+                <button
+                  onClick={() => {
+                    void updatePointsRule.mutateAsync({ id: rule.id, patch: { isAuto: !rule.isAuto } });
+                  }}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  {rule.isAuto ? "Авто" : "Ручн."}
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="mb-3 font-semibold text-gray-900">Акции и бонусы</h3>
+          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-4">
+            <input value={pointsCampaignDraft.name} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название акции" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <input value={pointsCampaignDraft.actionKey} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, actionKey: event.target.value }))} placeholder="action_key или пусто=все" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <input value={pointsCampaignDraft.bonusPoints} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, bonusPoints: event.target.value }))} placeholder="Бонус (+/-)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <input value={pointsCampaignDraft.multiplier} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, multiplier: event.target.value }))} placeholder="Множитель (1.0)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <input type="datetime-local" value={pointsCampaignDraft.startsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, startsAt: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <input type="datetime-local" value={pointsCampaignDraft.endsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, endsAt: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <button
+              onClick={async () => {
+                try {
+                  await createPointsCampaign.mutateAsync({
+                    name: pointsCampaignDraft.name.trim(),
+                    description: pointsCampaignDraft.description.trim() || undefined,
+                    actionKey: pointsCampaignDraft.actionKey.trim() || null,
+                    bonusPoints: Number(pointsCampaignDraft.bonusPoints),
+                    multiplier: Number(pointsCampaignDraft.multiplier || "1"),
+                    startsAt: new Date(pointsCampaignDraft.startsAt).toISOString(),
+                    endsAt: new Date(pointsCampaignDraft.endsAt).toISOString(),
+                    isActive: true,
+                  });
+                  setPointsCampaignDraft({
+                    name: "",
+                    description: "",
+                    actionKey: "",
+                    bonusPoints: "0",
+                    multiplier: "1",
+                    startsAt: "",
+                    endsAt: "",
+                  });
+                  showToast("success", "Акция добавлена");
+                } catch (error) {
+                  showToast("error", extractErrorMessage(error));
+                }
+              }}
+              className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+            >
+              Добавить акцию
+            </button>
+          </div>
+          <textarea value={pointsCampaignDraft.description} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, description: event.target.value }))} placeholder="Описание акции" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          <div className="mt-3 space-y-2">
+            {(pointsCampaigns.data ?? []).map((campaign) => (
+              <div key={campaign.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 text-sm">
+                <div>
+                  <p className="font-medium text-gray-900">{campaign.name}</p>
+                  <p className="text-xs text-gray-500">{campaign.actionKey ?? "Все действия"} • {new Date(campaign.startsAt).toLocaleString()} - {new Date(campaign.endsAt).toLocaleString()}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-700">+{campaign.bonusPoints} / x{campaign.multiplier}</span>
+                  <button
+                    onClick={() => {
+                      void updatePointsCampaign.mutateAsync({ id: campaign.id, patch: { isActive: !campaign.isActive } });
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-xs ${campaign.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}
+                  >
+                    {campaign.isActive ? "Активна" : "Отключена"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="mb-3 font-semibold text-gray-900">Ручная корректировка баллов</h3>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+            <select value={pointsAwardDraft.userId} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, userId: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              <option value="">Выберите сотрудника</option>
+              {data.users.map((item) => (
+                <option key={String(item.id)} value={String(item.id)}>{item.name}</option>
+              ))}
+            </select>
+            <select value={pointsAwardDraft.actionKey} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, actionKey: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              {(pointsActions.data ?? []).map((item) => (
+                <option key={item.actionKey} value={item.actionKey}>{item.title}</option>
+              ))}
+            </select>
+            <input value={pointsAwardDraft.basePoints} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, basePoints: event.target.value }))} placeholder="Баллы (+/-)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <button
+              onClick={async () => {
+                try {
+                  await awardPoints.mutateAsync({
+                    userId: pointsAwardDraft.userId,
+                    actionKey: pointsAwardDraft.actionKey,
+                    basePoints: Number(pointsAwardDraft.basePoints),
+                    comment: pointsAwardDraft.comment.trim() || undefined,
+                  });
+                  setPointsAwardDraft((prev) => ({ ...prev, basePoints: "0", comment: "" }));
+                  showToast("success", "Баллы начислены");
+                } catch (error) {
+                  showToast("error", extractErrorMessage(error));
+                }
+              }}
+              className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+            >
+              Начислить
+            </button>
+          </div>
+          <textarea value={pointsAwardDraft.comment} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, comment: event.target.value }))} placeholder="Комментарий к начислению" className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="mb-3 font-semibold text-gray-900">События начисления (последние)</h3>
+          <div className="space-y-2">
+            {(pointsEvents.data?.items ?? []).map((event) => {
+              const employee = data.users.find((userItem) => String(userItem.id) === event.userId);
+              return (
+                <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                  <div>
+                    <p className="font-medium text-gray-900">{employee?.name ?? event.userId}</p>
+                    <p className="text-xs text-gray-500">{event.actionKey} • {new Date(event.createdAt).toLocaleString()}</p>
+                  </div>
+                  <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${event.totalPoints >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                    {event.totalPoints >= 0 ? "+" : ""}{event.totalPoints}
+                  </span>
+                </div>
+              );
+            })}
+            {(pointsEvents.data?.items ?? []).length === 0 ? (
+              <p className="text-sm text-gray-500">Событий пока нет.</p>
+            ) : null}
+          </div>
+        </Card>
+      </div>
       ) : null}
 
       {activeTab === "other" ? (
