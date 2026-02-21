@@ -55,6 +55,7 @@ export function useCrmClientsQuery(input?: {
   limit?: number;
   offset?: number;
   enabled?: boolean;
+  refetchIntervalMs?: number;
 }) {
   return useQuery({
     queryKey: ["crm-clients", input?.q ?? "", input?.status ?? "", input?.officeId ?? "", input?.assignedUserId ?? "", input?.limit ?? 50, input?.offset ?? 0],
@@ -66,12 +67,13 @@ export function useCrmClientsQuery(input?: {
         assignedUserId: input?.assignedUserId,
         limit: input?.limit,
         offset: input?.offset,
-      }),
+    }),
     enabled: input?.enabled ?? true,
+    refetchInterval: input?.refetchIntervalMs,
   });
 }
 
-export function useCrmClientQuery(clientId?: number, enabled = true) {
+export function useCrmClientQuery(clientId?: number, enabled = true, refetchIntervalMs?: number) {
   return useQuery({
     queryKey: ["crm-client", clientId ?? 0],
     queryFn: () => {
@@ -81,6 +83,7 @@ export function useCrmClientQuery(clientId?: number, enabled = true) {
       return portalRepository.getCrmClient(clientId);
     },
     enabled: enabled && Boolean(clientId),
+    refetchInterval: refetchIntervalMs,
   });
 }
 
