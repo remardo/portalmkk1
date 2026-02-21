@@ -103,7 +103,7 @@ export function CRMPage() {
 
   const clientsQuery = useCrmClientsQuery({
     q: query.trim() || undefined,
-    limit: 500,
+    limit: 200,
     enabled: Boolean(user),
     refetchIntervalMs: 10_000,
   });
