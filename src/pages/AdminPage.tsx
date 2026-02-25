@@ -550,7 +550,7 @@ export function AdminPage() {
             </div>
           </Card>
           {filteredUsers.map((item) => (
-            <Card key={String(item.id)} className="rounded-2xl border border-gray-200 p-4 shadow-sm">
+            <Card key={String(item.id)} className="rounded-2xl border border-gray-200 p-4 shadow-sm transition hover:shadow-md">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-gray-900">{item.name}</span>
                 <Badge className="bg-gray-100 text-gray-700">{item.email || "без email"}</Badge>
@@ -656,7 +656,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-60"
+                  className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-60"
                   disabled={updateUser.isPending}
                 >
                   Сохранить сотрудника
@@ -678,7 +678,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm transition hover:bg-gray-50 bg-white shadow-sm hover:shadow-md font-medium text-gray-700"
                 >
                   Сбросить логин
                 </button>
@@ -689,7 +689,7 @@ export function AdminPage() {
                     setUserPasswordDrafts((prev) => ({ ...prev, [String(item.id)]: event.target.value }))
                   }
                   placeholder="Новый пароль (мин. 8)"
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
                 />
                 <button
                   onClick={async () => {
@@ -709,7 +709,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm transition hover:bg-gray-50 bg-white shadow-sm hover:shadow-md font-medium text-gray-700"
                 >
                   Сбросить пароль
                 </button>
@@ -726,7 +726,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm transition hover:bg-gray-50 bg-white shadow-sm hover:shadow-md font-medium text-gray-700"
                 >
                   Сгенерировать пароль
                 </button>
@@ -832,7 +832,7 @@ export function AdminPage() {
             {filteredOffices.map((office) => {
               const draft = getOfficeDraft(office);
               return (
-                <Card key={office.id} className="rounded-2xl border border-gray-200 p-4 shadow-sm">
+                <Card key={office.id} className="rounded-2xl border border-gray-200 p-4 shadow-sm transition hover:shadow-md">
                   <div className="mb-3 flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm text-gray-500">Офис #{office.id}</p>
@@ -1011,7 +1011,7 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition"
               >
                 Добавить товар
               </button>
