@@ -240,7 +240,7 @@ async function evaluateSloStatus(windowMinutes: number): Promise<SloStatus> {
 
   const sinceIso = new Date(windowStart).toISOString();
   const { count: totalDeliveries, error: deliveriesError } = await supabaseAdmin
-    .from("notification_delivery_log")
+    .from("portalmkk_notification_delivery_log")
     .select("*", { head: true, count: "exact" })
     .gte("created_at", sinceIso);
   if (deliveriesError) {
@@ -248,7 +248,7 @@ async function evaluateSloStatus(windowMinutes: number): Promise<SloStatus> {
   }
 
   const { count: failedDeliveries, error: failedError } = await supabaseAdmin
-    .from("notification_delivery_log")
+    .from("portalmkk_notification_delivery_log")
     .select("*", { head: true, count: "exact" })
     .gte("created_at", sinceIso)
     .eq("status", "failed");
@@ -318,7 +318,7 @@ async function runSloAlertCheck(input: { actorUserId?: string; actorRole?: Profi
   const body = `Severity: ${routing.overallSeverity}; breaches: ${status.breaches.join(", ")}; api_error=${status.metrics.api.errorRatePercent}% ; p95=${status.metrics.api.p95LatencyMs}ms ; notif_failure=${status.metrics.notifications.failureRatePercent}%`;
 
   const { data: recipientsData, error: recipientsError } = await supabaseAdmin
-    .from("profiles")
+    .from("portalmkk_profiles")
     .select("id")
     .in("role", ["admin", "director"]);
   if (recipientsError) {
@@ -452,7 +452,7 @@ const smokeBypassOfficeId = env.SMOKE_AUTH_BYPASS_OFFICE_ID ?? 1;
 
 async function getProfileByUserId(client: SupabaseClient, userId: string) {
   const { data, error } = await client
-    .from("profiles")
+    .from("portalmkk_profiles")
     .select("id,full_name,role,office_id")
     .eq("id", userId)
     .single();
@@ -523,7 +523,7 @@ function requireRole(roles: Array<Profile["role"]>) {
 
 async function getOfficeHeadScopeOfficeIds(profile: Profile) {
   const { data, error } = await supabaseAdmin
-    .from("offices")
+    .from("portalmkk_offices")
     .select("id")
     .eq("head_id", profile.id);
   if (error) {
@@ -539,7 +539,7 @@ async function getOfficeHeadScopeOfficeIds(profile: Profile) {
 async function ensureOfficeHeadCanAssignAssignee(profile: Profile, assigneeId: string) {
   const managedOfficeIds = await getOfficeHeadScopeOfficeIds(profile);
   const { data: assignee, error: assigneeError } = await supabaseAdmin
-    .from("profiles")
+    .from("portalmkk_profiles")
     .select("id,office_id")
     .eq("id", assigneeId)
     .single();
@@ -668,7 +668,7 @@ async function canSessionAccessDocument(session: Session, document: { office_id:
 
 async function getScopedShopOrders(session: Session) {
   const { data: orders, error } = await supabaseAdmin
-    .from("shop_orders")
+    .from("portalmkk_shop_orders")
     .select("*")
     .order("id", { ascending: false });
   if (error) {
@@ -701,7 +701,7 @@ async function getShopOrderManagerRecipientIds(orderOfficeId: number | null, exc
   const recipientIds = new Set<string>();
 
   const { data: directorAndAdmins, error: managersError } = await supabaseAdmin
-    .from("profiles")
+    .from("portalmkk_profiles")
     .select("id")
     .in("role", ["director", "admin"]);
   if (managersError) {
@@ -713,7 +713,7 @@ async function getShopOrderManagerRecipientIds(orderOfficeId: number | null, exc
 
   if (orderOfficeId) {
     const { data: officesData, error: officeError } = await supabaseAdmin
-      .from("offices")
+      .from("portalmkk_offices")
       .select("head_id")
       .eq("id", orderOfficeId)
       .single();
@@ -755,7 +755,7 @@ async function writeAuditLog(input: {
   entityId: string;
   payload?: unknown;
 }) {
-  await supabaseAdmin.from("audit_log").insert({
+  await supabaseAdmin.from("portalmkk_audit_log").insert({
     actor_user_id: input.actorUserId,
     actor_role: input.actorRole,
     action: input.action,
@@ -810,7 +810,7 @@ async function awardPointsByAction(input: {
 }) {
   if (input.dedupeKey) {
     const { data: existing } = await supabaseAdmin
-      .from("points_events")
+      .from("portalmkk_points_events")
       .select("id,total_points")
       .eq("dedupe_key", input.dedupeKey)
       .maybeSingle();
@@ -820,7 +820,7 @@ async function awardPointsByAction(input: {
   }
 
   const { data: rule, error: ruleError } = await supabaseAdmin
-    .from("points_action_rules")
+    .from("portalmkk_points_action_rules")
     .select("id,base_points,is_active")
     .eq("action_key", input.actionKey)
     .maybeSingle();
@@ -833,7 +833,7 @@ async function awardPointsByAction(input: {
 
   const nowIso = new Date().toISOString();
   const { data: campaigns, error: campaignsError } = await supabaseAdmin
-    .from("points_campaigns")
+    .from("portalmkk_points_campaigns")
     .select("id,action_key,bonus_points,multiplier")
     .eq("is_active", true)
     .lte("starts_at", nowIso)
@@ -852,7 +852,7 @@ async function awardPointsByAction(input: {
   let currentPoints = 0;
   if (shouldApplyToProfile) {
     const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
+      .from("portalmkk_profiles")
       .select("id,points")
       .eq("id", input.userId)
       .single();
@@ -862,7 +862,7 @@ async function awardPointsByAction(input: {
     currentPoints = Number(profile.points ?? 0);
     const nextPoints = currentPoints + totalPoints;
     const { error: updateError } = await supabaseAdmin
-      .from("profiles")
+      .from("portalmkk_profiles")
       .update({ points: nextPoints })
       .eq("id", input.userId);
     if (updateError) {
@@ -887,17 +887,17 @@ async function awardPointsByAction(input: {
   };
 
   const { data: eventRow, error: insertError } = await supabaseAdmin
-    .from("points_events")
+    .from("portalmkk_points_events")
     .insert(eventPayload)
     .select("id")
     .single();
   if (insertError || !eventRow) {
     if (shouldApplyToProfile) {
-      await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", input.userId);
+      await supabaseAdmin.from("portalmkk_profiles").update({ points: currentPoints }).eq("id", input.userId);
     }
     if (insertError?.code === "23505" && input.dedupeKey) {
       const { data: existing } = await supabaseAdmin
-        .from("points_events")
+        .from("portalmkk_points_events")
         .select("id,total_points")
         .eq("dedupe_key", input.dedupeKey)
         .maybeSingle();
@@ -933,13 +933,13 @@ async function createNotification(input: {
 
   let notificationId: number | null = null;
   if (input.dedupeKey) {
-    const { data } = await supabaseAdmin.from("notifications").upsert(row, {
+    const { data } = await supabaseAdmin.from("portalmkk_notifications").upsert(row, {
       onConflict: "dedupe_key",
       ignoreDuplicates: true,
     }).select("id").maybeSingle();
     notificationId = data?.id ? Number(data.id) : null;
   } else {
-    const { data } = await supabaseAdmin.from("notifications").insert(row).select("id").single();
+    const { data } = await supabaseAdmin.from("portalmkk_notifications").insert(row).select("id").single();
     notificationId = data?.id ? Number(data.id) : null;
   }
 
@@ -960,8 +960,7 @@ async function createNotification(input: {
     );
   } catch (dispatchError) {
     console.error(
-      `[notification-delivery] failed: ${
-        dispatchError instanceof Error ? dispatchError.message : String(dispatchError)
+      `[notification-delivery] failed: ${dispatchError instanceof Error ? dispatchError.message : String(dispatchError)
       }`,
     );
   }
@@ -984,7 +983,7 @@ async function dispatchExternalNotification(
   options?: { channels?: NotificationChannel[] },
 ) {
   const { data: integrations, error } = await supabaseAdmin
-    .from("notification_integrations")
+    .from("portalmkk_notification_integrations")
     .select("id,channel,endpoint_url,secret,is_active")
     .eq("is_active", true);
   if (error) {
@@ -1032,7 +1031,7 @@ async function dispatchExternalNotification(
         }),
       });
 
-      await supabaseAdmin.from("notification_delivery_log").insert({
+      await supabaseAdmin.from("portalmkk_notification_delivery_log").insert({
         notification_id: payload.notificationId,
         integration_id: target.id ?? null,
         channel: target.channel,
@@ -1042,7 +1041,7 @@ async function dispatchExternalNotification(
         error_text: response.ok ? null : `HTTP ${response.status}`,
       });
     } catch (targetError) {
-      await supabaseAdmin.from("notification_delivery_log").insert({
+      await supabaseAdmin.from("portalmkk_notification_delivery_log").insert({
         notification_id: payload.notificationId,
         integration_id: target.id ?? null,
         channel: target.channel,
@@ -1082,7 +1081,7 @@ type SloAlertRoutingPolicy = {
 
 async function loadActiveSloRoutingPolicies() {
   const { data, error } = await supabaseAdmin
-    .from("slo_alert_routing_policies")
+    .from("portalmkk_slo_alert_routing_policies")
     .select("*")
     .eq("is_active", true)
     .order("priority", { ascending: true })
@@ -1128,8 +1127,7 @@ async function resolveSloAlertRouting(status: SloStatus): Promise<{
     dbPolicies = await loadActiveSloRoutingPolicies();
   } catch (error) {
     console.error(
-      `[slo-routing] failed to load DB policies, fallback to env routing: ${
-        error instanceof Error ? error.message : String(error)
+      `[slo-routing] failed to load DB policies, fallback to env routing: ${error instanceof Error ? error.message : String(error)
       }`,
     );
   }
@@ -1184,7 +1182,7 @@ type SlaPolicy = {
 
 async function loadActiveSlaPolicies() {
   const { data, error } = await supabaseAdmin
-    .from("sla_escalation_matrix")
+    .from("portalmkk_sla_escalation_matrix")
     .select("*")
     .eq("is_active", true)
     .order("threshold_hours", { ascending: true });
@@ -1197,7 +1195,7 @@ async function loadActiveSlaPolicies() {
 }
 
 async function getEscalationRecipients(input: { targetRole: Profile["role"]; officeId?: number; officeScoped?: boolean }) {
-  let query = supabaseAdmin.from("profiles").select("id").eq("role", input.targetRole);
+  let query = supabaseAdmin.from("portalmkk_profiles").select("id").eq("role", input.targetRole);
   if (input.officeScoped && input.officeId) {
     query = query.eq("office_id", input.officeId);
   }
@@ -1226,7 +1224,7 @@ async function runTaskOverdueEscalation(input: { actorUserId?: string; actorRole
   const documentPolicies = activePolicies.filter((policy) => policy.entity_type === "document");
 
   const { data: overdueTasks, error: overdueTasksError } = await supabaseAdmin
-    .from("tasks")
+    .from("portalmkk_tasks")
     .select("id,assignee_id,title,due_date,status,office_id")
     .in("status", ["new", "in_progress"])
     .lt("due_date", today);
@@ -1240,7 +1238,7 @@ async function runTaskOverdueEscalation(input: { actorUserId?: string; actorRole
   const updatedIds = taskIds.map((id) => String(id));
 
   if (taskIds.length > 0) {
-    const { error: updateError } = await supabaseAdmin.from("tasks").update({ status: "overdue" }).in("id", taskIds);
+    const { error: updateError } = await supabaseAdmin.from("portalmkk_tasks").update({ status: "overdue" }).in("id", taskIds);
     if (updateError) {
       throw new Error(updateError.message);
     }
@@ -1299,7 +1297,7 @@ async function runTaskOverdueEscalation(input: { actorUserId?: string; actorRole
 
   let documentEscalationNotifications = 0;
   const { data: reviewDocuments, error: reviewDocumentsError } = await supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .select("id,title,status,office_id,created_at,updated_at")
     .eq("status", "review");
   if (reviewDocumentsError) {
@@ -1344,7 +1342,7 @@ async function runTaskOverdueEscalation(input: { actorUserId?: string; actorRole
   }
 
   if (updatedIds.length > 0 && input.actorUserId && input.actorRole) {
-    await supabaseAdmin.from("audit_log").insert(
+    await supabaseAdmin.from("portalmkk_audit_log").insert(
       updatedIds.map((taskId) => ({
         actor_user_id: input.actorUserId,
         actor_role: input.actorRole,
@@ -1382,7 +1380,7 @@ async function runDueReminders() {
   const lmsDueEnd = formatDateISO(addDays(now, 3));
 
   const { data: dueTasks, error: dueTasksError } = await supabaseAdmin
-    .from("tasks")
+    .from("portalmkk_tasks")
     .select("id,assignee_id,title,due_date,status")
     .in("status", ["new", "in_progress"])
     .gte("due_date", today)
@@ -1407,7 +1405,7 @@ async function runDueReminders() {
   );
 
   const { data: dueAssignments, error: dueAssignmentsError } = await supabaseAdmin
-    .from("course_assignments")
+    .from("portalmkk_course_assignments")
     .select("id,course_id,user_id,due_date")
     .not("due_date", "is", null)
     .gte("due_date", today)
@@ -1424,14 +1422,14 @@ async function runDueReminders() {
   const [passedAttemptsRes, coursesRes] = await Promise.all([
     assignmentUserIds.length > 0 && assignmentCourseIds.length > 0
       ? supabaseAdmin
-          .from("course_attempts")
-          .select("course_id,user_id")
-          .eq("passed", true)
-          .in("user_id", assignmentUserIds)
-          .in("course_id", assignmentCourseIds)
+        .from("portalmkk_course_attempts")
+        .select("course_id,user_id")
+        .eq("passed", true)
+        .in("user_id", assignmentUserIds)
+        .in("course_id", assignmentCourseIds)
       : Promise.resolve({ data: [], error: null }),
     assignmentCourseIds.length > 0
-      ? supabaseAdmin.from("courses").select("id,title").in("id", assignmentCourseIds)
+      ? supabaseAdmin.from("portalmkk_courses").select("id,title").in("id", assignmentCourseIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
 
@@ -1503,7 +1501,7 @@ app.post("/auth/sign-up", async (req, res) => {
     return res.status(400).json({ error: error?.message ?? "Failed to create user" });
   }
 
-  const { error: profileError } = await supabaseAdmin.from("profiles").upsert({
+  const { error: profileError } = await supabaseAdmin.from("portalmkk_profiles").upsert({
     id: data.user.id,
     full_name: input.fullName,
     role: input.role ?? "operator",
@@ -1527,7 +1525,7 @@ const adminCreateUserSchema = z.object({
 
 app.get("/api/admin/users", requireAuth(), requireRole(["admin", "director", "office_head"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin
-    .from("profiles")
+    .from("portalmkk_profiles")
     .select("id,full_name,role,office_id,email,phone,points,position,avatar")
     .order("full_name");
 
@@ -1578,7 +1576,7 @@ app.post("/api/admin/users", requireAuth(), requireRole(["admin", "director", "o
     return res.status(400).json({ error: error?.message ?? "Failed to create user" });
   }
 
-  const { error: profileError } = await supabaseAdmin.from("profiles").upsert({
+  const { error: profileError } = await supabaseAdmin.from("portalmkk_profiles").upsert({
     id: data.user.id,
     full_name: input.fullName,
     role: input.role,
@@ -1633,7 +1631,7 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
 
   const session = (req as express.Request & { session: Session }).session;
   const { data: currentUser, error: currentUserError } = await supabaseAdmin
-    .from("profiles")
+    .from("portalmkk_profiles")
     .select("id,role,full_name,office_id,email,phone,position,points,avatar")
     .eq("id", userId)
     .single();
@@ -1644,7 +1642,7 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
 
   if (parsed.data.role && currentUser.role === "admin" && parsed.data.role !== "admin") {
     const { count, error: countError } = await supabaseAdmin
-      .from("profiles")
+      .from("portalmkk_profiles")
       .select("*", { count: "exact", head: true })
       .eq("role", "admin");
 
@@ -1724,7 +1722,7 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
   let error: { message: string } | null = null;
   if (Object.keys(updatePayload).length > 0) {
     const response = await supabaseAdmin
-      .from("profiles")
+      .from("portalmkk_profiles")
       .update(updatePayload)
       .eq("id", userId)
       .select("id,full_name,role,office_id,email,phone,points,position,avatar")
@@ -1733,7 +1731,7 @@ app.patch("/api/admin/users/:id", requireAuth(), requireRole(["admin", "director
     error = response.error;
   } else {
     const response = await supabaseAdmin
-      .from("profiles")
+      .from("portalmkk_profiles")
       .select("id,full_name,role,office_id,email,phone,points,position,avatar")
       .eq("id", userId)
       .single();
@@ -1791,7 +1789,7 @@ app.post("/api/admin/offices", requireAuth(), requireRole(["admin", "director", 
     rating: parsed.data.rating,
   };
 
-  const { data, error } = await supabaseAdmin.from("offices").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_offices").insert(payload).select("*").single();
   if (error || !data) {
     return res.status(400).json({ error: error?.message ?? "Failed to create office" });
   }
@@ -1832,7 +1830,7 @@ app.patch("/api/admin/offices/:id", requireAuth(), requireRole(["admin", "direct
   }
 
   const { data, error } = await supabaseAdmin
-    .from("offices")
+    .from("portalmkk_offices")
     .update(updatePayload)
     .eq("id", officeId)
     .select("*")
@@ -1914,7 +1912,7 @@ app.get("/api/admin/points/actions", requireAuth(), requireRole(["admin", "direc
 
 app.get("/api/admin/points/rules", requireAuth(), requireRole(["admin", "director", "office_head"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin
-    .from("points_action_rules")
+    .from("portalmkk_points_action_rules")
     .select("*")
     .order("action_key");
   if (error) {
@@ -1940,7 +1938,7 @@ app.post("/api/admin/points/rules", requireAuth(), requireRole(["admin", "direct
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await supabaseAdmin
-    .from("points_action_rules")
+    .from("portalmkk_points_action_rules")
     .insert(payload)
     .select("*")
     .single();
@@ -1978,7 +1976,7 @@ app.patch("/api/admin/points/rules/:id", requireAuth(), requireRole(["admin", "d
   }
   updatePayload.updated_at = new Date().toISOString();
   const { data, error } = await supabaseAdmin
-    .from("points_action_rules")
+    .from("portalmkk_points_action_rules")
     .update(updatePayload)
     .eq("id", ruleId)
     .select("*")
@@ -2000,7 +1998,7 @@ app.patch("/api/admin/points/rules/:id", requireAuth(), requireRole(["admin", "d
 
 app.get("/api/admin/points/campaigns", requireAuth(), requireRole(["admin", "director", "office_head"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin
-    .from("points_campaigns")
+    .from("portalmkk_points_campaigns")
     .select("*")
     .order("starts_at", { ascending: false });
   if (error) {
@@ -2031,7 +2029,7 @@ app.post("/api/admin/points/campaigns", requireAuth(), requireRole(["admin", "di
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await supabaseAdmin
-    .from("points_campaigns")
+    .from("portalmkk_points_campaigns")
     .insert(payload)
     .select("*")
     .single();
@@ -2072,7 +2070,7 @@ app.patch("/api/admin/points/campaigns/:id", requireAuth(), requireRole(["admin"
   }
   updatePayload.updated_at = new Date().toISOString();
   const { data, error } = await supabaseAdmin
-    .from("points_campaigns")
+    .from("portalmkk_points_campaigns")
     .update(updatePayload)
     .eq("id", campaignId)
     .select("*")
@@ -2099,7 +2097,7 @@ app.get("/api/admin/points/events", requireAuth(), requireRole(["admin", "direct
   }
   const { userId, actionKey, limit, offset } = parsed.data;
   let query = supabaseAdmin
-    .from("points_events")
+    .from("portalmkk_points_events")
     .select("*", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -2180,7 +2178,7 @@ app.get("/api/admin/audit", requireAuth(), requireRole(["admin", "director"]), a
 
   const { limit, offset, actorUserId, action, entityType, fromDate, toDate } = parsed.data;
   let query = supabaseAdmin
-    .from("audit_log")
+    .from("portalmkk_audit_log")
     .select("*", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -2265,7 +2263,7 @@ app.get("/api/admin/audit/export", requireAuth(), requireRole(["admin", "directo
 
   const { limit, actorUserId, action, entityType, fromDate, toDate } = parsed.data;
   let query = supabaseAdmin
-    .from("audit_log")
+    .from("portalmkk_audit_log")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -2329,7 +2327,7 @@ app.get(
   requireRole(["admin", "director"]),
   async (_req, res) => {
     const { data, error } = await supabaseAdmin
-      .from("notification_integrations")
+      .from("portalmkk_notification_integrations")
       .select("*")
       .order("created_at", { ascending: false });
     if (error) {
@@ -2359,7 +2357,7 @@ app.post(
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabaseAdmin
-      .from("notification_integrations")
+      .from("portalmkk_notification_integrations")
       .insert(payload)
       .select("*")
       .single();
@@ -2399,7 +2397,7 @@ app.patch(
     if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
 
     const { data, error } = await supabaseAdmin
-      .from("notification_integrations")
+      .from("portalmkk_notification_integrations")
       .update(updatePayload)
       .eq("id", integrationId)
       .select("*")
@@ -2422,7 +2420,7 @@ app.patch(
 
 app.get("/api/ops/slo-routing-policies", requireAuth(), requireRole(["admin", "director"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin
-    .from("slo_alert_routing_policies")
+    .from("portalmkk_slo_alert_routing_policies")
     .select("*")
     .order("priority", { ascending: true })
     .order("created_at", { ascending: true });
@@ -2449,7 +2447,7 @@ app.post("/api/ops/slo-routing-policies", requireAuth(), requireRole(["admin", "
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await supabaseAdmin
-    .from("slo_alert_routing_policies")
+    .from("portalmkk_slo_alert_routing_policies")
     .insert(payload)
     .select("*")
     .single();
@@ -2484,7 +2482,7 @@ app.patch("/api/ops/slo-routing-policies/:id", requireAuth(), requireRole(["admi
   if (parsed.data.priority !== undefined) updatePayload.priority = parsed.data.priority;
   if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
   const { data, error } = await supabaseAdmin
-    .from("slo_alert_routing_policies")
+    .from("portalmkk_slo_alert_routing_policies")
     .update(updatePayload)
     .eq("id", policyId)
     .select("*")
@@ -2510,7 +2508,7 @@ app.delete("/api/ops/slo-routing-policies/:id", requireAuth(), requireRole(["adm
     return res.status(400).json({ error: "Invalid policy id" });
   }
   const { error } = await supabaseAdmin
-    .from("slo_alert_routing_policies")
+    .from("portalmkk_slo_alert_routing_policies")
     .delete()
     .eq("id", policyId);
   if (error) {
@@ -2595,7 +2593,7 @@ app.get("/auth/me", requireAuth(), async (req, res) => {
 });
 
 app.get("/api/offices", requireAuth(), async (_req, res) => {
-  const { data, error } = await supabaseAdmin.from("offices").select("*").order("name");
+  const { data, error } = await supabaseAdmin.from("portalmkk_offices").select("*").order("name");
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -2605,25 +2603,25 @@ app.get("/api/offices", requireAuth(), async (_req, res) => {
 app.get("/api/bootstrap", requireAuth(), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
   const [offices, users, news, newsImages, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles, shopProducts, shopOrders, shopOrderItems] = await Promise.all([
-    supabaseAdmin.from("offices").select("*").order("id"),
-    supabaseAdmin.from("profiles").select("id,full_name,role,office_id,email,phone,points,position,avatar").order("full_name"),
-    supabaseAdmin.from("news").select("*").order("date", { ascending: false }),
-    supabaseAdmin.from("news_images").select("*").order("created_at", { ascending: false }),
-    supabaseAdmin.from("kb_articles").select("*").order("date", { ascending: false }),
-    supabaseAdmin.from("kb_article_versions").select("*").order("created_at", { ascending: false }),
-    supabaseAdmin.from("courses").select("*").order("id"),
-    supabaseAdmin.from("course_assignments").select("*").order("created_at", { ascending: false }),
-    supabaseAdmin.from("course_attempts").select("*").order("created_at", { ascending: false }),
-    supabaseAdmin.from("attestations").select("*").order("date", { ascending: false }),
-    supabaseAdmin.from("tasks").select("*").order("id", { ascending: false }),
-    supabaseAdmin.from("documents").select("*").order("id", { ascending: false }),
-    supabaseAdmin.from("document_approvals").select("*").order("created_at", { ascending: false }),
-    supabaseAdmin.from("notifications").select("*").eq("recipient_user_id", session.profile.id).order("created_at", { ascending: false }).limit(200),
-    supabaseAdmin.from("document_folders").select("*").order("name"),
-    supabaseAdmin.from("document_files").select("document_id,file_name,mime_type,size_bytes,updated_at"),
-    supabaseAdmin.from("shop_products").select("*").eq("is_active", true).order("name"),
-    supabaseAdmin.from("shop_orders").select("*").order("id", { ascending: false }),
-    supabaseAdmin.from("shop_order_items").select("*").order("id", { ascending: false }),
+    supabaseAdmin.from("portalmkk_offices").select("*").order("id"),
+    supabaseAdmin.from("portalmkk_profiles").select("id,full_name,role,office_id,email,phone,points,position,avatar").order("full_name"),
+    supabaseAdmin.from("portalmkk_news").select("*").order("date", { ascending: false }),
+    supabaseAdmin.from("portalmkk_news_images").select("*").order("created_at", { ascending: false }),
+    supabaseAdmin.from("portalmkk_kb_articles").select("*").order("date", { ascending: false }),
+    supabaseAdmin.from("portalmkk_kb_article_versions").select("*").order("created_at", { ascending: false }),
+    supabaseAdmin.from("portalmkk_courses").select("*").order("id"),
+    supabaseAdmin.from("portalmkk_course_assignments").select("*").order("created_at", { ascending: false }),
+    supabaseAdmin.from("portalmkk_course_attempts").select("*").order("created_at", { ascending: false }),
+    supabaseAdmin.from("portalmkk_attestations").select("*").order("date", { ascending: false }),
+    supabaseAdmin.from("portalmkk_tasks").select("*").order("id", { ascending: false }),
+    supabaseAdmin.from("portalmkk_documents").select("*").order("id", { ascending: false }),
+    supabaseAdmin.from("portalmkk_document_approvals").select("*").order("created_at", { ascending: false }),
+    supabaseAdmin.from("portalmkk_notifications").select("*").eq("recipient_user_id", session.profile.id).order("created_at", { ascending: false }).limit(200),
+    supabaseAdmin.from("portalmkk_document_folders").select("*").order("name"),
+    supabaseAdmin.from("portalmkk_document_files").select("document_id,file_name,mime_type,size_bytes,updated_at"),
+    supabaseAdmin.from("portalmkk_shop_products").select("*").eq("is_active", true).order("name"),
+    supabaseAdmin.from("portalmkk_shop_orders").select("*").order("id", { ascending: false }),
+    supabaseAdmin.from("portalmkk_shop_order_items").select("*").order("id", { ascending: false }),
   ]);
 
   const errors = [offices, users, news, newsImages, kbArticles, kbArticleVersions, courses, courseAssignments, courseAttempts, attestations, tasks, documents, documentApprovals, notifications, documentFolders, documentFiles, shopProducts, shopOrders, shopOrderItems]
@@ -2743,7 +2741,7 @@ app.get("/api/search/unified", requireAuth(), async (req, res) => {
   const isAdmin = ["admin", "director"].includes(session.profile.role);
 
   let docsQuery = supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .select("id,title,body,status,author,date,office_id,updated_at")
     .order("updated_at", { ascending: false })
     .limit(limit);
@@ -2758,7 +2756,7 @@ app.get("/api/search/unified", requireAuth(), async (req, res) => {
   docsQuery = docsQuery.or(`title.ilike.${pattern},body.ilike.${pattern}`);
 
   let kbQuery = supabaseAdmin
-    .from("kb_articles")
+    .from("portalmkk_kb_articles")
     .select("id,title,content,status,category,date,updated_at")
     .order("updated_at", { ascending: false })
     .limit(limit)
@@ -2768,7 +2766,7 @@ app.get("/api/search/unified", requireAuth(), async (req, res) => {
   }
 
   let lmsCoursesQuery = supabaseAdmin
-    .from("lms_courses")
+    .from("portalmkk_lms_courses")
     .select("id,title,description,status,updated_at")
     .order("updated_at", { ascending: false })
     .limit(limit)
@@ -2778,7 +2776,7 @@ app.get("/api/search/unified", requireAuth(), async (req, res) => {
   }
 
   let lmsSubsectionsQuery = supabaseAdmin
-    .from("lms_subsections")
+    .from("portalmkk_lms_subsections")
     .select("id,title,markdown_content,updated_at,section:lms_sections!inner(id,title,course:lms_courses!inner(id,title,status))")
     .order("updated_at", { ascending: false })
     .limit(limit)
@@ -2916,7 +2914,7 @@ async function buildKpiRowsForScope(input: { daysWindow: number; officeId?: numb
   const fromDate = formatDateISO(addDays(new Date(), -input.daysWindow));
   const today = formatDateISO(new Date());
 
-  let officesQuery = supabaseAdmin.from("offices").select("id,name").order("name");
+  let officesQuery = supabaseAdmin.from("portalmkk_offices").select("id,name").order("name");
   if (input.officeId) {
     officesQuery = officesQuery.eq("id", input.officeId);
   }
@@ -2931,26 +2929,26 @@ async function buildKpiRowsForScope(input: { daysWindow: number; officeId?: numb
   }
 
   const [profilesRes, tasksRes, documentsRes, approvalsRes, assignmentsRes, attemptsRes] = await Promise.all([
-    supabaseAdmin.from("profiles").select("id,office_id").in("office_id", officeIds),
+    supabaseAdmin.from("portalmkk_profiles").select("id,office_id").in("office_id", officeIds),
     supabaseAdmin
-      .from("tasks")
+      .from("portalmkk_tasks")
       .select("id,office_id,status,due_date,created_date")
       .in("office_id", officeIds)
       .gte("created_date", fromDate),
     supabaseAdmin
-      .from("documents")
+      .from("portalmkk_documents")
       .select("id,office_id,status")
       .in("office_id", officeIds),
     supabaseAdmin
-      .from("document_approvals")
+      .from("portalmkk_document_approvals")
       .select("document_id,decision")
       .in("decision", ["submitted", "approved", "rejected"])
       .gte("created_at", `${fromDate}T00:00:00.000Z`),
     supabaseAdmin
-      .from("course_assignments")
+      .from("portalmkk_course_assignments")
       .select("id,course_id,user_id,created_at")
       .gte("created_at", `${fromDate}T00:00:00.000Z`),
-    supabaseAdmin.from("course_attempts").select("course_id,user_id,passed"),
+    supabaseAdmin.from("portalmkk_course_attempts").select("course_id,user_id,passed"),
   ]);
   const firstError = [profilesRes, tasksRes, documentsRes, approvalsRes, assignmentsRes, attemptsRes]
     .map((result) => result.error)
@@ -3030,7 +3028,7 @@ async function runReportScheduleExecution(
   const csv = toCsv(scopedRows);
   const generatedAt = new Date().toISOString();
   const { data: runRow, error: runError } = await supabaseAdmin
-    .from("report_delivery_runs")
+    .from("portalmkk_report_delivery_runs")
     .insert({
       schedule_id: schedule.id,
       recipient_user_id: schedule.recipient_user_id,
@@ -3057,7 +3055,7 @@ async function runReportScheduleExecution(
   });
 
   await supabaseAdmin
-    .from("report_delivery_schedules")
+    .from("portalmkk_report_delivery_schedules")
     .update({
       last_run_at: generatedAt,
       next_run_at: getNextRunAt(schedule.frequency, new Date(generatedAt)),
@@ -3081,7 +3079,7 @@ async function runReportScheduleExecution(
 async function runScheduledReportDeliveries(input: { actorUserId?: string; actorRole?: Profile["role"] } = {}) {
   const nowIso = new Date().toISOString();
   const { data: schedules, error } = await supabaseAdmin
-    .from("report_delivery_schedules")
+    .from("portalmkk_report_delivery_schedules")
     .select("id,name,recipient_user_id,days_window,office_id,role_filter,frequency")
     .eq("is_active", true)
     .lte("next_run_at", nowIso);
@@ -3113,7 +3111,7 @@ app.get("/api/reports/kpi", requireAuth(), requireRole(["admin", "director", "of
   const fromDate = formatDateISO(addDays(new Date(), -parsed.data.days));
   const today = formatDateISO(new Date());
 
-  let officesQuery = supabaseAdmin.from("offices").select("id,name").order("name");
+  let officesQuery = supabaseAdmin.from("portalmkk_offices").select("id,name").order("name");
   if (scopeOfficeId) {
     officesQuery = officesQuery.eq("id", scopeOfficeId);
   }
@@ -3145,26 +3143,26 @@ app.get("/api/reports/kpi", requireAuth(), requireRole(["admin", "director", "of
   }
 
   const [profilesRes, tasksRes, documentsRes, approvalsRes, assignmentsRes, attemptsRes] = await Promise.all([
-    supabaseAdmin.from("profiles").select("id,office_id").in("office_id", officeIds),
+    supabaseAdmin.from("portalmkk_profiles").select("id,office_id").in("office_id", officeIds),
     supabaseAdmin
-      .from("tasks")
+      .from("portalmkk_tasks")
       .select("id,office_id,status,due_date,created_date")
       .in("office_id", officeIds)
       .gte("created_date", fromDate),
     supabaseAdmin
-      .from("documents")
+      .from("portalmkk_documents")
       .select("id,office_id,status,created_at")
       .in("office_id", officeIds),
     supabaseAdmin
-      .from("document_approvals")
+      .from("portalmkk_document_approvals")
       .select("document_id,decision,created_at")
       .in("decision", ["submitted", "approved", "rejected"])
       .gte("created_at", `${fromDate}T00:00:00.000Z`),
     supabaseAdmin
-      .from("course_assignments")
+      .from("portalmkk_course_assignments")
       .select("id,course_id,user_id,created_at")
       .gte("created_at", `${fromDate}T00:00:00.000Z`),
-    supabaseAdmin.from("course_attempts").select("course_id,user_id,passed"),
+    supabaseAdmin.from("portalmkk_course_attempts").select("course_id,user_id,passed"),
   ]);
 
   const firstError = [profilesRes, tasksRes, documentsRes, approvalsRes, assignmentsRes, attemptsRes]
@@ -3321,7 +3319,7 @@ app.get("/api/reports/drilldown", requireAuth(), requireRole(["admin", "director
   const fromDate = formatDateISO(addDays(new Date(), -parsed.data.days));
   const today = formatDateISO(new Date());
 
-  let profilesQuery = supabaseAdmin.from("profiles").select("id,full_name,role,office_id");
+  let profilesQuery = supabaseAdmin.from("portalmkk_profiles").select("id,full_name,role,office_id");
   if (scopeOfficeId) {
     profilesQuery = profilesQuery.eq("office_id", scopeOfficeId);
   }
@@ -3330,28 +3328,28 @@ app.get("/api/reports/drilldown", requireAuth(), requireRole(["admin", "director
     profilesQuery,
     scopeOfficeId
       ? supabaseAdmin
-          .from("tasks")
-          .select("id,assignee_id,status,due_date,created_date")
-          .eq("office_id", scopeOfficeId)
-          .gte("created_date", fromDate)
-      : supabaseAdmin.from("tasks").select("id,assignee_id,status,due_date,created_date").gte("created_date", fromDate),
+        .from("portalmkk_tasks")
+        .select("id,assignee_id,status,due_date,created_date")
+        .eq("office_id", scopeOfficeId)
+        .gte("created_date", fromDate)
+      : supabaseAdmin.from("portalmkk_tasks").select("id,assignee_id,status,due_date,created_date").gte("created_date", fromDate),
     supabaseAdmin
-      .from("course_assignments")
+      .from("portalmkk_course_assignments")
       .select("id,course_id,user_id,created_at")
       .gte("created_at", `${fromDate}T00:00:00.000Z`),
-    supabaseAdmin.from("course_attempts").select("course_id,user_id,passed"),
+    supabaseAdmin.from("portalmkk_course_attempts").select("course_id,user_id,passed"),
     scopeOfficeId
       ? supabaseAdmin
-          .from("documents")
-          .select("id,author,status,office_id,created_at")
-          .eq("office_id", scopeOfficeId)
-          .gte("created_at", `${fromDate}T00:00:00.000Z`)
+        .from("portalmkk_documents")
+        .select("id,author,status,office_id,created_at")
+        .eq("office_id", scopeOfficeId)
+        .gte("created_at", `${fromDate}T00:00:00.000Z`)
       : supabaseAdmin
-          .from("documents")
-          .select("id,author,status,office_id,created_at")
-          .gte("created_at", `${fromDate}T00:00:00.000Z`),
+        .from("portalmkk_documents")
+        .select("id,author,status,office_id,created_at")
+        .gte("created_at", `${fromDate}T00:00:00.000Z`),
     supabaseAdmin
-      .from("document_approvals")
+      .from("portalmkk_document_approvals")
       .select("id,actor_user_id,decision,created_at")
       .gte("created_at", `${fromDate}T00:00:00.000Z`),
   ]);
@@ -3472,7 +3470,7 @@ app.get("/api/reports/drilldown", requireAuth(), requireRole(["admin", "director
 
 app.get("/api/reports/schedules", requireAuth(), requireRole(["admin", "director"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin
-    .from("report_delivery_schedules")
+    .from("portalmkk_report_delivery_schedules")
     .select("*")
     .order("created_at", { ascending: false });
   if (error) {
@@ -3499,7 +3497,7 @@ app.post("/api/reports/schedules", requireAuth(), requireRole(["admin", "directo
     created_by: session.profile.id,
   };
   const { data, error } = await supabaseAdmin
-    .from("report_delivery_schedules")
+    .from("portalmkk_report_delivery_schedules")
     .insert(payload)
     .select("*")
     .single();
@@ -3539,7 +3537,7 @@ app.patch("/api/reports/schedules/:id", requireAuth(), requireRole(["admin", "di
     return res.status(400).json({ error: "No fields to update" });
   }
   const { data, error } = await supabaseAdmin
-    .from("report_delivery_schedules")
+    .from("portalmkk_report_delivery_schedules")
     .update(updatePayload)
     .eq("id", scheduleId)
     .select("*")
@@ -3565,7 +3563,7 @@ app.post("/api/reports/schedules/:id/run", requireAuth(), requireRole(["admin", 
     return res.status(400).json({ error: "Invalid schedule id" });
   }
   const { data: schedule, error } = await supabaseAdmin
-    .from("report_delivery_schedules")
+    .from("portalmkk_report_delivery_schedules")
     .select("id,name,recipient_user_id,days_window,office_id,role_filter,frequency")
     .eq("id", scheduleId)
     .single();
@@ -3618,7 +3616,7 @@ app.get("/api/reports/runs", requireAuth(), requireRole(["admin", "director"]), 
   }
 
   let query = supabaseAdmin
-    .from("report_delivery_runs")
+    .from("portalmkk_report_delivery_runs")
     .select("id,schedule_id,recipient_user_id,status,format,generated_at,file_name,rows_count")
     .order("generated_at", { ascending: false })
     .limit(100);
@@ -3649,7 +3647,7 @@ app.get("/api/reports/runs/:id/download", requireAuth(), async (req, res) => {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("report_delivery_runs")
+    .from("portalmkk_report_delivery_runs")
     .select("id,recipient_user_id,file_name,payload_csv")
     .eq("id", runId)
     .single();
@@ -3701,7 +3699,7 @@ app.post("/api/news", requireAuth(), requireRole(["director", "admin", "office_h
     author: session.profile.full_name,
   };
 
-  const { data, error } = await supabaseAdmin.from("news").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_news").insert(payload).select("*").single();
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -3771,7 +3769,7 @@ app.patch("/api/news/:id", requireAuth(), requireRole(["director", "admin"]), as
   if (parsed.data.coverImageMimeType !== undefined) updatePayload.cover_image_mime_type = parsed.data.coverImageMimeType;
 
   const { data, error } = await supabaseAdmin
-    .from("news")
+    .from("portalmkk_news")
     .update(updatePayload)
     .eq("id", newsId)
     .select("*")
@@ -3817,7 +3815,7 @@ app.post("/api/news/images", requireAuth(), requireRole(["director", "admin", "o
     caption: parsed.data.caption?.trim() || null,
   };
 
-  const { data, error } = await supabaseAdmin.from("news_images").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_news_images").insert(payload).select("*").single();
   if (error || !data) {
     return res.status(400).json({ error: error?.message ?? "Failed to upload news image" });
   }
@@ -3850,7 +3848,7 @@ app.delete("/api/news/:id", requireAuth(), requireRole(["director", "admin"]), a
   }
 
   const { error } = await supabaseAdmin
-    .from("news")
+    .from("portalmkk_news")
     .update({ status: "archived", pinned: false, updated_at: new Date().toISOString() })
     .eq("id", newsId);
 
@@ -3905,7 +3903,7 @@ app.post("/api/tasks", requireAuth(), requireRole(["director", "admin", "office_
   }
   if (resolvedOfficeId === undefined) {
     const { data: assignee, error: assigneeError } = await supabaseAdmin
-      .from("profiles")
+      .from("portalmkk_profiles")
       .select("office_id")
       .eq("id", parsed.data.assigneeId)
       .single();
@@ -3936,13 +3934,13 @@ app.post("/api/tasks", requireAuth(), requireRole(["director", "admin", "office_
     created_by: session.profile.id,
   };
 
-  let createResponse = await supabaseAdmin.from("tasks").insert(payload).select("*").single();
+  let createResponse = await supabaseAdmin.from("portalmkk_tasks").insert(payload).select("*").single();
   if (
     createResponse.error
     && (isMissingCreatedByColumnError(createResponse.error) || isCreatedByForeignKeyError(createResponse.error))
   ) {
     const { created_by: _createdBy, ...legacyPayload } = payload;
-    createResponse = await supabaseAdmin.from("tasks").insert(legacyPayload).select("*").single();
+    createResponse = await supabaseAdmin.from("portalmkk_tasks").insert(legacyPayload).select("*").single();
   }
   const { data, error } = createResponse;
   if (error) {
@@ -3997,7 +3995,7 @@ app.patch("/api/tasks/:id", requireAuth(), requireRole(["director", "admin", "of
   if (session.profile.role === "office_head") {
     managedOfficeIds = await getOfficeHeadScopeOfficeIds(session.profile);
     const { data: currentTask, error: currentTaskError } = await supabaseAdmin
-      .from("tasks")
+      .from("portalmkk_tasks")
       .select("id,office_id")
       .eq("id", taskId)
       .single();
@@ -4047,7 +4045,7 @@ app.patch("/api/tasks/:id", requireAuth(), requireRole(["director", "admin", "of
   }
 
   const { data, error } = await supabaseAdmin
-    .from("tasks")
+    .from("portalmkk_tasks")
     .update(updatePayload)
     .eq("id", taskId)
     .select("*")
@@ -4085,7 +4083,7 @@ app.patch("/api/tasks/:id/status", requireAuth(), async (req, res) => {
   }
 
   const { data: currentTask, error: currentTaskError } = await supabaseAdmin
-    .from("tasks")
+    .from("portalmkk_tasks")
     .select("id,status,assignee_id")
     .eq("id", taskId)
     .single();
@@ -4094,7 +4092,7 @@ app.patch("/api/tasks/:id/status", requireAuth(), async (req, res) => {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("tasks")
+    .from("portalmkk_tasks")
     .update({ status: parsed.data.status })
     .eq("id", taskId)
     .select("*")
@@ -4138,7 +4136,7 @@ app.delete("/api/tasks/:id", requireAuth(), requireRole(["director", "admin"]), 
     return res.status(400).json({ error: "Invalid task id" });
   }
 
-  const { error } = await supabaseAdmin.from("tasks").delete().eq("id", taskId);
+  const { error } = await supabaseAdmin.from("portalmkk_tasks").delete().eq("id", taskId);
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -4381,7 +4379,7 @@ function isCrmIntakeSecretValid(req: express.Request) {
 async function resolveCrmIntakeEmployee(input: { employeeUserId?: string; employeePhone?: string }) {
   if (input.employeeUserId) {
     const { data, error } = await supabaseAdmin
-      .from("profiles")
+      .from("portalmkk_profiles")
       .select("id,office_id")
       .eq("id", input.employeeUserId)
       .single();
@@ -4396,7 +4394,7 @@ async function resolveCrmIntakeEmployee(input: { employeeUserId?: string; employ
 
   const phoneDigits = normalizePhoneDigits(input.employeePhone);
   const { data, error } = await supabaseAdmin
-    .from("profiles")
+    .from("portalmkk_profiles")
     .select("id,office_id,phone")
     .limit(100);
   if (error || !data) {
@@ -4413,7 +4411,7 @@ async function resolveCrmIntakeEmployee(input: { employeeUserId?: string; employ
 async function findCrmClientByPhone(phone: string) {
   const normalized = normalizePhoneDigits(phone);
   const { data: exactRows } = await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .select("*")
     .eq("phone", phone)
     .order("updated_at", { ascending: false })
@@ -4427,7 +4425,7 @@ async function findCrmClientByPhone(phone: string) {
     return null;
   }
   const { data: likeRows } = await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .select("*")
     .ilike("phone", `%${tail}%`)
     .order("updated_at", { ascending: false })
@@ -4463,21 +4461,21 @@ async function createTasksFromCrmSuggestions(input: {
       continue;
     }
     // eslint-disable-next-line no-await-in-loop
-    let taskInsert = await supabaseAdmin.from("tasks").insert(taskPayload).select("*").single();
+    let taskInsert = await supabaseAdmin.from("portalmkk_tasks").insert(taskPayload).select("*").single();
     if (
       taskInsert.error
       && (isMissingCreatedByColumnError(taskInsert.error) || isCreatedByForeignKeyError(taskInsert.error))
     ) {
       const { created_by: _createdBy, ...legacyPayload } = taskPayload;
       // eslint-disable-next-line no-await-in-loop
-      taskInsert = await supabaseAdmin.from("tasks").insert(legacyPayload).select("*").single();
+      taskInsert = await supabaseAdmin.from("portalmkk_tasks").insert(legacyPayload).select("*").single();
     }
     if (taskInsert.error || !taskInsert.data) {
       continue;
     }
     createdTaskIds.push(Number(taskInsert.data.id));
     // eslint-disable-next-line no-await-in-loop
-    await supabaseAdmin.from("crm_call_tasks").upsert(
+    await supabaseAdmin.from("portalmkk_crm_call_tasks").upsert(
       {
         call_id: input.callId,
         task_id: taskInsert.data.id,
@@ -4529,7 +4527,7 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
       updated_at: new Date().toISOString(),
     };
     const { data: createdClient, error: clientError } = await supabaseAdmin
-      .from("crm_clients")
+      .from("portalmkk_crm_clients")
       .insert(clientPayload)
       .select("*")
       .single();
@@ -4542,7 +4540,7 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
   let existingCall: Record<string, unknown> | null = null;
   if (intake.externalCallId) {
     const { data: callRows, error: existingCallError } = await supabaseAdmin
-      .from("crm_calls")
+      .from("portalmkk_crm_calls")
       .select("*")
       .eq("provider", intake.provider)
       .eq("external_call_id", intake.externalCallId)
@@ -4574,7 +4572,7 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
   let callId: number;
   if (existingCall?.id) {
     const { data: updatedCall, error: updateCallError } = await supabaseAdmin
-      .from("crm_calls")
+      .from("portalmkk_crm_calls")
       .update(callPayload)
       .eq("id", existingCall.id as number)
       .select("id")
@@ -4585,7 +4583,7 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
     callId = Number(updatedCall.id);
   } else {
     const { data: insertedCall, error: insertCallError } = await supabaseAdmin
-      .from("crm_calls")
+      .from("portalmkk_crm_calls")
       .insert(callPayload)
       .select("id")
       .single();
@@ -4607,7 +4605,7 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
         scriptContext: intake.scriptContext,
       });
       await supabaseAdmin
-        .from("crm_calls")
+        .from("portalmkk_crm_calls")
         .update({
           transcription_status: "ready",
           analysis_status: "ready",
@@ -4617,7 +4615,7 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
         })
         .eq("id", callId);
 
-      await supabaseAdmin.from("crm_call_evaluations").upsert({
+      await supabaseAdmin.from("portalmkk_crm_call_evaluations").upsert({
         call_id: callId,
         overall_score: analysis.overallScore,
         script_compliance_score: analysis.scriptComplianceScore,
@@ -4643,14 +4641,14 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
       analysisResult = { overallScore: analysis.overallScore, createdTaskIds };
     } catch {
       await supabaseAdmin
-        .from("crm_calls")
+        .from("portalmkk_crm_calls")
         .update({ analysis_status: "failed", updated_at: nowIso })
         .eq("id", callId);
     }
   }
 
   await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .update({
       status: "in_progress",
       last_contacted_at: nowIso,
@@ -4678,7 +4676,7 @@ app.get("/api/crm/clients", requireAuth(), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
 
   let query = supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .select("*", { count: "exact" })
     .order("updated_at", { ascending: false });
 
@@ -4740,7 +4738,7 @@ app.get("/api/crm/clients/:id", requireAuth(), async (req, res) => {
     return res.status(400).json({ error: "Invalid client id" });
   }
   const session = (req as express.Request & { session: Session }).session;
-  const { data: client, error } = await supabaseAdmin.from("crm_clients").select("*").eq("id", clientId).single();
+  const { data: client, error } = await supabaseAdmin.from("portalmkk_crm_clients").select("*").eq("id", clientId).single();
   if (error || !client) {
     return res.status(404).json({ error: "Client not found" });
   }
@@ -4750,7 +4748,7 @@ app.get("/api/crm/clients/:id", requireAuth(), async (req, res) => {
   }
 
   const { data: calls, error: callsError } = await supabaseAdmin
-    .from("crm_calls")
+    .from("portalmkk_crm_calls")
     .select("*")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
@@ -4762,7 +4760,7 @@ app.get("/api/crm/clients/:id", requireAuth(), async (req, res) => {
   let evaluations: Array<Record<string, unknown>> = [];
   if (callIds.length > 0) {
     const { data: evalRows, error: evalError } = await supabaseAdmin
-      .from("crm_call_evaluations")
+      .from("portalmkk_crm_call_evaluations")
       .select("*")
       .in("call_id", callIds);
     if (evalError) {
@@ -4802,7 +4800,7 @@ app.post("/api/crm/clients", requireAuth(), requireRole(["operator", "office_hea
 
   if (resolvedOfficeId === null && parsed.data.assignedUserId) {
     const { data: assignee, error: assigneeError } = await supabaseAdmin
-      .from("profiles")
+      .from("portalmkk_profiles")
       .select("office_id")
       .eq("id", parsed.data.assignedUserId)
       .single();
@@ -4824,13 +4822,13 @@ app.post("/api/crm/clients", requireAuth(), requireRole(["operator", "office_hea
     updated_at: new Date().toISOString(),
   };
 
-  const { error: insertError } = await supabaseAdmin.from("crm_clients").insert(payload);
+  const { error: insertError } = await supabaseAdmin.from("portalmkk_crm_clients").insert(payload);
   if (insertError) {
     return res.status(400).json({ error: insertError.message });
   }
 
   const { data: dataRows, error: fetchError } = await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .select("*")
     .eq("phone", payload.phone)
     .order("id", { ascending: false })
@@ -4874,7 +4872,7 @@ app.post("/api/crm/clients/import", requireAuth(), requireRole(["office_head", "
     updated_at: new Date().toISOString(),
   }));
 
-  const { data, error } = await supabaseAdmin.from("crm_clients").insert(payloadRows).select("id");
+  const { data, error } = await supabaseAdmin.from("portalmkk_crm_clients").insert(payloadRows).select("id");
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -4906,7 +4904,7 @@ app.patch("/api/crm/clients/:id", requireAuth(), requireRole(["operator", "offic
 
   const session = (req as express.Request & { session: Session }).session;
   const { data: currentClient, error: currentError } = await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .select("*")
     .eq("id", clientId)
     .single();
@@ -4931,7 +4929,7 @@ app.patch("/api/crm/clients/:id", requireAuth(), requireRole(["operator", "offic
   updatePayload.updated_at = new Date().toISOString();
 
   const { data, error } = await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .update(updatePayload)
     .eq("id", clientId)
     .select("*")
@@ -4960,7 +4958,7 @@ app.post("/api/crm/calls", requireAuth(), requireRole(["operator", "office_head"
   const session = (req as express.Request & { session: Session }).session;
 
   const { data: client, error: clientError } = await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .select("id, office_id, assigned_user_id")
     .eq("id", parsed.data.clientId)
     .single();
@@ -4988,7 +4986,7 @@ app.post("/api/crm/calls", requireAuth(), requireRole(["operator", "office_head"
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabaseAdmin.from("crm_calls").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_crm_calls").insert(payload).select("*").single();
   if (error || !data) {
     return res.status(400).json({ error: error?.message ?? "Failed to create CRM call" });
   }
@@ -5017,7 +5015,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
   const session = (req as express.Request & { session: Session }).session;
 
   const { data: call, error: callError } = await supabaseAdmin
-    .from("crm_calls")
+    .from("portalmkk_crm_calls")
     .select("*")
     .eq("id", callId)
     .single();
@@ -5025,7 +5023,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
     return res.status(404).json({ error: "Call not found" });
   }
   const { data: client, error: clientError } = await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .select("id, office_id, assigned_user_id")
     .eq("id", call.client_id)
     .single();
@@ -5050,7 +5048,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
     });
   } catch (error) {
     await supabaseAdmin
-      .from("crm_calls")
+      .from("portalmkk_crm_calls")
       .update({ analysis_status: "failed", updated_at: new Date().toISOString() })
       .eq("id", callId);
     return res.status(400).json({ error: error instanceof Error ? error.message : "Failed to analyze call" });
@@ -5058,7 +5056,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
 
   const nowIso = new Date().toISOString();
   const { error: updateCallError } = await supabaseAdmin
-    .from("crm_calls")
+    .from("portalmkk_crm_calls")
     .update({
       transcript_raw: transcript,
       transcription_status: "ready",
@@ -5084,7 +5082,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
   };
 
   const { data: evaluation, error: evalError } = await supabaseAdmin
-    .from("crm_call_evaluations")
+    .from("portalmkk_crm_call_evaluations")
     .upsert(evalPayload, { onConflict: "call_id" })
     .select("*")
     .single();
@@ -5112,14 +5110,14 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
       }
 
       // eslint-disable-next-line no-await-in-loop
-      let taskInsert = await supabaseAdmin.from("tasks").insert(taskPayload).select("*").single();
+      let taskInsert = await supabaseAdmin.from("portalmkk_tasks").insert(taskPayload).select("*").single();
       if (
         taskInsert.error
         && (isMissingCreatedByColumnError(taskInsert.error) || isCreatedByForeignKeyError(taskInsert.error))
       ) {
         const { created_by: _createdBy, ...legacyPayload } = taskPayload;
         // eslint-disable-next-line no-await-in-loop
-        taskInsert = await supabaseAdmin.from("tasks").insert(legacyPayload).select("*").single();
+        taskInsert = await supabaseAdmin.from("portalmkk_tasks").insert(legacyPayload).select("*").single();
       }
       if (taskInsert.error || !taskInsert.data) {
         continue;
@@ -5127,7 +5125,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
       createdTaskIds.push(Number(taskInsert.data.id));
 
       // eslint-disable-next-line no-await-in-loop
-      await supabaseAdmin.from("crm_call_tasks").upsert(
+      await supabaseAdmin.from("portalmkk_crm_call_tasks").upsert(
         {
           call_id: callId,
           task_id: taskInsert.data.id,
@@ -5138,7 +5136,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
   }
 
   await supabaseAdmin
-    .from("crm_clients")
+    .from("portalmkk_crm_clients")
     .update({
       last_contacted_at: nowIso,
       updated_at: nowIso,
@@ -5216,7 +5214,7 @@ const updateAdminShopProductSchema = z.object({
 
 app.get("/api/shop/products", requireAuth(), async (_req, res) => {
   const { data, error } = await supabaseAdmin
-    .from("shop_products")
+    .from("portalmkk_shop_products")
     .select("*")
     .eq("is_active", true)
     .order("name");
@@ -5227,7 +5225,7 @@ app.get("/api/shop/products", requireAuth(), async (_req, res) => {
 });
 
 app.get("/api/admin/shop/products", requireAuth(), requireRole(["office_head", "director", "admin"]), async (_req, res) => {
-  const { data, error } = await supabaseAdmin.from("shop_products").select("*").order("name");
+  const { data, error } = await supabaseAdmin.from("portalmkk_shop_products").select("*").order("name");
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -5269,7 +5267,7 @@ app.post("/api/admin/shop/products", requireAuth(), requireRole(["office_head", 
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabaseAdmin.from("shop_products").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_shop_products").insert(payload).select("*").single();
   if (error || !data) {
     return res.status(400).json({ error: error?.message ?? "Failed to create shop product" });
   }
@@ -5335,7 +5333,7 @@ app.patch("/api/admin/shop/products/:id", requireAuth(), requireRole(["office_he
   updatePayload.updated_at = new Date().toISOString();
 
   const { data, error } = await supabaseAdmin
-    .from("shop_products")
+    .from("portalmkk_shop_products")
     .update(updatePayload)
     .eq("id", productId)
     .select("*")
@@ -5380,7 +5378,7 @@ app.get("/api/shop/orders", requireAuth(), async (req, res) => {
     return res.json({ orders: [], items: [] });
   }
   const { data: items, error: itemsError } = await supabaseAdmin
-    .from("shop_order_items")
+    .from("portalmkk_shop_order_items")
     .select("*")
     .in("order_id", orderIds)
     .order("id", { ascending: true });
@@ -5399,7 +5397,7 @@ app.post("/api/shop/orders", requireAuth(), async (req, res) => {
   const session = (req as express.Request & { session: Session }).session;
   const uniqueProductIds = Array.from(new Set(parsed.data.items.map((item) => Number(item.productId))));
   const { data: products, error: productsError } = await supabaseAdmin
-    .from("shop_products")
+    .from("portalmkk_shop_products")
     .select("id,name,price_points,is_material,stock_qty,is_active")
     .in("id", uniqueProductIds);
   if (productsError) {
@@ -5438,7 +5436,7 @@ app.post("/api/shop/orders", requireAuth(), async (req, res) => {
   }
 
   const { data: buyerProfile, error: buyerError } = await supabaseAdmin
-    .from("profiles")
+    .from("portalmkk_profiles")
     .select("id,points,office_id,full_name")
     .eq("id", session.profile.id)
     .single();
@@ -5453,7 +5451,7 @@ app.post("/api/shop/orders", requireAuth(), async (req, res) => {
 
   const nextPoints = currentPoints - totalPoints;
   const { error: pointsUpdateError } = await supabaseAdmin
-    .from("profiles")
+    .from("portalmkk_profiles")
     .update({ points: nextPoints })
     .eq("id", session.profile.id);
   if (pointsUpdateError) {
@@ -5472,12 +5470,12 @@ app.post("/api/shop/orders", requireAuth(), async (req, res) => {
   };
 
   const { data: order, error: orderError } = await supabaseAdmin
-    .from("shop_orders")
+    .from("portalmkk_shop_orders")
     .insert(payload)
     .select("*")
     .single();
   if (orderError || !order) {
-    await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", session.profile.id);
+    await supabaseAdmin.from("portalmkk_profiles").update({ points: currentPoints }).eq("id", session.profile.id);
     return res.status(400).json({ error: orderError?.message ?? "Failed to create order" });
   }
 
@@ -5490,12 +5488,12 @@ app.post("/api/shop/orders", requireAuth(), async (req, res) => {
     subtotal_points: item.subtotalPoints,
   }));
   const { data: createdItems, error: itemsError } = await supabaseAdmin
-    .from("shop_order_items")
+    .from("portalmkk_shop_order_items")
     .insert(itemRows)
     .select("*");
   if (itemsError) {
-    await supabaseAdmin.from("shop_orders").delete().eq("id", order.id);
-    await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", session.profile.id);
+    await supabaseAdmin.from("portalmkk_shop_orders").delete().eq("id", order.id);
+    await supabaseAdmin.from("portalmkk_profiles").update({ points: currentPoints }).eq("id", session.profile.id);
     return res.status(400).json({ error: itemsError.message });
   }
 
@@ -5560,8 +5558,7 @@ app.post("/api/shop/orders", requireAuth(), async (req, res) => {
     });
   } catch (awardError) {
     console.error(
-      `[points] shop_purchase event failed for order=${order.id}: ${
-        awardError instanceof Error ? awardError.message : String(awardError)
+      `[points] shop_purchase event failed for order=${order.id}: ${awardError instanceof Error ? awardError.message : String(awardError)
       }`,
     );
   }
@@ -5582,7 +5579,7 @@ app.patch("/api/shop/orders/:id/status", requireAuth(), requireRole(["office_hea
 
   const session = (req as express.Request & { session: Session }).session;
   const { data: existingOrder, error: existingOrderError } = await supabaseAdmin
-    .from("shop_orders")
+    .from("portalmkk_shop_orders")
     .select("*")
     .eq("id", orderId)
     .single();
@@ -5605,7 +5602,7 @@ app.patch("/api/shop/orders/:id/status", requireAuth(), requireRole(["office_hea
   }
 
   const { data: updatedOrder, error: updateError } = await supabaseAdmin
-    .from("shop_orders")
+    .from("portalmkk_shop_orders")
     .update({
       status: parsed.data.status,
       updated_at: new Date().toISOString(),
@@ -5723,7 +5720,7 @@ const updateSlaPolicySchema = z.object({
 
 async function getDocumentRouteSteps(routeId: number) {
   const { data, error } = await supabaseAdmin
-    .from("document_approval_route_steps")
+    .from("portalmkk_document_approval_route_steps")
     .select("id,route_id,step_order,required_role")
     .eq("route_id", routeId)
     .order("step_order", { ascending: true });
@@ -5738,7 +5735,7 @@ app.get("/api/document-templates", requireAuth(), async (req, res) => {
   const canManage = ["admin", "director"].includes(session.profile.role);
 
   let query = supabaseAdmin
-    .from("document_templates")
+    .from("portalmkk_document_templates")
     .select("*")
     .order("updated_at", { ascending: false });
 
@@ -5774,7 +5771,7 @@ app.post("/api/document-templates", requireAuth(), requireRole(["admin", "direct
   };
 
   const { data, error } = await supabaseAdmin
-    .from("document_templates")
+    .from("portalmkk_document_templates")
     .insert(payload)
     .select("*")
     .single();
@@ -5786,7 +5783,7 @@ app.post("/api/document-templates", requireAuth(), requireRole(["admin", "direct
 
 app.get("/api/document-approval-routes", requireAuth(), async (_req, res) => {
   const { data: routes, error: routesError } = await supabaseAdmin
-    .from("document_approval_routes")
+    .from("portalmkk_document_approval_routes")
     .select("*")
     .order("name");
   if (routesError) {
@@ -5796,10 +5793,10 @@ app.get("/api/document-approval-routes", requireAuth(), async (_req, res) => {
   const routeIds = (routes ?? []).map((route) => Number(route.id));
   const { data: steps, error: stepsError } = routeIds.length
     ? await supabaseAdmin
-        .from("document_approval_route_steps")
-        .select("*")
-        .in("route_id", routeIds)
-        .order("step_order", { ascending: true })
+      .from("portalmkk_document_approval_route_steps")
+      .select("*")
+      .in("route_id", routeIds)
+      .order("step_order", { ascending: true })
     : { data: [], error: null };
   if (stepsError) {
     return res.status(400).json({ error: stepsError.message });
@@ -5821,7 +5818,7 @@ app.post("/api/document-approval-routes", requireAuth(), requireRole(["admin", "
 
   const session = (req as express.Request & { session: Session }).session;
   const { data: route, error: routeError } = await supabaseAdmin
-    .from("document_approval_routes")
+    .from("portalmkk_document_approval_routes")
     .insert({
       name: parsed.data.name,
       description: parsed.data.description ?? null,
@@ -5836,7 +5833,7 @@ app.post("/api/document-approval-routes", requireAuth(), requireRole(["admin", "
   const uniqueSortedSteps = [...parsed.data.steps]
     .sort((a, b) => a.stepOrder - b.stepOrder)
     .filter((step, idx, arr) => idx === 0 || step.stepOrder !== arr[idx - 1]?.stepOrder);
-  const { error: stepsError } = await supabaseAdmin.from("document_approval_route_steps").insert(
+  const { error: stepsError } = await supabaseAdmin.from("portalmkk_document_approval_route_steps").insert(
     uniqueSortedSteps.map((step) => ({
       route_id: route.id,
       step_order: step.stepOrder,
@@ -5853,7 +5850,7 @@ app.post("/api/document-approval-routes", requireAuth(), requireRole(["admin", "
 
 app.get("/api/document-folders", requireAuth(), async (_req, res) => {
   const { data, error } = await supabaseAdmin
-    .from("document_folders")
+    .from("portalmkk_document_folders")
     .select("*")
     .order("name");
   if (error) {
@@ -5870,7 +5867,7 @@ app.post("/api/document-folders", requireAuth(), requireRole(["director", "admin
 
   if (parsed.data.parentId) {
     const { data: parent, error: parentError } = await supabaseAdmin
-      .from("document_folders")
+      .from("portalmkk_document_folders")
       .select("id")
       .eq("id", parsed.data.parentId)
       .single();
@@ -5881,7 +5878,7 @@ app.post("/api/document-folders", requireAuth(), requireRole(["director", "admin
 
   const session = (req as express.Request & { session: Session }).session;
   const { data, error } = await supabaseAdmin
-    .from("document_folders")
+    .from("portalmkk_document_folders")
     .insert({
       name: parsed.data.name,
       parent_id: parsed.data.parentId ?? null,
@@ -5929,7 +5926,7 @@ app.post(
 
     if (!officeId) {
       const { data: firstOffice, error: firstOfficeError } = await supabaseAdmin
-        .from("offices")
+        .from("portalmkk_offices")
         .select("id")
         .order("id", { ascending: true })
         .limit(1)
@@ -5949,7 +5946,7 @@ app.post(
 
     if (folderId) {
       const { data: folder, error: folderError } = await supabaseAdmin
-        .from("document_folders")
+        .from("portalmkk_document_folders")
         .select("id")
         .eq("id", folderId)
         .single();
@@ -5983,7 +5980,7 @@ app.post(
 
     if (templateId) {
       const { data: template, error: templateError } = await supabaseAdmin
-        .from("document_templates")
+        .from("portalmkk_document_templates")
         .select("id,title_template,body_template,type,default_route_id,status")
         .eq("id", templateId)
         .single();
@@ -6013,7 +6010,7 @@ app.post(
     };
 
     const { data, error } = await supabaseAdmin
-      .from("documents")
+      .from("portalmkk_documents")
       .insert(payload)
       .select("*")
       .single();
@@ -6024,7 +6021,7 @@ app.post(
 
     if (filePayload) {
       const { error: fileError } = await supabaseAdmin
-        .from("document_files")
+        .from("portalmkk_document_files")
         .upsert(
           {
             document_id: data.id,
@@ -6037,7 +6034,7 @@ app.post(
           { onConflict: "document_id" },
         );
       if (fileError) {
-        await supabaseAdmin.from("documents").delete().eq("id", data.id);
+        await supabaseAdmin.from("portalmkk_documents").delete().eq("id", data.id);
         return res.status(400).json({ error: fileError.message });
       }
     }
@@ -6062,7 +6059,7 @@ app.post("/api/documents/:id/submit", requireAuth(), requireRole(["director", "a
   }
 
   const { data: existingDocument, error: existingDocumentError } = await supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .select("id,approval_route_id")
     .eq("id", documentId)
     .single();
@@ -6077,7 +6074,7 @@ app.post("/api/documents/:id/submit", requireAuth(), requireRole(["director", "a
   }
 
   const { data, error } = await supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .update({ status: "review", current_approval_step: nextStep, updated_at: new Date().toISOString() })
     .eq("id", documentId)
     .select("*")
@@ -6087,7 +6084,7 @@ app.post("/api/documents/:id/submit", requireAuth(), requireRole(["director", "a
   }
 
   const session = (req as express.Request & { session: Session }).session;
-  await supabaseAdmin.from("document_approvals").insert({
+  await supabaseAdmin.from("portalmkk_document_approvals").insert({
     document_id: documentId,
     actor_user_id: session.profile.id,
     actor_role: session.profile.role,
@@ -6120,7 +6117,7 @@ app.post("/api/documents/:id/approve", requireAuth(), requireRole(["director", "
 
   const session = (req as express.Request & { session: Session }).session;
   const { data: existingDocument, error: existingDocumentError } = await supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .select("id,status,approval_route_id,current_approval_step")
     .eq("id", documentId)
     .single();
@@ -6155,7 +6152,7 @@ app.post("/api/documents/:id/approve", requireAuth(), requireRole(["director", "
   }
 
   const { data, error } = await supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .update({ status: nextStatus, current_approval_step: nextStep, updated_at: new Date().toISOString() })
     .eq("id", documentId)
     .select("*")
@@ -6164,7 +6161,7 @@ app.post("/api/documents/:id/approve", requireAuth(), requireRole(["director", "
     return res.status(400).json({ error: error?.message ?? "Failed to approve document" });
   }
 
-  await supabaseAdmin.from("document_approvals").insert({
+  await supabaseAdmin.from("portalmkk_document_approvals").insert({
     document_id: documentId,
     actor_user_id: session.profile.id,
     actor_role: session.profile.role,
@@ -6196,7 +6193,7 @@ app.post("/api/documents/:id/reject", requireAuth(), requireRole(["director", "a
   }
 
   const { data, error } = await supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .update({ status: "rejected", current_approval_step: null, updated_at: new Date().toISOString() })
     .eq("id", documentId)
     .select("*")
@@ -6206,7 +6203,7 @@ app.post("/api/documents/:id/reject", requireAuth(), requireRole(["director", "a
   }
 
   const session = (req as express.Request & { session: Session }).session;
-  await supabaseAdmin.from("document_approvals").insert({
+  await supabaseAdmin.from("portalmkk_document_approvals").insert({
     document_id: documentId,
     actor_user_id: session.profile.id,
     actor_role: session.profile.role,
@@ -6233,7 +6230,7 @@ app.get("/api/documents/:id/history", requireAuth(), async (req, res) => {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("document_approvals")
+    .from("portalmkk_document_approvals")
     .select("*")
     .eq("document_id", documentId)
     .order("created_at", { ascending: false });
@@ -6251,7 +6248,7 @@ app.get("/api/documents/:id/file", requireAuth(), async (req, res) => {
   }
 
   const { data: document, error: documentError } = await supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .select("id,office_id,author")
     .eq("id", documentId)
     .single();
@@ -6269,7 +6266,7 @@ app.get("/api/documents/:id/file", requireAuth(), async (req, res) => {
   }
 
   const { data: file, error: fileError } = await supabaseAdmin
-    .from("document_files")
+    .from("portalmkk_document_files")
     .select("file_name,mime_type,content_base64")
     .eq("document_id", documentId)
     .single();
@@ -6411,7 +6408,7 @@ async function createEmbeddingWithOpenRouter(input: string) {
 
 async function indexKbArticleEmbeddings(articleId: number) {
   const { data: article, error: articleError } = await supabaseAdmin
-    .from("kb_articles")
+    .from("portalmkk_kb_articles")
     .select("id,title,category,content,status")
     .eq("id", articleId)
     .single();
@@ -6419,7 +6416,7 @@ async function indexKbArticleEmbeddings(articleId: number) {
     throw new Error(articleError?.message ?? "KB article not found");
   }
 
-  await supabaseAdmin.from("kb_article_chunks").delete().eq("article_id", articleId);
+  await supabaseAdmin.from("portalmkk_kb_article_chunks").delete().eq("article_id", articleId);
 
   const baseText = `# ${article.title}\nКатегория: ${article.category}\n\n${article.content}`;
   const chunks = splitTextToKbChunks(baseText);
@@ -6447,7 +6444,7 @@ async function indexKbArticleEmbeddings(articleId: number) {
     });
   }
 
-  const { error: insertError } = await supabaseAdmin.from("kb_article_chunks").insert(rows);
+  const { error: insertError } = await supabaseAdmin.from("portalmkk_kb_article_chunks").insert(rows);
   if (insertError) {
     throw new Error(insertError.message);
   }
@@ -6462,8 +6459,7 @@ async function tryIndexKbArticleEmbeddings(articleId: number) {
     await indexKbArticleEmbeddings(articleId);
   } catch (error) {
     console.error(
-      `[kb-vector] failed to index article ${articleId}: ${
-        error instanceof Error ? error.message : String(error)
+      `[kb-vector] failed to index article ${articleId}: ${error instanceof Error ? error.message : String(error)
       }`,
     );
   }
@@ -6515,7 +6511,7 @@ async function completeKbConsultation(input: { question: string; matches: KbVect
 async function findKbMatchesForQuestion(input: { question: string; topK: number; minSimilarity: number }) {
   const vector = await createEmbeddingWithOpenRouter(input.question);
   const queryEmbeddingText = toPgVectorLiteral(vector);
-  const { data, error } = await supabaseAdmin.rpc("match_kb_article_chunks", {
+  const { data, error } = await supabaseAdmin.rpc("portalmkk_match_kb_article_chunks", {
     query_embedding_text: queryEmbeddingText,
     match_count: input.topK,
     min_similarity: input.minSimilarity,
@@ -6561,11 +6557,11 @@ async function completeAgentChat(input: {
     },
     ...(kbContext
       ? [
-          {
-            role: "system" as const,
-            content: `Фрагменты базы знаний:\n${kbContext}`,
-          },
-        ]
+        {
+          role: "system" as const,
+          content: `Фрагменты базы знаний:\n${kbContext}`,
+        },
+      ]
       : []),
     ...input.history.slice(-8).map((item) => ({
       role: item.role,
@@ -6688,13 +6684,13 @@ app.post("/api/kb-articles", requireAuth(), requireRole(["director", "admin"]), 
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabaseAdmin.from("kb_articles").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_kb_articles").insert(payload).select("*").single();
   if (error) {
     return res.status(400).json({ error: error.message });
   }
 
   const session = (req as express.Request & { session: Session }).session;
-  await supabaseAdmin.from("kb_article_versions").insert({
+  await supabaseAdmin.from("portalmkk_kb_article_versions").insert({
     article_id: data.id,
     version: 1,
     title: data.title,
@@ -6737,7 +6733,7 @@ app.patch("/api/kb-articles/:id", requireAuth(), requireRole(["director", "admin
   }
 
   const { data: current, error: currentError } = await supabaseAdmin
-    .from("kb_articles")
+    .from("portalmkk_kb_articles")
     .select("*")
     .eq("id", articleId)
     .single();
@@ -6757,7 +6753,7 @@ app.patch("/api/kb-articles/:id", requireAuth(), requireRole(["director", "admin
   if (parsed.data.status !== undefined) updatePayload.status = parsed.data.status;
 
   const { data, error } = await supabaseAdmin
-    .from("kb_articles")
+    .from("portalmkk_kb_articles")
     .update(updatePayload)
     .eq("id", articleId)
     .select("*")
@@ -6768,7 +6764,7 @@ app.patch("/api/kb-articles/:id", requireAuth(), requireRole(["director", "admin
   }
 
   const session = (req as express.Request & { session: Session }).session;
-  await supabaseAdmin.from("kb_article_versions").insert({
+  await supabaseAdmin.from("portalmkk_kb_article_versions").insert({
     article_id: data.id,
     version: data.version,
     title: data.title,
@@ -6799,7 +6795,7 @@ app.get("/api/kb-articles/:id/versions", requireAuth(), async (req, res) => {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("kb_article_versions")
+    .from("portalmkk_kb_article_versions")
     .select("*")
     .eq("article_id", articleId)
     .order("version", { ascending: false });
@@ -6818,7 +6814,7 @@ app.post("/api/kb-articles/:id/restore/:version", requireAuth(), requireRole(["d
   }
 
   const { data: snapshot, error: snapshotError } = await supabaseAdmin
-    .from("kb_article_versions")
+    .from("portalmkk_kb_article_versions")
     .select("*")
     .eq("article_id", articleId)
     .eq("version", version)
@@ -6829,7 +6825,7 @@ app.post("/api/kb-articles/:id/restore/:version", requireAuth(), requireRole(["d
   }
 
   const { data: current, error: currentError } = await supabaseAdmin
-    .from("kb_articles")
+    .from("portalmkk_kb_articles")
     .select("*")
     .eq("id", articleId)
     .single();
@@ -6848,7 +6844,7 @@ app.post("/api/kb-articles/:id/restore/:version", requireAuth(), requireRole(["d
   };
 
   const { data, error } = await supabaseAdmin
-    .from("kb_articles")
+    .from("portalmkk_kb_articles")
     .update(updatePayload)
     .eq("id", articleId)
     .select("*")
@@ -6858,7 +6854,7 @@ app.post("/api/kb-articles/:id/restore/:version", requireAuth(), requireRole(["d
   }
 
   const session = (req as express.Request & { session: Session }).session;
-  await supabaseAdmin.from("kb_article_versions").insert({
+  await supabaseAdmin.from("portalmkk_kb_article_versions").insert({
     article_id: data.id,
     version: data.version,
     title: data.title,
@@ -7057,7 +7053,7 @@ app.post("/api/courses", requireAuth(), requireRole(["director", "admin"]), asyn
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabaseAdmin.from("courses").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_courses").insert(payload).select("*").single();
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -7102,7 +7098,7 @@ app.patch("/api/courses/:id", requireAuth(), requireRole(["director", "admin"]),
   if (parsed.data.status !== undefined) updatePayload.status = parsed.data.status;
 
   const { data, error } = await supabaseAdmin
-    .from("courses")
+    .from("portalmkk_courses")
     .update(updatePayload)
     .eq("id", courseId)
     .select("*")
@@ -7150,7 +7146,7 @@ app.post("/api/courses/:id/assignments", requireAuth(), requireRole(["director",
     due_date: parsed.data.dueDate ?? null,
   }));
 
-  const { error } = await supabaseAdmin.from("course_assignments").upsert(rows, {
+  const { error } = await supabaseAdmin.from("portalmkk_course_assignments").upsert(rows, {
     onConflict: "course_id,user_id",
     ignoreDuplicates: false,
   });
@@ -7178,7 +7174,7 @@ app.get("/api/courses/:id/assignments", requireAuth(), async (req, res) => {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("course_assignments")
+    .from("portalmkk_course_assignments")
     .select("*")
     .eq("course_id", courseId)
     .order("created_at", { ascending: false });
@@ -7211,7 +7207,7 @@ app.get("/api/courses/:id/questions", requireAuth(), async (req, res) => {
     canViewAnswers && (parsed.data.includeAnswers === "1" || parsed.data.includeAnswers === "true");
 
   const { data: course, error: courseError } = await supabaseAdmin
-    .from("courses")
+    .from("portalmkk_courses")
     .select("id,title,status")
     .eq("id", courseId)
     .single();
@@ -7225,7 +7221,7 @@ app.get("/api/courses/:id/questions", requireAuth(), async (req, res) => {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("course_questions")
+    .from("portalmkk_course_questions")
     .select("id,course_id,sort_order,question,options,correct_option,explanation")
     .eq("course_id", courseId)
     .order("sort_order", { ascending: true });
@@ -7285,7 +7281,7 @@ app.post("/api/courses/:id/attempts/grade", requireAuth(), async (req, res) => {
   const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
 
   const { data: course, error: courseError } = await supabaseAdmin
-    .from("courses")
+    .from("portalmkk_courses")
     .select("id,passing_score,status")
     .eq("id", courseId)
     .single();
@@ -7298,7 +7294,7 @@ app.post("/api/courses/:id/attempts/grade", requireAuth(), async (req, res) => {
   }
 
   const { data: questions, error: questionsError } = await supabaseAdmin
-    .from("course_questions")
+    .from("portalmkk_course_questions")
     .select("id,correct_option")
     .eq("course_id", courseId);
   if (questionsError) {
@@ -7329,7 +7325,7 @@ app.post("/api/courses/:id/attempts/grade", requireAuth(), async (req, res) => {
   const passed = score >= Number(course.passing_score);
 
   const { count, error: countError } = await supabaseAdmin
-    .from("course_attempts")
+    .from("portalmkk_course_attempts")
     .select("*", { count: "exact", head: true })
     .eq("course_id", courseId)
     .eq("user_id", targetUserId);
@@ -7339,7 +7335,7 @@ app.post("/api/courses/:id/attempts/grade", requireAuth(), async (req, res) => {
 
   const attemptNo = (count ?? 0) + 1;
   const { data: attempt, error: attemptError } = await supabaseAdmin
-    .from("course_attempts")
+    .from("portalmkk_course_attempts")
     .insert({
       course_id: courseId,
       user_id: targetUserId,
@@ -7353,7 +7349,7 @@ app.post("/api/courses/:id/attempts/grade", requireAuth(), async (req, res) => {
     return res.status(400).json({ error: attemptError?.message ?? "Failed to create attempt" });
   }
 
-  await supabaseAdmin.from("attestations").insert({
+  await supabaseAdmin.from("portalmkk_attestations").insert({
     course_id: courseId,
     user_id: targetUserId,
     date: new Date().toISOString().slice(0, 10),
@@ -7383,8 +7379,7 @@ app.post("/api/courses/:id/attempts/grade", requireAuth(), async (req, res) => {
       });
     } catch (awardError) {
       console.error(
-        `[points] lms_course_passed failed for attempt=${attempt.id}: ${
-          awardError instanceof Error ? awardError.message : String(awardError)
+        `[points] lms_course_passed failed for attempt=${attempt.id}: ${awardError instanceof Error ? awardError.message : String(awardError)
         }`,
       );
     }
@@ -7416,7 +7411,7 @@ app.post("/api/courses/:id/attempts", requireAuth(), async (req, res) => {
   const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
 
   const { data: course, error: courseError } = await supabaseAdmin
-    .from("courses")
+    .from("portalmkk_courses")
     .select("id,passing_score")
     .eq("id", courseId)
     .single();
@@ -7425,7 +7420,7 @@ app.post("/api/courses/:id/attempts", requireAuth(), async (req, res) => {
   }
 
   const { count, error: countError } = await supabaseAdmin
-    .from("course_attempts")
+    .from("portalmkk_course_attempts")
     .select("*", { count: "exact", head: true })
     .eq("course_id", courseId)
     .eq("user_id", targetUserId);
@@ -7437,7 +7432,7 @@ app.post("/api/courses/:id/attempts", requireAuth(), async (req, res) => {
   const passed = parsed.data.score >= Number(course.passing_score);
 
   const { data, error } = await supabaseAdmin
-    .from("course_attempts")
+    .from("portalmkk_course_attempts")
     .insert({
       course_id: courseId,
       user_id: targetUserId,
@@ -7451,7 +7446,7 @@ app.post("/api/courses/:id/attempts", requireAuth(), async (req, res) => {
     return res.status(400).json({ error: error?.message ?? "Failed to create attempt" });
   }
 
-  await supabaseAdmin.from("attestations").insert({
+  await supabaseAdmin.from("portalmkk_attestations").insert({
     course_id: courseId,
     user_id: targetUserId,
     date: new Date().toISOString().slice(0, 10),
@@ -7481,8 +7476,7 @@ app.post("/api/courses/:id/attempts", requireAuth(), async (req, res) => {
       });
     } catch (awardError) {
       console.error(
-        `[points] lms_course_passed failed for attempt=${data.id}: ${
-          awardError instanceof Error ? awardError.message : String(awardError)
+        `[points] lms_course_passed failed for attempt=${data.id}: ${awardError instanceof Error ? awardError.message : String(awardError)
         }`,
       );
     }
@@ -7503,7 +7497,7 @@ app.get("/api/courses/:id/attempts", requireAuth(), async (req, res) => {
   const targetUserId = canReadAll ? userId : session.profile.id;
 
   let query = supabaseAdmin
-    .from("course_attempts")
+    .from("portalmkk_course_attempts")
     .select("*")
     .eq("course_id", courseId)
     .order("created_at", { ascending: false });
@@ -7706,7 +7700,7 @@ function parseLmsMarkdown(markdown: string): ParsedSection[] {
 
 async function getLmsCourseTree(courseId: number) {
   const { data: course, error: courseError } = await supabaseAdmin
-    .from("lms_courses")
+    .from("portalmkk_lms_courses")
     .select("*")
     .eq("id", courseId)
     .single();
@@ -7715,7 +7709,7 @@ async function getLmsCourseTree(courseId: number) {
   }
 
   const { data: sections, error: sectionsError } = await supabaseAdmin
-    .from("lms_sections")
+    .from("portalmkk_lms_sections")
     .select("*")
     .eq("course_id", courseId)
     .order("sort_order", { ascending: true });
@@ -7724,20 +7718,20 @@ async function getLmsCourseTree(courseId: number) {
   const sectionIds = (sections ?? []).map((s) => Number(s.id));
   const { data: subsections, error: subsectionsError } = sectionIds.length
     ? await supabaseAdmin
-        .from("lms_subsections")
-        .select("*")
-        .in("section_id", sectionIds)
-        .order("sort_order", { ascending: true })
+      .from("portalmkk_lms_subsections")
+      .select("*")
+      .in("section_id", sectionIds)
+      .order("sort_order", { ascending: true })
     : { data: [], error: null };
   if (subsectionsError) throw new Error(subsectionsError.message);
 
   const subsectionIds = (subsections ?? []).map((s) => Number(s.id));
   const { data: media, error: mediaError } = subsectionIds.length
     ? await supabaseAdmin
-        .from("lms_media")
-        .select("id,subsection_id,media_type,image_data_base64,image_mime_type,external_url,caption,sort_order,created_at")
-        .in("subsection_id", subsectionIds)
-        .order("sort_order", { ascending: true })
+      .from("portalmkk_lms_media")
+      .select("id,subsection_id,media_type,image_data_base64,image_mime_type,external_url,caption,sort_order,created_at")
+      .in("subsection_id", subsectionIds)
+      .order("sort_order", { ascending: true })
     : { data: [], error: null };
   if (mediaError) throw new Error(mediaError.message);
 
@@ -7757,7 +7751,7 @@ async function getLmsCourseTree(courseId: number) {
 
 async function getLmsCourseIdBySectionId(sectionId: number) {
   const { data, error } = await supabaseAdmin
-    .from("lms_sections")
+    .from("portalmkk_lms_sections")
     .select("course_id")
     .eq("id", sectionId)
     .single();
@@ -7769,7 +7763,7 @@ async function getLmsCourseIdBySectionId(sectionId: number) {
 
 async function getLmsCourseIdBySubsectionId(subsectionId: number) {
   const { data: subsection, error: subsectionError } = await supabaseAdmin
-    .from("lms_subsections")
+    .from("portalmkk_lms_subsections")
     .select("section_id")
     .eq("id", subsectionId)
     .single();
@@ -7799,7 +7793,7 @@ async function saveLmsCourseVersionSnapshot(input: {
   const tree = input.snapshot ?? (await getLmsCourseTree(input.courseId));
 
   const { data: latest, error: latestError } = await supabaseAdmin
-    .from("lms_course_versions")
+    .from("portalmkk_lms_course_versions")
     .select("version")
     .eq("course_id", input.courseId)
     .order("version", { ascending: false })
@@ -7810,7 +7804,7 @@ async function saveLmsCourseVersionSnapshot(input: {
   }
 
   const nextVersion = Number(latest?.version ?? 0) + 1;
-  const { error } = await supabaseAdmin.from("lms_course_versions").insert({
+  const { error } = await supabaseAdmin.from("portalmkk_lms_course_versions").insert({
     course_id: input.courseId,
     version: nextVersion,
     snapshot: tree,
@@ -7831,7 +7825,7 @@ async function restoreLmsCourseFromSnapshot(courseId: number, snapshot: unknown)
   }
 
   const { error: updateCourseError } = await supabaseAdmin
-    .from("lms_courses")
+    .from("portalmkk_lms_courses")
     .update({
       title: tree.title,
       description: tree.description ?? null,
@@ -7844,7 +7838,7 @@ async function restoreLmsCourseFromSnapshot(courseId: number, snapshot: unknown)
   }
 
   const { data: existingSections, error: existingSectionsError } = await supabaseAdmin
-    .from("lms_sections")
+    .from("portalmkk_lms_sections")
     .select("id")
     .eq("course_id", courseId);
   if (existingSectionsError) {
@@ -7854,7 +7848,7 @@ async function restoreLmsCourseFromSnapshot(courseId: number, snapshot: unknown)
   const existingSectionIds = (existingSections ?? []).map((row) => Number(row.id));
   if (existingSectionIds.length > 0) {
     const { error: deleteSectionsError } = await supabaseAdmin
-      .from("lms_sections")
+      .from("portalmkk_lms_sections")
       .delete()
       .in("id", existingSectionIds);
     if (deleteSectionsError) {
@@ -7864,7 +7858,7 @@ async function restoreLmsCourseFromSnapshot(courseId: number, snapshot: unknown)
 
   for (const section of tree.sections) {
     const { data: createdSection, error: createSectionError } = await supabaseAdmin
-      .from("lms_sections")
+      .from("portalmkk_lms_sections")
       .insert({
         course_id: courseId,
         title: section.title,
@@ -7878,7 +7872,7 @@ async function restoreLmsCourseFromSnapshot(courseId: number, snapshot: unknown)
 
     for (const subsection of section.subsections ?? []) {
       const { data: createdSubsection, error: createSubsectionError } = await supabaseAdmin
-        .from("lms_subsections")
+        .from("portalmkk_lms_subsections")
         .insert({
           section_id: createdSection.id,
           title: subsection.title,
@@ -7896,22 +7890,22 @@ async function restoreLmsCourseFromSnapshot(courseId: number, snapshot: unknown)
         const payload =
           mediaItem.media_type === "image"
             ? {
-                subsection_id: createdSubsection.id,
-                media_type: "image" as const,
-                image_data_base64: mediaItem.image_data_base64 ?? null,
-                image_mime_type: mediaItem.image_mime_type ?? null,
-                caption: mediaItem.caption ?? null,
-                sort_order: mediaItem.sort_order ?? 1,
-              }
+              subsection_id: createdSubsection.id,
+              media_type: "image" as const,
+              image_data_base64: mediaItem.image_data_base64 ?? null,
+              image_mime_type: mediaItem.image_mime_type ?? null,
+              caption: mediaItem.caption ?? null,
+              sort_order: mediaItem.sort_order ?? 1,
+            }
             : {
-                subsection_id: createdSubsection.id,
-                media_type: "video" as const,
-                external_url: mediaItem.external_url ?? null,
-                caption: mediaItem.caption ?? null,
-                sort_order: mediaItem.sort_order ?? 1,
-              };
+              subsection_id: createdSubsection.id,
+              media_type: "video" as const,
+              external_url: mediaItem.external_url ?? null,
+              caption: mediaItem.caption ?? null,
+              sort_order: mediaItem.sort_order ?? 1,
+            };
 
-        const { error: createMediaError } = await supabaseAdmin.from("lms_media").insert(payload);
+        const { error: createMediaError } = await supabaseAdmin.from("portalmkk_lms_media").insert(payload);
         if (createMediaError) {
           throw new Error(createMediaError.message);
         }
@@ -7922,7 +7916,7 @@ async function restoreLmsCourseFromSnapshot(courseId: number, snapshot: unknown)
 
 async function validateLmsCourseCanBePublished(courseId: number) {
   const { data: sections, error: sectionsError } = await supabaseAdmin
-    .from("lms_sections")
+    .from("portalmkk_lms_sections")
     .select("id")
     .eq("course_id", courseId);
   if (sectionsError) {
@@ -7935,7 +7929,7 @@ async function validateLmsCourseCanBePublished(courseId: number) {
   }
 
   const { data: subsections, error: subsectionsError } = await supabaseAdmin
-    .from("lms_subsections")
+    .from("portalmkk_lms_subsections")
     .select("id,markdown_content")
     .in("section_id", sectionIds);
   if (subsectionsError) {
@@ -7949,7 +7943,7 @@ async function validateLmsCourseCanBePublished(courseId: number) {
 
   const subsectionIds = subsectionRows.map((item) => Number(item.id));
   const { data: mediaRows, error: mediaError } = await supabaseAdmin
-    .from("lms_media")
+    .from("portalmkk_lms_media")
     .select("id,subsection_id")
     .in("subsection_id", subsectionIds);
   if (mediaError) {
@@ -7985,10 +7979,10 @@ async function getLmsCourseProgressTree(courseId: number, userId: string) {
 
   const { data: progressRows, error: progressError } = subsectionIds.length
     ? await supabaseAdmin
-        .from("lms_subsection_progress")
-        .select("subsection_id,completed,progress_percent,updated_at,completed_at")
-        .eq("user_id", userId)
-        .in("subsection_id", subsectionIds)
+      .from("portalmkk_lms_subsection_progress")
+      .select("subsection_id,completed,progress_percent,updated_at,completed_at")
+      .eq("user_id", userId)
+      .in("subsection_id", subsectionIds)
     : { data: [], error: null };
 
   if (progressError) {
@@ -8003,14 +7997,14 @@ async function getLmsCourseProgressTree(courseId: number, userId: string) {
       updated_at: string | null;
       completed_at: string | null;
     }) => [
-      Number(row.subsection_id),
-      {
-        completed: Boolean(row.completed),
-        progressPercent: Number(row.progress_percent ?? 0),
-        updatedAt: row.updated_at as string,
-        completedAt: (row.completed_at as string | null) ?? null,
-      },
-    ]),
+        Number(row.subsection_id),
+        {
+          completed: Boolean(row.completed),
+          progressPercent: Number(row.progress_percent ?? 0),
+          updatedAt: row.updated_at as string,
+          completedAt: (row.completed_at as string | null) ?? null,
+        },
+      ]),
   );
 
   const sectionProgress = sections.map((section: { id: number | string; subsections: Array<{ id: number | string }> }) => {
@@ -8035,11 +8029,11 @@ async function getLmsCourseProgressTree(courseId: number, userId: string) {
     const progressPercent =
       total > 0
         ? Math.round(
-            subsectionProgress.reduce(
-              (sum: number, sub: { progressPercent: number }) => sum + sub.progressPercent,
-              0,
-            ) / total,
-          )
+          subsectionProgress.reduce(
+            (sum: number, sub: { progressPercent: number }) => sum + sub.progressPercent,
+            0,
+          ) / total,
+        )
         : 0;
 
     return {
@@ -8063,12 +8057,12 @@ async function getLmsCourseProgressTree(courseId: number, userId: string) {
   const averageProgressPercent =
     totalSubsections > 0
       ? Math.round(
-          sectionProgress.reduce(
-            (sum: number, section: { progressPercent: number; totalSubsections: number }) =>
-              sum + section.progressPercent * section.totalSubsections,
-            0,
-          ) / totalSubsections,
-        )
+        sectionProgress.reduce(
+          (sum: number, section: { progressPercent: number; totalSubsections: number }) =>
+            sum + section.progressPercent * section.totalSubsections,
+          0,
+        ) / totalSubsections,
+      )
       : 0;
 
   return {
@@ -8089,11 +8083,11 @@ app.get("/api/lms-builder/courses", requireAuth(), async (req, res) => {
 
   // Keep query tolerant to schema drift: do not rely on optional columns in SQL layer.
   let data: Array<Record<string, unknown>> | null = null;
-  const primary = await supabaseAdmin.from("lms_courses").select("*");
+  const primary = await supabaseAdmin.from("portalmkk_lms_courses").select("*");
   if (!primary.error) {
     data = (primary.data ?? []) as Array<Record<string, unknown>>;
   } else if (isMissingLmsSchemaError(primary.error)) {
-    const legacy = await supabaseAdmin.from("courses").select("*");
+    const legacy = await supabaseAdmin.from("portalmkk_courses").select("*");
     if (legacy.error) return res.status(400).json({ error: legacy.error.message });
     data = ((legacy.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
       id: row.id,
@@ -8139,7 +8133,7 @@ app.get("/api/lms-builder/courses/:id", requireAuth(), async (req, res) => {
     return res.json(tree);
   } catch (error) {
     // Legacy fallback: map old `courses` record to empty LMS tree so editor can open.
-    const legacy = await supabaseAdmin.from("courses").select("*").eq("id", courseId).maybeSingle();
+    const legacy = await supabaseAdmin.from("portalmkk_courses").select("*").eq("id", courseId).maybeSingle();
     if (!legacy.error && legacy.data) {
       return res.json({
         id: legacy.data.id,
@@ -8168,12 +8162,12 @@ app.post("/api/lms-builder/courses", requireAuth(), requireRole(["admin", "direc
   let createdRow: Record<string, unknown> | null = null;
 
   // First try LMS table.
-  const lmsInsert = await supabaseAdmin.from("lms_courses").insert(payload);
+  const lmsInsert = await supabaseAdmin.from("portalmkk_lms_courses").insert(payload);
 
   if (lmsInsert.error && isMissingLmsSchemaError(lmsInsert.error)) {
     // Legacy fallback to old `courses` table.
     const legacyInsert = await supabaseAdmin
-      .from("courses")
+      .from("portalmkk_courses")
       .insert({
         title: parsed.data.title,
         category: "Базовый",
@@ -8186,7 +8180,7 @@ app.post("/api/lms-builder/courses", requireAuth(), requireRole(["admin", "direc
     }
 
     const legacyRead = await supabaseAdmin
-      .from("courses")
+      .from("portalmkk_courses")
       .select("*")
       .eq("title", parsed.data.title)
       .order("id", { ascending: false })
@@ -8207,7 +8201,7 @@ app.post("/api/lms-builder/courses", requireAuth(), requireRole(["admin", "direc
     return res.status(400).json({ error: lmsInsert.error.message });
   } else {
     const lmsRead = await supabaseAdmin
-      .from("lms_courses")
+      .from("portalmkk_lms_courses")
       .select("*")
       .eq("created_by", session.profile.id)
       .eq("title", parsed.data.title)
@@ -8259,7 +8253,7 @@ app.patch("/api/lms-builder/courses/:id", requireAuth(), requireRole(["admin", "
 
   let updatedData: Record<string, unknown> | null = null;
   const lmsUpdate = await supabaseAdmin
-    .from("lms_courses")
+    .from("portalmkk_lms_courses")
     .update(payload)
     .eq("id", courseId)
     .select("*")
@@ -8274,7 +8268,7 @@ app.patch("/api/lms-builder/courses/:id", requireAuth(), requireRole(["admin", "
     if (parsed.data.description !== undefined) legacyPayload.category = parsed.data.description;
 
     const legacyUpdate = await supabaseAdmin
-      .from("courses")
+      .from("portalmkk_courses")
       .update(legacyPayload)
       .eq("id", courseId)
       .select("*")
@@ -8318,7 +8312,7 @@ app.post("/api/lms-builder/courses/:id/sections", requireAuth(), requireRole(["a
   const courseId = Number(req.params.id);
   if (Number.isNaN(courseId)) return res.status(400).json({ error: "Invalid course id" });
 
-  const lmsCourseCheck = await supabaseAdmin.from("lms_courses").select("id").eq("id", courseId).maybeSingle();
+  const lmsCourseCheck = await supabaseAdmin.from("portalmkk_lms_courses").select("id").eq("id", courseId).maybeSingle();
   if (lmsCourseCheck.error && isMissingLmsSchemaError(lmsCourseCheck.error)) {
     return res.status(400).json({
       error:
@@ -8326,7 +8320,7 @@ app.post("/api/lms-builder/courses/:id/sections", requireAuth(), requireRole(["a
     });
   }
   if (!lmsCourseCheck.error && !lmsCourseCheck.data) {
-    const legacyCourse = await supabaseAdmin.from("courses").select("id").eq("id", courseId).maybeSingle();
+    const legacyCourse = await supabaseAdmin.from("portalmkk_courses").select("id").eq("id", courseId).maybeSingle();
     if (!legacyCourse.error && legacyCourse.data) {
       return res.status(400).json({
         error:
@@ -8337,7 +8331,7 @@ app.post("/api/lms-builder/courses/:id/sections", requireAuth(), requireRole(["a
   }
 
   const { count, error: countError } = await supabaseAdmin
-    .from("lms_sections")
+    .from("portalmkk_lms_sections")
     .select("*", { head: true, count: "exact" })
     .eq("course_id", courseId);
   if (countError) return res.status(400).json({ error: countError.message });
@@ -8348,7 +8342,7 @@ app.post("/api/lms-builder/courses/:id/sections", requireAuth(), requireRole(["a
     sort_order: parsed.data.sortOrder ?? (count ?? 0) + 1,
   };
 
-  const { data, error } = await supabaseAdmin.from("lms_sections").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_lms_sections").insert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
 
   const session = (req as express.Request & { session: Session }).session;
@@ -8378,7 +8372,7 @@ app.patch("/api/lms-builder/sections/:id", requireAuth(), requireRole(["admin", 
   if (parsed.data.sortOrder !== undefined) payload.sort_order = parsed.data.sortOrder;
 
   const { data, error } = await supabaseAdmin
-    .from("lms_sections")
+    .from("portalmkk_lms_sections")
     .update(payload)
     .eq("id", sectionId)
     .select("*")
@@ -8408,12 +8402,12 @@ app.post("/api/lms-builder/sections/:id/subsections", requireAuth(), requireRole
   const sectionId = Number(req.params.id);
   if (Number.isNaN(sectionId)) return res.status(400).json({ error: "Invalid section id" });
 
-  const sectionCheck = await supabaseAdmin.from("lms_sections").select("id").eq("id", sectionId).maybeSingle();
+  const sectionCheck = await supabaseAdmin.from("portalmkk_lms_sections").select("id").eq("id", sectionId).maybeSingle();
   if (sectionCheck.error) return res.status(400).json({ error: sectionCheck.error.message });
   if (!sectionCheck.data) return res.status(400).json({ error: "LMS section not found" });
 
   const { count, error: countError } = await supabaseAdmin
-    .from("lms_subsections")
+    .from("portalmkk_lms_subsections")
     .select("*", { head: true, count: "exact" })
     .eq("section_id", sectionId);
   if (countError) return res.status(400).json({ error: countError.message });
@@ -8425,7 +8419,7 @@ app.post("/api/lms-builder/sections/:id/subsections", requireAuth(), requireRole
     markdown_content: parsed.data.markdownContent ?? "",
   };
 
-  const { data, error } = await supabaseAdmin.from("lms_subsections").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_lms_subsections").insert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
 
   const session = (req as express.Request & { session: Session }).session;
@@ -8457,7 +8451,7 @@ app.patch("/api/lms-builder/subsections/:id", requireAuth(), requireRole(["admin
   if (parsed.data.markdownContent !== undefined) payload.markdown_content = parsed.data.markdownContent;
 
   const { data, error } = await supabaseAdmin
-    .from("lms_subsections")
+    .from("portalmkk_lms_subsections")
     .update(payload)
     .eq("id", subsectionId)
     .select("*")
@@ -8488,12 +8482,12 @@ app.post("/api/lms-builder/subsections/:id/media/image", requireAuth(), requireR
   if (Number.isNaN(subsectionId)) return res.status(400).json({ error: "Invalid subsection id" });
 
   const base64 = parsed.data.dataBase64.replace(/^data:[^;]+;base64,/, "");
-  const subsectionCheck = await supabaseAdmin.from("lms_subsections").select("id").eq("id", subsectionId).maybeSingle();
+  const subsectionCheck = await supabaseAdmin.from("portalmkk_lms_subsections").select("id").eq("id", subsectionId).maybeSingle();
   if (subsectionCheck.error) return res.status(400).json({ error: subsectionCheck.error.message });
   if (!subsectionCheck.data) return res.status(400).json({ error: "LMS subsection not found" });
 
   const { count, error: countError } = await supabaseAdmin
-    .from("lms_media")
+    .from("portalmkk_lms_media")
     .select("*", { head: true, count: "exact" })
     .eq("subsection_id", subsectionId);
   if (countError) return res.status(400).json({ error: countError.message });
@@ -8507,7 +8501,7 @@ app.post("/api/lms-builder/subsections/:id/media/image", requireAuth(), requireR
     sort_order: parsed.data.sortOrder ?? (count ?? 0) + 1,
   };
 
-  const { data, error } = await supabaseAdmin.from("lms_media").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_lms_media").insert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
 
   const session = (req as express.Request & { session: Session }).session;
@@ -8533,12 +8527,12 @@ app.post("/api/lms-builder/subsections/:id/media/video", requireAuth(), requireR
   const subsectionId = Number(req.params.id);
   if (Number.isNaN(subsectionId)) return res.status(400).json({ error: "Invalid subsection id" });
 
-  const subsectionCheck = await supabaseAdmin.from("lms_subsections").select("id").eq("id", subsectionId).maybeSingle();
+  const subsectionCheck = await supabaseAdmin.from("portalmkk_lms_subsections").select("id").eq("id", subsectionId).maybeSingle();
   if (subsectionCheck.error) return res.status(400).json({ error: subsectionCheck.error.message });
   if (!subsectionCheck.data) return res.status(400).json({ error: "LMS subsection not found" });
 
   const { count, error: countError } = await supabaseAdmin
-    .from("lms_media")
+    .from("portalmkk_lms_media")
     .select("*", { head: true, count: "exact" })
     .eq("subsection_id", subsectionId);
   if (countError) return res.status(400).json({ error: countError.message });
@@ -8551,7 +8545,7 @@ app.post("/api/lms-builder/subsections/:id/media/video", requireAuth(), requireR
     sort_order: parsed.data.sortOrder ?? (count ?? 0) + 1,
   };
 
-  const { data, error } = await supabaseAdmin.from("lms_media").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_lms_media").insert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
 
   const session = (req as express.Request & { session: Session }).session;
@@ -8584,7 +8578,7 @@ app.post("/api/lms-builder/import-markdown", requireAuth(), requireRole(["admin"
   let courseId = parsed.data.courseId;
   if (!courseId) {
     const { data: createdCourse, error: createCourseError } = await supabaseAdmin
-      .from("lms_courses")
+      .from("portalmkk_lms_courses")
       .insert({
         title: parsed.data.title,
         description: null,
@@ -8602,7 +8596,7 @@ app.post("/api/lms-builder/import-markdown", requireAuth(), requireRole(["admin"
   for (let s = 0; s < sections.length; s += 1) {
     const section = sections[s];
     const { data: createdSection, error: sectionError } = await supabaseAdmin
-      .from("lms_sections")
+      .from("portalmkk_lms_sections")
       .insert({
         course_id: courseId,
         title: section.title,
@@ -8617,7 +8611,7 @@ app.post("/api/lms-builder/import-markdown", requireAuth(), requireRole(["admin"
     for (let ss = 0; ss < section.subsections.length; ss += 1) {
       const subsection = section.subsections[ss];
       const { data: createdSubsection, error: subsectionError } = await supabaseAdmin
-        .from("lms_subsections")
+        .from("portalmkk_lms_subsections")
         .insert({
           section_id: createdSection.id,
           title: subsection.title,
@@ -8632,7 +8626,7 @@ app.post("/api/lms-builder/import-markdown", requireAuth(), requireRole(["admin"
 
       let mediaSort = 1;
       for (const image of subsection.imageAssets) {
-        await supabaseAdmin.from("lms_media").insert({
+        await supabaseAdmin.from("portalmkk_lms_media").insert({
           subsection_id: createdSubsection.id,
           media_type: "image",
           image_data_base64: image.base64,
@@ -8643,7 +8637,7 @@ app.post("/api/lms-builder/import-markdown", requireAuth(), requireRole(["admin"
         mediaSort += 1;
       }
       for (const video of subsection.videoAssets) {
-        await supabaseAdmin.from("lms_media").insert({
+        await supabaseAdmin.from("portalmkk_lms_media").insert({
           subsection_id: createdSubsection.id,
           media_type: "video",
           external_url: video.url,
@@ -8682,7 +8676,7 @@ app.get(
     }
 
     const { data, error } = await supabaseAdmin
-      .from("lms_course_versions")
+      .from("portalmkk_lms_course_versions")
       .select("id,course_id,version,reason,created_by,created_at")
       .eq("course_id", courseId)
       .order("version", { ascending: false });
@@ -8706,7 +8700,7 @@ app.post(
     }
 
     const { data: versionRow, error: versionError } = await supabaseAdmin
-      .from("lms_course_versions")
+      .from("portalmkk_lms_course_versions")
       .select("id,version,snapshot")
       .eq("course_id", courseId)
       .eq("version", version)
@@ -8745,7 +8739,7 @@ app.get(
     }
 
     const { data: assignments, error: assignmentsError } = await supabaseAdmin
-      .from("lms_course_assignments")
+      .from("portalmkk_lms_course_assignments")
       .select("*")
       .eq("course_id", courseId)
       .order("created_at", { ascending: false });
@@ -8756,9 +8750,9 @@ app.get(
     const userIds = [...new Set((assignments ?? []).map((item) => String(item.user_id)))];
     const { data: profiles, error: profilesError } = userIds.length
       ? await supabaseAdmin
-          .from("profiles")
-          .select("id,full_name,role,office_id,email")
-          .in("id", userIds)
+        .from("portalmkk_profiles")
+        .select("id,full_name,role,office_id,email")
+        .in("id", userIds)
       : { data: [], error: null };
     if (profilesError) {
       return res.status(400).json({ error: profilesError.message });
@@ -8790,7 +8784,7 @@ app.post(
     }
 
     const { data: course, error: courseError } = await supabaseAdmin
-      .from("lms_courses")
+      .from("portalmkk_lms_courses")
       .select("id,title,status")
       .eq("id", courseId)
       .single();
@@ -8800,7 +8794,7 @@ app.post(
 
     const targetUserIds = new Set<string>(parsed.data.userIds ?? []);
     if (parsed.data.role || parsed.data.officeId) {
-      let profilesQuery = supabaseAdmin.from("profiles").select("id");
+      let profilesQuery = supabaseAdmin.from("portalmkk_profiles").select("id");
       if (parsed.data.role) {
         profilesQuery = profilesQuery.eq("role", parsed.data.role);
       }
@@ -8831,7 +8825,7 @@ app.post(
       source_office_id: parsed.data.officeId ?? null,
     }));
 
-    const { error } = await supabaseAdmin.from("lms_course_assignments").upsert(rows, {
+    const { error } = await supabaseAdmin.from("portalmkk_lms_course_assignments").upsert(rows, {
       onConflict: "course_id,user_id",
     });
     if (error) {
@@ -8870,7 +8864,7 @@ app.post(
     });
 
     const { count } = await supabaseAdmin
-      .from("lms_course_assignments")
+      .from("portalmkk_lms_course_assignments")
       .select("*", { count: "exact", head: true })
       .eq("course_id", courseId);
 
@@ -8958,7 +8952,7 @@ app.post("/api/lms-progress/subsections/:id", requireAuth(), async (req, res) =>
   };
 
   const { data, error } = await supabaseAdmin
-    .from("lms_subsection_progress")
+    .from("portalmkk_lms_subsection_progress")
     .upsert(payload, { onConflict: "user_id,subsection_id" })
     .select("*")
     .single();
@@ -9010,7 +9004,7 @@ app.get("/api/lms-quizzes", requireAuth(), async (req, res) => {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("lms_quizzes")
+    .from("portalmkk_lms_quizzes")
     .select("*")
     .eq("subsection_id", parsed.data.subsection_id)
     .order("created_at", { ascending: true });
@@ -9036,7 +9030,7 @@ app.get("/api/lms-quizzes/:id", requireAuth(), async (req, res) => {
   const canViewAnswers = ["admin", "director"].includes(session.profile.role);
 
   const { data: quiz, error: quizError } = await supabaseAdmin
-    .from("lms_quizzes")
+    .from("portalmkk_lms_quizzes")
     .select("*")
     .eq("id", quizId)
     .single();
@@ -9046,7 +9040,7 @@ app.get("/api/lms-quizzes/:id", requireAuth(), async (req, res) => {
   }
 
   const { data: questions, error: questionsError } = await supabaseAdmin
-    .from("lms_quiz_questions")
+    .from("portalmkk_lms_quiz_questions")
     .select("*")
     .eq("quiz_id", quizId)
     .order("sort_order", { ascending: true });
@@ -9059,10 +9053,10 @@ app.get("/api/lms-quizzes/:id", requireAuth(), async (req, res) => {
 
   const { data: options, error: optionsError } = questionIds.length > 0
     ? await supabaseAdmin
-        .from("lms_quiz_options")
-        .select("*")
-        .in("question_id", questionIds)
-        .order("sort_order", { ascending: true })
+      .from("portalmkk_lms_quiz_options")
+      .select("*")
+      .in("question_id", questionIds)
+      .order("sort_order", { ascending: true })
     : { data: [], error: null };
 
   if (optionsError) {
@@ -9071,10 +9065,10 @@ app.get("/api/lms-quizzes/:id", requireAuth(), async (req, res) => {
 
   const { data: matchingPairs, error: matchingError } = questionIds.length > 0
     ? await supabaseAdmin
-        .from("lms_quiz_matching_pairs")
-        .select("*")
-        .in("question_id", questionIds)
-        .order("id", { ascending: true })
+      .from("portalmkk_lms_quiz_matching_pairs")
+      .select("*")
+      .in("question_id", questionIds)
+      .order("id", { ascending: true })
     : { data: [], error: null };
 
   if (matchingError) {
@@ -9142,7 +9136,7 @@ app.get("/api/lms-quizzes/:id/attempts", requireAuth(), async (req, res) => {
   const targetUserId = canViewAll && userId ? userId : session.profile.id;
 
   const { data, error } = await supabaseAdmin
-    .from("lms_quiz_attempts")
+    .from("portalmkk_lms_quiz_attempts")
     .select("*")
     .eq("quiz_id", quizId)
     .eq("user_id", targetUserId)
@@ -9172,7 +9166,7 @@ app.post("/api/lms-quizzes/:id/attempts", requireAuth(), async (req, res) => {
   const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
 
   const { data: quiz, error: quizError } = await supabaseAdmin
-    .from("lms_quizzes")
+    .from("portalmkk_lms_quizzes")
     .select("id,max_attempts")
     .eq("id", quizId)
     .single();
@@ -9184,7 +9178,7 @@ app.post("/api/lms-quizzes/:id/attempts", requireAuth(), async (req, res) => {
   // Check attempt count if max_attempts is set
   if (quiz.max_attempts && quiz.max_attempts > 0) {
     const { count, error: countError } = await supabaseAdmin
-      .from("lms_quiz_attempts")
+      .from("portalmkk_lms_quiz_attempts")
       .select("*", { count: "exact", head: true })
       .eq("quiz_id", quizId)
       .eq("user_id", targetUserId);
@@ -9199,7 +9193,7 @@ app.post("/api/lms-quizzes/:id/attempts", requireAuth(), async (req, res) => {
   }
 
   const { data: attempt, error: attemptError } = await supabaseAdmin
-    .from("lms_quiz_attempts")
+    .from("portalmkk_lms_quiz_attempts")
     .insert({
       quiz_id: quizId,
       user_id: targetUserId,
@@ -9243,7 +9237,7 @@ app.post("/api/lms-quizzes/:id/submit", requireAuth(), async (req, res) => {
 
   // Get the current in-progress attempt
   const { data: attempt, error: attemptError } = await supabaseAdmin
-    .from("lms_quiz_attempts")
+    .from("portalmkk_lms_quiz_attempts")
     .select("*")
     .eq("quiz_id", quizId)
     .eq("user_id", targetUserId)
@@ -9262,7 +9256,7 @@ app.post("/api/lms-quizzes/:id/submit", requireAuth(), async (req, res) => {
 
   // Get quiz and questions
   const { data: quiz, error: quizError } = await supabaseAdmin
-    .from("lms_quizzes")
+    .from("portalmkk_lms_quizzes")
     .select("id,passing_score")
     .eq("id", quizId)
     .single();
@@ -9272,7 +9266,7 @@ app.post("/api/lms-quizzes/:id/submit", requireAuth(), async (req, res) => {
   }
 
   const { data: questions, error: questionsError } = await supabaseAdmin
-    .from("lms_quiz_questions")
+    .from("portalmkk_lms_quiz_questions")
     .select("id,question_type,points")
     .eq("quiz_id", quizId);
 
@@ -9284,9 +9278,9 @@ app.post("/api/lms-quizzes/:id/submit", requireAuth(), async (req, res) => {
 
   const { data: options, error: optionsError } = questionIds.length > 0
     ? await supabaseAdmin
-        .from("lms_quiz_options")
-        .select("id,question_id,is_correct,sort_order")
-        .in("question_id", questionIds)
+      .from("portalmkk_lms_quiz_options")
+      .select("id,question_id,is_correct,sort_order")
+      .in("question_id", questionIds)
     : { data: [], error: null };
 
   if (optionsError) {
@@ -9295,9 +9289,9 @@ app.post("/api/lms-quizzes/:id/submit", requireAuth(), async (req, res) => {
 
   const { data: matchingPairs, error: matchingError } = questionIds.length > 0
     ? await supabaseAdmin
-        .from("lms_quiz_matching_pairs")
-        .select("id,question_id,right_item")
-        .in("question_id", questionIds)
+      .from("portalmkk_lms_quiz_matching_pairs")
+      .select("id,question_id,right_item")
+      .in("question_id", questionIds)
     : { data: [], error: null };
 
   if (matchingError) {
@@ -9371,7 +9365,7 @@ app.post("/api/lms-quizzes/:id/submit", requireAuth(), async (req, res) => {
 
   // Update attempt
   const { data: updatedAttempt, error: updateError } = await supabaseAdmin
-    .from("lms_quiz_attempts")
+    .from("portalmkk_lms_quiz_attempts")
     .update({
       status: "completed",
       completed_at: new Date().toISOString(),
@@ -9418,7 +9412,7 @@ app.get("/api/lms-quizzes/:id/progress", requireAuth(), async (req, res) => {
   const targetUserId = canViewAll && userId ? userId : session.profile.id;
 
   const { data, error } = await supabaseAdmin
-    .from("lms_quiz_progress")
+    .from("portalmkk_lms_quiz_progress")
     .select("*")
     .eq("quiz_id", quizId)
     .eq("user_id", targetUserId)
@@ -9448,7 +9442,7 @@ app.post("/api/lms-quizzes/:id/progress", requireAuth(), async (req, res) => {
   const targetUserId = parsed.data.userId && canActForOthers ? parsed.data.userId : session.profile.id;
 
   const { data, error } = await supabaseAdmin
-    .from("lms_quiz_progress")
+    .from("portalmkk_lms_quiz_progress")
     .upsert(
       {
         quiz_id: quizId,
@@ -9514,7 +9508,7 @@ app.get("/api/tasks", requireAuth(), async (req, res) => {
   }
 
   let query = supabaseAdmin
-    .from("tasks")
+    .from("portalmkk_tasks")
     .select("*", paginated ? { count: "exact" } : undefined)
     .order("id", { ascending: false });
 
@@ -9575,7 +9569,7 @@ app.get("/api/news", requireAuth(), async (req, res) => {
   const rangeEnd = offset + limit - 1;
 
   let query = supabaseAdmin
-    .from("news")
+    .from("portalmkk_news")
     .select("*", paginated ? { count: "exact" } : undefined)
     .order("date", { ascending: false });
 
@@ -9614,7 +9608,7 @@ app.get("/api/documents", requireAuth(), async (req, res) => {
   const rangeEnd = offset + limit - 1;
 
   let query = supabaseAdmin
-    .from("documents")
+    .from("portalmkk_documents")
     .select("*", paginated ? { count: "exact" } : undefined)
     .order("id", { ascending: false });
 
@@ -9657,7 +9651,7 @@ app.get("/api/notifications", requireAuth(), async (req, res) => {
 
   const session = (req as express.Request & { session: Session }).session;
   let query = supabaseAdmin
-    .from("notifications")
+    .from("portalmkk_notifications")
     .select("*")
     .eq("recipient_user_id", session.profile.id)
     .order("created_at", { ascending: false })
@@ -9682,7 +9676,7 @@ app.post("/api/notifications/:id/read", requireAuth(), async (req, res) => {
 
   const session = (req as express.Request & { session: Session }).session;
   const { data, error } = await supabaseAdmin
-    .from("notifications")
+    .from("portalmkk_notifications")
     .update({ is_read: true, read_at: new Date().toISOString() })
     .eq("id", id)
     .eq("recipient_user_id", session.profile.id)
@@ -9707,7 +9701,7 @@ app.post("/api/notifications/read-all", requireAuth(), async (req, res) => {
   }
 
   const { error } = await supabaseAdmin
-    .from("notifications")
+    .from("portalmkk_notifications")
     .update({ is_read: true, read_at: new Date().toISOString() })
     .eq("recipient_user_id", session.profile.id)
     .eq("is_read", false);
@@ -9789,7 +9783,7 @@ app.post("/api/ops/slo-check", requireAuth(), requireRole(["admin", "director"])
 
 app.get("/api/ops/sla-matrix", requireAuth(), requireRole(["admin", "director"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin
-    .from("sla_escalation_matrix")
+    .from("portalmkk_sla_escalation_matrix")
     .select("*")
     .order("entity_type", { ascending: true })
     .order("trigger_status", { ascending: true })
@@ -9818,7 +9812,7 @@ app.post("/api/ops/sla-matrix", requireAuth(), requireRole(["admin", "director"]
     is_active: parsed.data.isActive,
     created_by: session.profile.id,
   };
-  const { data, error } = await supabaseAdmin.from("sla_escalation_matrix").insert(payload).select("*").single();
+  const { data, error } = await supabaseAdmin.from("portalmkk_sla_escalation_matrix").insert(payload).select("*").single();
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -9858,7 +9852,7 @@ app.patch("/api/ops/sla-matrix/:id", requireAuth(), requireRole(["admin", "direc
   }
 
   const { data, error } = await supabaseAdmin
-    .from("sla_escalation_matrix")
+    .from("portalmkk_sla_escalation_matrix")
     .update(updatePayload)
     .eq("id", policyId)
     .select("*")
