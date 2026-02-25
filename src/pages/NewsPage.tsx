@@ -298,8 +298,8 @@ export function NewsPage() {
 
       {/* Create form */}
       {canCreate && showCreateForm && (
-        <Card className="overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-5 py-4">
+        <Card className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100">
               <Megaphone className="h-4 w-4 text-teal-600" />
             </div>
@@ -404,15 +404,14 @@ export function NewsPage() {
           const isEditing = editingId === item.id;
 
           return (
-            <Card key={item.id} className="overflow-hidden">
+            <Card key={item.id} className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm transition hover:shadow-md">
               {/* Header */}
-              <div className="border-b border-gray-100 px-5 py-4">
+              <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       {item.pinned && (
                         <div className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">
-                          <Pin className="h-3 w-3" />
                           Важно
                         </div>
                       )}
@@ -574,11 +573,10 @@ export function NewsPage() {
 
                     <button
                       onClick={() => updateNews.mutate({ id: item.id, pinned: !item.pinned })}
-                      className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-white transition-colors ${
-                        item.pinned
-                          ? "bg-gray-500 hover:bg-gray-600"
-                          : "bg-amber-500 hover:bg-amber-600"
-                      }`}
+                      className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-white transition-colors ${item.pinned
+                        ? "bg-gray-500 hover:bg-gray-600"
+                        : "bg-amber-500 hover:bg-amber-600"
+                        }`}
                     >
                       <Pin className="h-3.5 w-3.5" />
                       {item.pinned ? "Открепить" : "Закрепить"}
@@ -599,9 +597,9 @@ export function NewsPage() {
         })}
 
         {sorted.length === 0 && (
-          <Card className="p-8 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-              <Megaphone className="h-6 w-6 text-gray-400" />
+          <Card className="rounded-2xl p-8 text-center shadow-sm">
+            <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-50">
+              <Megaphone className="h-8 w-8 text-gray-400" />
             </div>
             <p className="text-gray-500">Новостей пока нет</p>
           </Card>
@@ -610,4 +608,3 @@ export function NewsPage() {
     </div>
   );
 }
-

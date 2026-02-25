@@ -35,42 +35,42 @@ const statusColumns: Array<{
   borderClass: string;
   badgeClass: string;
 }> = [
-  {
-    value: "sleeping",
-    label: "Спящие",
-    hint: "Нужен первый контакт",
-    borderClass: "border-slate-200",
-    badgeClass: "bg-slate-100 text-slate-700",
-  },
-  {
-    value: "in_progress",
-    label: "В работе",
-    hint: "Идут звонки и диалог",
-    borderClass: "border-cyan-200",
-    badgeClass: "bg-cyan-100 text-cyan-700",
-  },
-  {
-    value: "reactivated",
-    label: "Реактивированы",
-    hint: "Клиенты вернулись",
-    borderClass: "border-emerald-200",
-    badgeClass: "bg-emerald-100 text-emerald-700",
-  },
-  {
-    value: "lost",
-    label: "Потеряны",
-    hint: "Закрыты без результата",
-    borderClass: "border-rose-200",
-    badgeClass: "bg-rose-100 text-rose-700",
-  },
-  {
-    value: "do_not_call",
-    label: "Не звонить",
-    hint: "Контакт запрещен",
-    borderClass: "border-amber-200",
-    badgeClass: "bg-amber-100 text-amber-700",
-  },
-];
+    {
+      value: "sleeping",
+      label: "Спящие",
+      hint: "Нужен первый контакт",
+      borderClass: "border-zinc-200",
+      badgeClass: "bg-zinc-100 text-zinc-600",
+    },
+    {
+      value: "in_progress",
+      label: "В работе",
+      hint: "Идут звонки и диалог",
+      borderClass: "border-blue-200",
+      badgeClass: "bg-blue-50 text-blue-700",
+    },
+    {
+      value: "reactivated",
+      label: "Реактивированы",
+      hint: "Клиенты вернулись",
+      borderClass: "border-zinc-800",
+      badgeClass: "bg-zinc-900 text-white",
+    },
+    {
+      value: "lost",
+      label: "Потеряны",
+      hint: "Закрыты без результата",
+      borderClass: "border-red-100",
+      badgeClass: "bg-red-50 text-red-600",
+    },
+    {
+      value: "do_not_call",
+      label: "Не звонить",
+      hint: "Контакт запрещен",
+      borderClass: "border-orange-100",
+      badgeClass: "bg-orange-50 text-orange-600",
+    },
+  ];
 
 function parseClientsCsv(input: string) {
   const lines = input
@@ -281,11 +281,11 @@ export function CRMPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-3xl border border-cyan-200 bg-[radial-gradient(circle_at_12%_20%,rgba(45,212,191,0.2),transparent_40%),radial-gradient(circle_at_95%_10%,rgba(34,211,238,0.2),transparent_35%),linear-gradient(160deg,#f7fcfd,#ecfeff)] p-5 shadow-sm">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">CRM Pipeline</h1>
-            <p className="mt-1 text-sm text-slate-600">Kanban-доска клиентов в стиле amoCRM: стадии, карточки и быстрый звонок.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">CRM Pipeline</h1>
+            <p className="mt-1 text-sm text-zinc-500">Kanban-доска клиентов в стиле amoCRM: стадии, карточки и быстрый звонок.</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -296,36 +296,36 @@ export function CRMPage() {
                   void clientQuery.refetch();
                 }
               }}
-              className="inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-3 py-2 text-xs font-semibold text-cyan-800 hover:bg-cyan-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
             >
               <RefreshCcw className="h-3.5 w-3.5" />
               Обновить
             </button>
-            <div className="rounded-xl bg-cyan-700 px-3 py-2 text-sm font-semibold text-white">Клиентов: {clientsQuery.data?.total ?? 0}</div>
+            <div className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-semibold text-white shadow-sm">Клиентов: {clientsQuery.data?.total ?? 0}</div>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+        <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto]">
           <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Поиск по имени, телефону, источнику"
-              className="w-full rounded-xl border border-cyan-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-cyan-400"
+              className="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             />
           </label>
-          <div className="rounded-xl border border-cyan-200 bg-white px-3 py-2 text-xs text-slate-600">
-            Автосинхронизация звонков/расшифровок: <span className="font-semibold text-cyan-700">включена</span>
+          <div className="flex items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+            Автосинхронизация звонков/расшифровок: <span className="ml-1 font-semibold text-zinc-900">включена</span>
           </div>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md">
         <button
           type="button"
           onClick={() => setShowCreatePanel((prev) => !prev)}
-          className="mb-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="mb-3 inline-flex items-center gap-2 rounded-lg border border-transparent px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100"
         >
           <ChevronRight className={`h-4 w-4 transition ${showCreatePanel ? "rotate-90" : ""}`} />
           Лиды: добавить / импортировать
@@ -333,30 +333,30 @@ export function CRMPage() {
 
         {showCreatePanel ? (
           <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <UserRound className="h-4 w-4 text-cyan-700" />
+            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                <UserRound className="h-4 w-4 text-zinc-500" />
                 Новый клиент
               </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                <input value={newClient.fullName} onChange={(e) => setNewClient((p) => ({ ...p, fullName: e.target.value }))} placeholder="ФИО" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400" />
-                <input value={newClient.phone} onChange={(e) => setNewClient((p) => ({ ...p, phone: e.target.value }))} placeholder="Телефон" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400" />
-                <input value={newClient.source} onChange={(e) => setNewClient((p) => ({ ...p, source: e.target.value }))} placeholder="Источник" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400" />
-                <button type="button" onClick={handleCreateClient} disabled={createClient.isPending} className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800 disabled:opacity-60">
+              <div className="grid gap-3 md:grid-cols-2">
+                <input value={newClient.fullName} onChange={(e) => setNewClient((p) => ({ ...p, fullName: e.target.value }))} placeholder="ФИО" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+                <input value={newClient.phone} onChange={(e) => setNewClient((p) => ({ ...p, phone: e.target.value }))} placeholder="Телефон" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+                <input value={newClient.source} onChange={(e) => setNewClient((p) => ({ ...p, source: e.target.value }))} placeholder="Источник" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+                <button type="button" onClick={handleCreateClient} disabled={createClient.isPending} className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60">
                   {createClient.isPending ? "Сохраняю..." : "Создать"}
                 </button>
               </div>
-              <textarea value={newClient.notes} onChange={(e) => setNewClient((p) => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Комментарий" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400" />
+              <textarea value={newClient.notes} onChange={(e) => setNewClient((p) => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Комментарий" className="mt-3 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
             </div>
 
-            <div className="rounded-xl border border-cyan-200 bg-cyan-50/50 p-3">
-              <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-cyan-800">
-                <FileSpreadsheet className="h-4 w-4" />
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 shadow-sm">
+              <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                <FileSpreadsheet className="h-4 w-4 text-zinc-500" />
                 Импорт базы
               </div>
-              <p className="mb-2 text-xs text-cyan-700">Формат строк: ФИО;Телефон;Источник;Комментарий</p>
-              <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={4} placeholder="Иванов Иван; +79990000000; CRM-архив; не отвечал 3 месяца" className="w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400" />
-              <button type="button" onClick={handleImportClients} disabled={importClients.isPending} className="mt-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+              <p className="mb-3 text-xs text-zinc-500">Формат строк: ФИО;Телефон;Источник;Комментарий</p>
+              <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={4} placeholder="Иванов Иван; +79990000000; CRM-архив; не отвечал 3 месяца" className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+              <button type="button" onClick={handleImportClients} disabled={importClients.isPending} className="mt-3 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60">
                 {importClients.isPending ? "Импорт..." : "Импортировать"}
               </button>
             </div>
@@ -375,21 +375,20 @@ export function CRMPage() {
                 void handleColumnDrop(event, column.value);
               }}
               onDragLeave={() => setDropStatus((prev) => (prev === column.value ? null : prev))}
-              className={`min-h-[62vh] rounded-2xl border bg-white transition ${
-                dropStatus === column.value ? "ring-2 ring-cyan-300" : ""
-              } ${column.borderClass}`}
+              className={`min-h-[62vh] rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${dropStatus === column.value ? "ring-2 ring-zinc-300" : ""
+                } ${column.borderClass}`}
             >
-              <div className="sticky top-0 z-10 rounded-t-2xl border-b border-slate-100 bg-white/95 px-3 py-3 backdrop-blur">
+              <div className="sticky top-0 z-10 rounded-t-2xl border-b border-zinc-100 bg-white/95 px-3 py-3 backdrop-blur">
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-slate-800">{column.label}</h3>
+                  <h3 className="text-sm font-semibold text-zinc-800">{column.label}</h3>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${column.badgeClass}`}>{columnClients.length}</span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">{column.hint}</p>
+                <p className="mt-1 text-xs text-zinc-500">{column.hint}</p>
               </div>
 
               <div className="space-y-2 p-3">
                 {columnClients.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-400">Пусто</div>
+                  <div className="rounded-xl border border-dashed border-zinc-200 px-3 py-5 text-center text-xs text-zinc-400">Пусто</div>
                 ) : (
                   columnClients.map((client) => (
                     <button
@@ -399,21 +398,20 @@ export function CRMPage() {
                       onDragStart={(event) => handleCardDragStart(event, client.id, client.status)}
                       onDragEnd={handleCardDragEnd}
                       onClick={() => setSelectedClientId(client.id)}
-                      className={`w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-cyan-300 hover:bg-white ${
-                        draggingClientId === client.id ? "opacity-60" : ""
-                      }`}
+                      className={`w-full rounded-xl border border-zinc-200 bg-white shadow-sm p-4 text-left transition-all hover:-translate-y-0.5 hover:border-zinc-400 hover:shadow-md ${draggingClientId === client.id ? "opacity-60" : ""
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className="line-clamp-2 text-sm font-semibold text-slate-800">{client.fullName}</p>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                        <p className="line-clamp-2 text-sm font-bold text-zinc-900">{client.fullName}</p>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300" />
                       </div>
-                      <p className="mt-1 text-xs text-slate-600">{client.phone}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">
+                      <p className="mt-1 text-xs font-medium text-zinc-600">{client.phone}</p>
+                      <p className="mt-1.5 text-[11px] font-medium text-zinc-500">
                         {client.assignedUserId ? usersById.get(client.assignedUserId) ?? "Исполнитель" : "Без исполнителя"}
                       </p>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-500">{client.source ?? "Без источника"}</span>
-                        <span className="text-[11px] text-slate-400">{formatDateTime(client.lastContactedAt)}</span>
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="rounded-md bg-zinc-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">{client.source ?? "Без источника"}</span>
+                        <span className="text-[10px] font-medium text-zinc-400">{formatDateTime(client.lastContactedAt)}</span>
                       </div>
                     </button>
                   ))
@@ -426,25 +424,25 @@ export function CRMPage() {
 
       {selectedClient ? (
         <div className="fixed inset-0 z-40">
-          <button type="button" className="absolute inset-0 bg-slate-900/35" onClick={() => setSelectedClientId(undefined)} />
-          <aside className="absolute right-0 top-0 h-full w-full max-w-[560px] overflow-auto border-l border-slate-200 bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white px-5 py-4">
+          <button type="button" className="absolute inset-0 bg-zinc-900/30 backdrop-blur-[2px]" onClick={() => setSelectedClientId(undefined)} />
+          <aside className="absolute right-0 top-0 flex h-full w-full max-w-[560px] flex-col border-l border-zinc-200 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 border-b border-zinc-100 bg-white/95 px-5 py-5 backdrop-blur">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-semibold text-slate-900">{selectedClient.fullName}</h2>
-                  <p className="mt-1 text-sm text-slate-600">{selectedClient.phone}</p>
+                  <h2 className="text-xl font-bold tracking-tight text-zinc-900">{selectedClient.fullName}</h2>
+                  <p className="mt-1 text-sm font-medium text-zinc-500">{selectedClient.phone}</p>
                 </div>
-                <button type="button" onClick={() => setSelectedClientId(undefined)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+                <button type="button" onClick={() => setSelectedClientId(undefined)} className="rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600">
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => handleCall(selectedClient.phone)} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800">
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => handleCall(selectedClient.phone)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800">
                   <Phone className="h-4 w-4" />
                   Позвонить
                 </button>
-                <button type="button" onClick={() => { void clientQuery.refetch(); void clientsQuery.refetch(); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <button type="button" onClick={() => { void clientQuery.refetch(); void clientsQuery.refetch(); }} className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:border-zinc-300">
                   <RefreshCcw className="h-4 w-4" />
                   Подтянуть из АТС
                 </button>
@@ -453,7 +451,7 @@ export function CRMPage() {
                   onChange={(event) => {
                     void handleStatusChange(selectedClient.id, event.target.value as CrmClientStatus);
                   }}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-400"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 >
                   {statusColumns.map((status) => (
                     <option key={status.value} value={status.value}>{status.label}</option>
@@ -462,72 +460,72 @@ export function CRMPage() {
               </div>
             </div>
 
-            <div className="space-y-4 px-5 py-4">
-              <Card className="border-slate-200">
-                <CardHeader>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <ShieldCheck className="h-4 w-4 text-cyan-700" />
+            <div className="flex-1 overflow-auto px-5 py-5 space-y-4">
+              <Card className="rounded-2xl border border-zinc-200 shadow-sm">
+                <CardHeader className="pb-3 border-b border-zinc-100">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                    <ShieldCheck className="h-4 w-4 text-zinc-500" />
                     Карточка клиента
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm text-slate-700">
-                  <p><span className="text-slate-500">Офис:</span> {selectedClient.officeId ? officesById.get(selectedClient.officeId) : "Не задан"}</p>
-                  <p><span className="text-slate-500">Ответственный:</span> {selectedClient.assignedUserId ? usersById.get(selectedClient.assignedUserId) : "Не назначен"}</p>
-                  <p><span className="text-slate-500">Последний контакт:</span> {formatDateTime(selectedClient.lastContactedAt)}</p>
-                  <p><span className="text-slate-500">Комментарий:</span> {selectedClient.notes || "Нет"}</p>
+                <CardContent className="mt-3 space-y-3 text-sm text-zinc-700">
+                  <div className="flex items-center justify-between"><span className="text-zinc-500">Офис:</span> <span className="font-medium text-zinc-900">{selectedClient.officeId ? officesById.get(selectedClient.officeId) : "Не задан"}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-zinc-500">Ответственный:</span> <span className="font-medium text-zinc-900">{selectedClient.assignedUserId ? usersById.get(selectedClient.assignedUserId) : "Не назначен"}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-zinc-500">Последний контакт:</span> <span className="font-medium text-zinc-900">{formatDateTime(selectedClient.lastContactedAt)}</span></div>
+                  <div className="pt-2"><span className="block text-zinc-500 mb-1">Комментарий:</span> <span className="block rounded-lg bg-zinc-50 p-3 italic text-zinc-700 font-medium">{selectedClient.notes || "Нет"}</span></div>
                 </CardContent>
               </Card>
 
-              <Card className="border-cyan-200">
-                <CardHeader>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-cyan-800">
-                    <PhoneCall className="h-4 w-4" />
+              <Card className="rounded-2xl border border-zinc-200 bg-white shadow-sm lg:col-span-1">
+                <CardHeader className="pb-3 border-b border-zinc-100">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                    <PhoneCall className="h-4 w-4 text-zinc-500" />
                     Ручной звонок + QA
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <select value={callDraft.provider} onChange={(event) => setCallDraft((prev) => ({ ...prev, provider: event.target.value as "asterisk" | "fmc" | "manual" }))} className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400">
+                <CardContent className="mt-3 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <select value={callDraft.provider} onChange={(event) => setCallDraft((prev) => ({ ...prev, provider: event.target.value as "asterisk" | "fmc" | "manual" }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400">
                       <option value="manual">Manual</option>
                       <option value="asterisk">Asterisk</option>
                       <option value="fmc">FMC</option>
                     </select>
-                    <input value={callDraft.recordingUrl} onChange={(event) => setCallDraft((prev) => ({ ...prev, recordingUrl: event.target.value }))} placeholder="URL записи" className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400" />
+                    <input value={callDraft.recordingUrl} onChange={(event) => setCallDraft((prev) => ({ ...prev, recordingUrl: event.target.value }))} placeholder="URL записи" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
                   </div>
-                  <textarea value={callDraft.transcriptRaw} onChange={(event) => setCallDraft((prev) => ({ ...prev, transcriptRaw: event.target.value }))} rows={4} placeholder="Расшифровка звонка" className="w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400" />
-                  <textarea value={callDraft.scriptContext} onChange={(event) => setCallDraft((prev) => ({ ...prev, scriptContext: event.target.value }))} rows={2} placeholder="Скрипт для проверки" className="w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400" />
-                  <button type="button" onClick={handleAddManualCall} disabled={createCall.isPending || analyzeCall.isPending || !callDraft.transcriptRaw.trim()} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800 disabled:opacity-60">
+                  <textarea value={callDraft.transcriptRaw} onChange={(event) => setCallDraft((prev) => ({ ...prev, transcriptRaw: event.target.value }))} rows={4} placeholder="Расшифровка звонка" className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+                  <textarea value={callDraft.scriptContext} onChange={(event) => setCallDraft((prev) => ({ ...prev, scriptContext: event.target.value }))} rows={2} placeholder="Скрипт для проверки" className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+                  <button type="button" onClick={handleAddManualCall} disabled={createCall.isPending || analyzeCall.isPending || !callDraft.transcriptRaw.trim()} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60">
                     <WandSparkles className="h-4 w-4" />
                     {analyzeCall.isPending ? "Анализ..." : "Сохранить звонок"}
                   </button>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <BookText className="h-4 w-4 text-teal-700" />
+              <Card className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                <CardHeader className="pb-3 border-b border-zinc-100">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                    <BookText className="h-4 w-4 text-zinc-500" />
                     История звонков и расшифровок
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="mt-3 space-y-3">
                   {(clientQuery.data?.calls ?? []).length === 0 ? (
-                    <p className="text-sm text-slate-500">Пока нет звонков. После звонка через Asterisk/FMC карточка обновится автоматически.</p>
+                    <p className="text-sm rounded-lg bg-zinc-50 p-4 text-center text-zinc-500">Пока нет звонков. После звонка через Asterisk/FMC карточка обновится автоматически.</p>
                   ) : (
                     clientQuery.data!.calls.map((call) => {
                       const evaluation = clientQuery.data!.evaluations.find((item) => item.callId === call.id);
                       return (
-                        <div key={call.id} className="rounded-xl border border-slate-200 p-3">
+                        <div key={call.id} className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 transition hover:bg-zinc-50">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-800">#{call.id} • {call.provider.toUpperCase()} • {formatDateTime(call.createdAt)}</p>
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">QA: {evaluation ? `${evaluation.overallScore}/100` : "нет"}</span>
+                            <p className="text-sm font-semibold text-zinc-900">#{call.id} • {call.provider.toUpperCase()} • {formatDateTime(call.createdAt)}</p>
+                            <span className="rounded-md bg-white border border-zinc-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-600 shadow-sm">QA: {evaluation ? `${evaluation.overallScore}/100` : "нет"}</span>
                           </div>
-                          <p className="mt-2 text-sm text-slate-700">{call.transcriptSummaryShort || "Сводка еще не готова"}</p>
+                          <p className="mt-2 text-sm text-zinc-700">{call.transcriptSummaryShort || "Сводка еще не готова"}</p>
                           {evaluation ? (
-                            <p className="mt-2 text-xs text-slate-500">Скрипт: {evaluation.scriptComplianceScore}/100 • Подача: {evaluation.deliveryScore}/100</p>
+                            <p className="mt-2 text-xs font-medium text-zinc-500">Скрипт: <span className="text-zinc-700">{evaluation.scriptComplianceScore}/100</span> • Подача: <span className="text-zinc-700">{evaluation.deliveryScore}/100</span></p>
                           ) : null}
                           {call.recordingUrl ? (
-                            <a href={call.recordingUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-cyan-700 hover:underline">
+                            <a href={call.recordingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline">
                               <BellDot className="h-3.5 w-3.5" />
                               Открыть запись
                             </a>

@@ -1,4 +1,4 @@
-import { Building2, ClipboardList, Coins, Package, ScrollText, Users } from "lucide-react";
+import { Building2, ClipboardList, Coins, Package, ScrollText, Users, X, Plus } from "lucide-react";
 import { useState } from "react";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -201,6 +201,7 @@ export function AdminPage() {
   })();
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
   const pageSize = Number(auditLimit) || 50;
   const canViewShopOrders = user?.role === "office_head" || user?.role === "director" || user?.role === "admin";
   const canCreateUsers = user?.role === "admin" || user?.role === "director" || user?.role === "office_head";
@@ -364,15 +365,15 @@ export function AdminPage() {
 
   return (
     <div className="space-y-4">
-      <Card className="border border-gray-200 bg-gradient-to-r from-slate-50 via-white to-cyan-50 p-4">
-        <div className="mb-3">
-          <h1 className="text-2xl font-bold text-gray-900">Админка</h1>
-          <p className="mt-1 text-sm text-gray-600">Управление сотрудниками, офисами и служебными настройками</p>
+      <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Админка</h1>
+          <p className="mt-1 text-sm text-zinc-500">Управление сотрудниками, офисами и служебными настройками</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => switchTab("users")}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "users" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "users" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
               }`}
           >
             <Users className="h-4 w-4" />
@@ -380,7 +381,7 @@ export function AdminPage() {
           </button>
           <button
             onClick={() => switchTab("offices")}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "offices" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "offices" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
               }`}
           >
             <Building2 className="h-4 w-4" />
@@ -388,7 +389,7 @@ export function AdminPage() {
           </button>
           <button
             onClick={() => switchTab("points")}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "points" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "points" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
               }`}
           >
             <Coins className="h-4 w-4" />
@@ -396,7 +397,7 @@ export function AdminPage() {
           </button>
           <button
             onClick={() => switchTab("other")}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "other" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "other" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
               }`}
           >
             <ScrollText className="h-4 w-4" />
@@ -406,7 +407,7 @@ export function AdminPage() {
             <>
               <button
                 onClick={() => switchTab("products")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "products" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "products" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
                   }`}
               >
                 <Package className="h-4 w-4" />
@@ -414,7 +415,7 @@ export function AdminPage() {
               </button>
               <button
                 onClick={() => switchTab("orders")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "orders" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "orders" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
                   }`}
               >
                 <ClipboardList className="h-4 w-4" />
@@ -428,7 +429,7 @@ export function AdminPage() {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`max-w-sm rounded-lg px-3 py-2 text-sm text-white shadow-lg ${toast.kind === "success" ? "bg-emerald-600" : "bg-rose-600"
+            className={`max-w-sm rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-lg ${toast.kind === "success" ? "bg-emerald-600" : "bg-red-600"
               }`}
           >
             {toast.message}
@@ -437,35 +438,35 @@ export function AdminPage() {
       </div>
 
       {activeTab === "users" && canCreateUsers ? (
-        <Card className="border border-gray-200 bg-gradient-to-r from-cyan-50 via-white to-teal-50 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Создать пользователя</h2>
-            <Badge className="bg-white text-gray-700">Шаг 1: регистрация</Badge>
+        <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-bold tracking-tight text-zinc-900">Добавить пользователя</h2>
+            <Badge className="bg-zinc-100 text-zinc-700 font-semibold border-transparent shadow-none">Шаг 1: регистрация</Badge>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <input
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               placeholder="ФИО"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             />
             <input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="Email"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             />
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Пароль (мин. 8)"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             />
             <select
               value={role}
               onChange={(event) => setRole(event.target.value as Role)}
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             >
               {createUserRoleOptions.map((item) => (
                 <option key={item} value={item}>
@@ -477,7 +478,7 @@ export function AdminPage() {
               value={user.role === "office_head" ? String(user.officeId) : officeId}
               onChange={(event) => setOfficeId(event.target.value)}
               disabled={user.role === "office_head"}
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 disabled:bg-gray-100"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 disabled:bg-zinc-50 disabled:text-zinc-500"
             >
               {user.role === "office_head" ? null : <option value="">Без офиса</option>}
               {data.offices
@@ -516,7 +517,7 @@ export function AdminPage() {
                   showToast("error", extractErrorMessage(error));
                 }
               }}
-              className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700 disabled:opacity-60"
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60"
               disabled={createUser.isPending}
             >
               {createUser.isPending ? "Создание..." : "Создать пользователя"}
@@ -526,19 +527,19 @@ export function AdminPage() {
       ) : null}
 
       {activeTab === "users" ? (
-        <div className="space-y-3">
-          <Card className="border border-gray-200 p-3">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+        <div className="space-y-4">
+          <Card className="border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <input
                 value={userSearch}
                 onChange={(event) => setUserSearch(event.target.value)}
                 placeholder="Поиск: ФИО, email, должность"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 md:col-span-2"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-2"
               />
               <select
                 value={userRoleFilter}
                 onChange={(event) => setUserRoleFilter(event.target.value as Role | "all")}
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
               >
                 <option value="all">Все роли</option>
                 {roleOptions.map((option) => (
@@ -550,16 +551,16 @@ export function AdminPage() {
             </div>
           </Card>
           {filteredUsers.map((item) => (
-            <Card key={String(item.id)} className="rounded-2xl border border-gray-200 p-4 shadow-sm transition hover:shadow-md">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-gray-900">{item.name}</span>
-                <Badge className="bg-gray-100 text-gray-700">{item.email || "без email"}</Badge>
-                <Badge className="bg-cyan-100 text-cyan-700">{RoleLabels[item.role]}</Badge>
+            <Card key={String(item.id)} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <span className="font-bold text-zinc-900">{item.name}</span>
+                <Badge className="bg-zinc-100 text-zinc-600 font-medium border-transparent shadow-none">{item.email || "без email"}</Badge>
+                <Badge className="bg-zinc-800 text-white font-medium border-transparent shadow-none">{RoleLabels[item.role]}</Badge>
                 {userHasUnsavedChanges(item) ? (
-                  <Badge className="bg-amber-100 text-amber-700">Есть изменения</Badge>
+                  <Badge className="bg-amber-100 text-amber-800 font-semibold border-transparent shadow-none">Есть изменения</Badge>
                 ) : null}
               </div>
-              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <input
                   value={getUserDraft(item).fullName}
                   onChange={(event) =>
@@ -569,7 +570,7 @@ export function AdminPage() {
                     }))
                   }
                   placeholder="ФИО"
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 />
                 <input
                   value={getUserDraft(item).email}
@@ -580,7 +581,7 @@ export function AdminPage() {
                     }))
                   }
                   placeholder="Логин (email)"
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 />
                 <input
                   value={getUserDraft(item).phone}
@@ -591,7 +592,7 @@ export function AdminPage() {
                     }))
                   }
                   placeholder="Телефон"
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 />
                 <input
                   value={getUserDraft(item).position}
@@ -602,7 +603,7 @@ export function AdminPage() {
                     }))
                   }
                   placeholder="Должность"
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 />
                 <select
                   value={getUserDraft(item).role}
@@ -612,7 +613,7 @@ export function AdminPage() {
                       [String(item.id)]: { ...getUserDraft(item), role: event.target.value as Role },
                     }))
                   }
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 >
                   {roleOptions.map((option) => (
                     <option key={option} value={option}>
@@ -628,7 +629,7 @@ export function AdminPage() {
                       [String(item.id)]: { ...getUserDraft(item), officeId: event.target.value },
                     }))
                   }
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 >
                   <option value="">Без офиса</option>
                   {data.offices.map((office) => (
@@ -638,7 +639,7 @@ export function AdminPage() {
                   ))}
                 </select>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <button
                   onClick={async () => {
                     try {
@@ -656,7 +657,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-60"
+                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60"
                   disabled={updateUser.isPending}
                 >
                   Сохранить сотрудника
@@ -678,7 +679,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm transition hover:bg-gray-50 bg-white shadow-sm hover:shadow-md font-medium text-gray-700"
+                  className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
                 >
                   Сбросить логин
                 </button>
@@ -689,7 +690,7 @@ export function AdminPage() {
                     setUserPasswordDrafts((prev) => ({ ...prev, [String(item.id)]: event.target.value }))
                   }
                   placeholder="Новый пароль (мин. 8)"
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 />
                 <button
                   onClick={async () => {
@@ -709,7 +710,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm transition hover:bg-gray-50 bg-white shadow-sm hover:shadow-md font-medium text-gray-700"
+                  className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
                 >
                   Сбросить пароль
                 </button>
@@ -726,7 +727,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm transition hover:bg-gray-50 bg-white shadow-sm hover:shadow-md font-medium text-gray-700"
+                  className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
                 >
                   Сгенерировать пароль
                 </button>
@@ -734,38 +735,38 @@ export function AdminPage() {
             </Card>
           ))}
           {filteredUsers.length === 0 ? (
-            <Card className="p-6 text-center text-sm text-gray-500">По текущим фильтрам сотрудники не найдены.</Card>
+            <Card className="p-6 text-center text-sm font-medium text-zinc-500 border-dashed border-zinc-300 bg-zinc-50 shadow-none">По текущим фильтрам сотрудники не найдены.</Card>
           ) : null}
         </div>
       ) : null}
 
       {activeTab === "offices" ? (
         <div className="space-y-4">
-          <Card className="border border-gray-200 bg-gradient-to-r from-teal-50 via-white to-sky-50 p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-gray-900">Офисы</h2>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm">
+          <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-bold tracking-tight text-zinc-900">Создать офис</h2>
+              <span className="rounded-lg bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700 shadow-none border-transparent">
                 {data.offices.length} офисов
               </span>
             </div>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
               <input
                 value={newOffice.name}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="Название офиса"
-                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-2"
               />
               <input
                 value={newOffice.city}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, city: event.target.value }))}
                 placeholder="Город"
-                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
               />
               <input
                 value={newOffice.address}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, address: event.target.value }))}
                 placeholder="Адрес"
-                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-2"
               />
               <input
                 type="number"
@@ -773,12 +774,12 @@ export function AdminPage() {
                 value={newOffice.rating}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, rating: event.target.value }))}
                 placeholder="Рейтинг"
-                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
               />
               <select
                 value={newOffice.headId}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, headId: event.target.value }))}
-                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-3"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-3"
               >
                 <option value="">Без руководителя</option>
                 {officeHeadCandidates.map((employee) => (
@@ -791,7 +792,7 @@ export function AdminPage() {
                 value={officeSearch}
                 onChange={(event) => setOfficeSearch(event.target.value)}
                 placeholder="Поиск: название, город, адрес"
-                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-2"
               />
               <div className="md:col-span-1">
                 <button
@@ -819,7 +820,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="w-full rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-60"
+                  className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
                   disabled={createOffice.isPending}
                 >
                   {createOffice.isPending ? "Создание..." : "Создать офис"}
@@ -828,23 +829,23 @@ export function AdminPage() {
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {filteredOffices.map((office) => {
               const draft = getOfficeDraft(office);
               return (
-                <Card key={office.id} className="rounded-2xl border border-gray-200 p-4 shadow-sm transition hover:shadow-md">
-                  <div className="mb-3 flex items-start justify-between gap-2">
+                <Card key={office.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+                  <div className="mb-4 flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm text-gray-500">Офис #{office.id}</p>
-                      <h3 className="text-base font-semibold text-gray-900">{office.name}</h3>
+                      <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-0.5">Офис #{office.id}</p>
+                      <h3 className="text-lg font-bold text-zinc-900 tracking-tight">{office.name}</h3>
                     </div>
                     {officeHasUnsavedChanges(office) ? (
-                      <Badge className="bg-amber-100 text-amber-700">Есть изменения</Badge>
+                      <Badge className="bg-amber-100 text-amber-800 font-semibold border-transparent shadow-none">Есть изменения</Badge>
                     ) : (
-                      <Badge className="bg-emerald-100 text-emerald-700">Синхронизировано</Badge>
+                      <Badge className="bg-zinc-100 text-zinc-600 font-semibold border-transparent shadow-none">Синхронизировано</Badge>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 gap-2">
+                  <div className="grid grid-cols-1 gap-4">
                     <input
                       value={draft.name}
                       onChange={(event) =>
@@ -854,9 +855,9 @@ export function AdminPage() {
                         }))
                       }
                       placeholder="Название офиса"
-                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                     />
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <input
                         value={draft.city}
                         onChange={(event) =>
@@ -866,7 +867,7 @@ export function AdminPage() {
                           }))
                         }
                         placeholder="Город"
-                        className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                        className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                       />
                       <input
                         type="number"
@@ -879,7 +880,7 @@ export function AdminPage() {
                           }))
                         }
                         placeholder="Рейтинг"
-                        className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                        className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                       />
                     </div>
                     <input
@@ -891,7 +892,7 @@ export function AdminPage() {
                         }))
                       }
                       placeholder="Адрес"
-                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                     />
                     <select
                       value={draft.headId}
@@ -901,7 +902,7 @@ export function AdminPage() {
                           [office.id]: { ...draft, headId: event.target.value },
                         }))
                       }
-                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                     >
                       <option value="">Без руководителя</option>
                       {officeHeadCandidates.map((employee) => (
@@ -911,7 +912,7 @@ export function AdminPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-4 flex justify-end">
                     <button
                       onClick={async () => {
                         try {
@@ -928,10 +929,10 @@ export function AdminPage() {
                           showToast("error", extractErrorMessage(error));
                         }
                       }}
-                      className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-60"
+                      className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60"
                       disabled={updateOffice.isPending}
                     >
-                      Сохранить
+                      Сохранить офис
                     </button>
                   </div>
                 </Card>
@@ -942,315 +943,273 @@ export function AdminPage() {
       ) : null}
 
       {activeTab === "products" ? (
-        <Card className="border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-purple-50 p-4">
-          <div className="mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Товары магазина</h2>
-            <p className="mt-1 text-sm text-gray-600">Добавление и редактирование доступных товаров</p>
-          </div>
-          <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-sm font-semibold text-gray-900">Добавить новый товар</h3>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-              <input
-                value={newShopProduct.name}
-                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="Название"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              />
-              <input
-                value={newShopProduct.category}
-                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, category: event.target.value }))}
-                placeholder="Категория"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              />
-              <input
-                value={newShopProduct.pricePoints}
-                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, pricePoints: event.target.value }))}
-                placeholder="Цена в баллах"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              />
-              <input
-                value={newShopProduct.imageUrl}
-                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, imageUrl: event.target.value }))}
-                placeholder="URL картинки"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              />
-              <button
-                onClick={async () => {
-                  if (!newShopProduct.name.trim() || !newShopProduct.category.trim()) {
-                    showToast("error", "Заполните название и категорию товара");
-                    return;
-                  }
-                  const pricePoints = Number(newShopProduct.pricePoints);
-                  if (!Number.isFinite(pricePoints) || pricePoints < 1) {
-                    showToast("error", "Цена должна быть больше 0");
-                    return;
-                  }
-                  try {
-                    let imageDataBase64: string | undefined;
-                    let imageMimeType: string | undefined;
-                    if (newShopProductImageFile) {
-                      const compressed = await compressShopImage(newShopProductImageFile);
-                      imageDataBase64 = compressed.base64;
-                      imageMimeType = compressed.mimeType;
-                    }
-                    await createShopProduct.mutateAsync({
-                      name: newShopProduct.name.trim(),
-                      description: newShopProduct.description.trim() || undefined,
-                      category: newShopProduct.category.trim(),
-                      pricePoints,
-                      isMaterial: true,
-                      isActive: true,
-                      imageUrl: newShopProduct.imageUrl.trim() || undefined,
-                      imageDataBase64,
-                      imageMimeType,
-                    });
-                    setNewShopProduct({ name: "", description: "", category: "", pricePoints: "", imageUrl: "" });
-                    setNewShopProductImageFile(null);
-                    showToast("success", "Товар создан");
-                  } catch (error) {
-                    showToast("error", extractErrorMessage(error));
-                  }
-                }}
-                className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition"
-              >
-                Добавить товар
-              </button>
-              <textarea
-                value={newShopProduct.description}
-                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, description: event.target.value }))}
-                placeholder="Описание товара"
-                rows={2}
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-4 resize-none"
-              />
-              <label className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer transition md:col-span-1">
-                <span className="truncate max-w-full text-center">
-                  {newShopProductImageFile ? newShopProductImageFile.name : "Загрузить фото"}
-                </span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  onChange={(event) => setNewShopProductImageFile(event.target.files?.[0] ?? null)}
-                  className="hidden"
-                />
-              </label>
+        <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-900">Товары магазина</h2>
+              <p className="mt-1 text-sm text-zinc-500">Добавление и редактирование доступных товаров</p>
             </div>
+            <button
+              onClick={() => setIsAddingProduct(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+            >
+              <Plus className="h-4 w-4" />
+              Добавить товар
+            </button>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {(adminShopProducts.data ?? data.shopProducts).map((product) => {
-              const isEditing = editingProductId === product.id;
-              return (
-                <div key={product.id} className="relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-lg">
-                  {isEditing ? (
-                    <div className="flex flex-col gap-3 p-4">
+            {(adminShopProducts.data ?? data.shopProducts).map((product) => (
+              <button
+                type="button"
+                key={product.id}
+                onClick={() => setEditingProductId(product.id)}
+                className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition-all hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md"
+              >
+                <div className="aspect-[4/3] w-full overflow-hidden bg-zinc-50 border-b border-zinc-100 flex items-center justify-center p-4">
+                  <img
+                    src={product.imageDataBase64 ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}` : (product.imageUrl || "")}
+                    alt={product.name}
+                    className="max-h-full max-w-full object-contain mix-blend-multiply transition-transform duration-500 group-hover:scale-105"
+                  />
+                </div>
+                <div className="flex flex-col p-4 flex-1">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <h4 className="font-bold text-zinc-900 leading-tight line-clamp-2">{product.name}</h4>
+                    <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${product.isActive ? 'bg-zinc-100 text-zinc-700' : 'bg-red-50 text-red-600'}`}>
+                      {product.isActive ? 'Активен' : 'Скрыт'}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-zinc-500 mb-2">{product.category}</p>
+
+                  <div className="mt-auto flex items-center justify-between pt-3">
+                    <div className="flex items-center gap-1.5 font-bold text-zinc-900 bg-zinc-50 rounded-lg px-2.5 py-1 text-sm border border-zinc-200 shadow-sm">
+                      <Coins className="h-4 w-4 text-zinc-700" />
+                      {product.pricePoints}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {(isAddingProduct || editingProductId !== null) ? (() => {
+            const isEditing = editingProductId !== null;
+            const product = isEditing ? (adminShopProducts.data ?? data.shopProducts).find((p) => p.id === editingProductId) : null;
+            const draft = isEditing && product ? getShopProductDraft(product) : newShopProduct;
+
+            const handleClose = () => {
+              setIsAddingProduct(false);
+              setEditingProductId(null);
+            };
+
+            const handleFieldChange = (field: string, value: string | boolean) => {
+              if (isEditing && product) {
+                setShopProductDrafts((prev) => ({
+                  ...prev,
+                  [product.id]: { ...getShopProductDraft(product), [field]: value }
+                }));
+              } else {
+                setNewShopProduct((prev) => ({ ...prev, [field]: value }));
+              }
+            };
+
+            const currentFile = isEditing && product ? shopProductImageFiles[product.id] : newShopProductImageFile;
+
+            const handleSave = async () => {
+              const pricePoints = Number(draft.pricePoints);
+              if (!draft.name.trim() || !draft.category.trim()) {
+                showToast("error", "Название и категория обязательны");
+                return;
+              }
+              if (!Number.isFinite(pricePoints) || pricePoints < 1) {
+                showToast("error", "Цена должна быть больше 0");
+                return;
+              }
+
+              try {
+                let imageDataBase64: string | undefined;
+                let imageMimeType: string | undefined;
+
+                if (currentFile) {
+                  const compressed = await compressShopImage(currentFile);
+                  imageDataBase64 = compressed.base64;
+                  imageMimeType = compressed.mimeType;
+                }
+
+                if (isEditing && product) {
+                  const pDraft = draft as typeof shopProductDrafts[number];
+                  await updateShopProduct.mutateAsync({
+                    ...product,
+                    name: pDraft.name.trim(),
+                    description: pDraft.description?.trim() || null,
+                    category: pDraft.category.trim(),
+                    pricePoints,
+                    imageUrl: pDraft.imageUrl?.trim() || null,
+                    imageDataBase64,
+                    imageMimeType,
+                    isActive: pDraft.isActive,
+                  });
+                  setShopProductImageFiles((prev) => ({ ...prev, [product.id]: null }));
+                  showToast("success", `Товар "${pDraft.name}" сохранен`);
+                } else {
+                  const nDraft = draft as typeof newShopProduct;
+                  await createShopProduct.mutateAsync({
+                    name: nDraft.name.trim(),
+                    description: nDraft.description?.trim() || undefined,
+                    category: nDraft.category.trim(),
+                    pricePoints,
+                    isMaterial: true,
+                    isActive: true,
+                    imageUrl: nDraft.imageUrl?.trim() || undefined,
+                    imageDataBase64,
+                    imageMimeType,
+                  });
+                  setNewShopProduct({ name: "", description: "", category: "", pricePoints: "", imageUrl: "" });
+                  setNewShopProductImageFile(null);
+                  showToast("success", "Товар создан");
+                }
+
+                handleClose();
+              } catch (error) {
+                showToast("error", extractErrorMessage(error));
+              }
+            };
+
+            return (
+              <div className="fixed inset-0 z-50">
+                <button type="button" className="absolute inset-0 bg-zinc-900/30 backdrop-blur-[2px]" onClick={handleClose} />
+                <aside className="absolute right-0 top-0 flex h-full w-full max-w-[480px] flex-col border-l border-zinc-200 bg-white shadow-2xl">
+                  <div className="sticky top-0 z-10 border-b border-zinc-100 bg-white/95 px-6 py-5 backdrop-blur flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold tracking-tight text-zinc-900">
+                        {isEditing ? "Редактировать товар" : "Новый товар"}
+                      </h3>
+                      {isEditing && product && <p className="text-sm text-zinc-500 mt-1">{product.name}</p>}
+                    </div>
+                    <button type="button" onClick={handleClose} className="rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-auto px-6 py-6 space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-zinc-900">Название</label>
                       <input
-                        value={getShopProductDraft(product).name}
-                        onChange={(event) =>
-                          setShopProductDrafts((prev) => ({
-                            ...prev,
-                            [product.id]: { ...getShopProductDraft(product), name: event.target.value },
-                          }))
-                        }
-                        placeholder="Название"
-                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        value={draft.name}
+                        onChange={(e) => handleFieldChange("name", e.target.value)}
+                        placeholder="Фирменная футболка"
+                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                       />
-                      <input
-                        value={getShopProductDraft(product).category}
-                        onChange={(event) =>
-                          setShopProductDrafts((prev) => ({
-                            ...prev,
-                            [product.id]: { ...getShopProductDraft(product), category: event.target.value },
-                          }))
-                        }
-                        placeholder="Категория"
-                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                      />
-                      <div className="flex gap-2">
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-semibold text-zinc-900">Категория</label>
                         <input
-                          value={getShopProductDraft(product).pricePoints}
-                          onChange={(event) =>
-                            setShopProductDrafts((prev) => ({
-                              ...prev,
-                              [product.id]: { ...getShopProductDraft(product), pricePoints: event.target.value },
-                            }))
-                          }
-                          placeholder="Баллы"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          value={draft.category}
+                          onChange={(e) => handleFieldChange("category", e.target.value)}
+                          placeholder="Мерч"
+                          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                         />
-                        <label className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 bg-white">
-                          <input
-                            type="checkbox"
-                            checked={getShopProductDraft(product).isActive}
-                            onChange={(event) =>
-                              setShopProductDrafts((prev) => ({
-                                ...prev,
-                                [product.id]: { ...getShopProductDraft(product), isActive: event.target.checked },
-                              }))
-                            }
-                            className="accent-indigo-600 w-4 h-4 cursor-pointer"
-                          />
-                          Активен
-                        </label>
                       </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-semibold text-zinc-900">Цена (баллов)</label>
+                        <input
+                          value={draft.pricePoints}
+                          onChange={(e) => handleFieldChange("pricePoints", e.target.value)}
+                          placeholder="50"
+                          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                        />
+                      </div>
+                    </div>
+                    {isEditing && (
+                      <label className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2.5 text-sm font-medium text-zinc-800 cursor-pointer hover:bg-zinc-50 transition w-max">
+                        <input
+                          type="checkbox"
+                          checked={(draft as typeof shopProductDrafts[number]).isActive}
+                          onChange={(e) => handleFieldChange("isActive", e.target.checked)}
+                          className="accent-zinc-900 w-4 h-4 cursor-pointer"
+                        />
+                        Товар активен
+                      </label>
+                    )}
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-zinc-900">Описание</label>
                       <textarea
-                        value={getShopProductDraft(product).description}
-                        onChange={(event) =>
-                          setShopProductDrafts((prev) => ({
-                            ...prev,
-                            [product.id]: { ...getShopProductDraft(product), description: event.target.value },
-                          }))
-                        }
-                        placeholder="Описание"
-                        rows={2}
-                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm resize-none focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        value={"description" in draft ? (draft.description || "") : ""}
+                        onChange={(e) => handleFieldChange("description", e.target.value)}
+                        placeholder="Подробное описание товара..."
+                        rows={3}
+                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 resize-none"
                       />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-zinc-900">Изображение (URL или файл)</label>
                       <input
-                        value={getShopProductDraft(product).imageUrl}
-                        onChange={(event) =>
-                          setShopProductDrafts((prev) => ({
-                            ...prev,
-                            [product.id]: { ...getShopProductDraft(product), imageUrl: event.target.value },
-                          }))
-                        }
-                        placeholder="URL картинки"
-                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        value={draft.imageUrl}
+                        onChange={(e) => handleFieldChange("imageUrl", e.target.value)}
+                        placeholder="https://example.com/image.png"
+                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 mb-2"
                       />
-                      <label className="flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 bg-gray-50 hover:bg-gray-100 cursor-pointer overflow-hidden">
-                        <span className="truncate max-w-full w-full text-center">
-                          {shopProductImageFiles[product.id] ? shopProductImageFiles[product.id]?.name : "Загрузить новое фото..."}
+                      <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50 px-6 py-8 text-sm font-medium text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer transition text-center">
+                        <span className="truncate w-full max-w-[250px] font-semibold text-zinc-800 break-words mb-1">
+                          {currentFile ? currentFile.name : (isEditing && product?.imageDataBase64 ? "Загружено (заменить)" : "Выберите файл на компьютере")}
                         </span>
+                        <span className="text-xs text-zinc-400">PNG, JPG, WEBP до 5 MB</span>
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp,image/gif"
-                          onChange={(event) =>
-                            setShopProductImageFiles((prev) => ({
-                              ...prev,
-                              [product.id]: event.target.files?.[0] ?? null,
-                            }))
-                          }
+                          onChange={(e) => {
+                            if (isEditing && product) {
+                              setShopProductImageFiles((prev) => ({ ...prev, [product.id]: e.target.files?.[0] ?? null }));
+                            } else {
+                              setNewShopProductImageFile(e.target.files?.[0] ?? null);
+                            }
+                          }}
                           className="hidden"
                         />
                       </label>
-
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <button
-                          onClick={() => setEditingProductId(null)}
-                          className="w-full rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
-                        >
-                          Отмена
-                        </button>
-                        <button
-                          onClick={async () => {
-                            const draft = getShopProductDraft(product);
-                            const pricePoints = Number(draft.pricePoints);
-                            if (!draft.name.trim() || !draft.category.trim()) {
-                              showToast("error", "Название и категория обязательны");
-                              return;
-                            }
-                            if (!Number.isFinite(pricePoints) || pricePoints < 1) {
-                              showToast("error", "Цена должна быть больше 0");
-                              return;
-                            }
-                            try {
-                              const nextFile = shopProductImageFiles[product.id];
-                              let imageDataBase64: string | null | undefined;
-                              let imageMimeType: string | null | undefined;
-                              if (nextFile) {
-                                const compressed = await compressShopImage(nextFile);
-                                imageDataBase64 = compressed.base64;
-                                imageMimeType = compressed.mimeType;
-                              }
-                              await updateShopProduct.mutateAsync({
-                                id: product.id,
-                                name: draft.name.trim(),
-                                description: draft.description.trim() || null,
-                                category: draft.category.trim(),
-                                pricePoints,
-                                imageUrl: draft.imageUrl.trim() || null,
-                                imageDataBase64,
-                                imageMimeType,
-                                isActive: draft.isActive,
-                              });
-                              setShopProductImageFiles((prev) => ({ ...prev, [product.id]: null }));
-                              showToast("success", `Товар "${draft.name}" сохранен`);
-                              setEditingProductId(null);
-                            } catch (error) {
-                              showToast("error", extractErrorMessage(error));
-                            }
-                          }}
-                          className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition"
-                        >
-                          Сохранить
-                        </button>
-                      </div>
                     </div>
-                  ) : (
-                    <>
-                      <div className="aspect-[4/3] w-full overflow-hidden bg-white border-b border-gray-100 flex items-center justify-center p-4">
-                        <img
-                          src={
-                            product.imageDataBase64
-                              ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
-                              : (product.imageUrl || "")
-                          }
-                          alt={product.name}
-                          className="max-h-full max-w-full object-contain mix-blend-multiply"
-                        />
-                      </div>
-                      <div className="flex flex-col p-4 flex-1">
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <h4 className="font-bold text-gray-900 leading-tight">{product.name}</h4>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${product.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                            {product.isActive ? 'Активен' : 'Скрыт'}
-                          </span>
-                        </div>
-                        <p className="text-xs font-semibold text-indigo-600 mb-2">{product.category}</p>
-                        <p className="text-xs text-gray-500 flex-1 line-clamp-2 mb-4">{product.description || "Нет описания"}</p>
+                  </div>
 
-                        <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-3">
-                          <div className="flex items-center gap-1.5 font-bold text-gray-900 bg-amber-50 rounded-lg px-2 py-1 border border-amber-100 shadow-sm">
-                            <Coins className="h-4 w-4 text-amber-500" />
-                            {product.pricePoints}
-                          </div>
-                          <button
-                            onClick={() => setEditingProductId(product.id)}
-                            className="rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-200 border border-gray-200 shadow-sm"
-                          >
-                            Редактировать
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  <div className="border-t border-zinc-100 p-6 bg-zinc-50">
+                    <button
+                      onClick={handleSave}
+                      disabled={updateShopProduct.isPending || createShopProduct.isPending}
+                      className="w-full rounded-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60"
+                    >
+                      {(updateShopProduct.isPending || createShopProduct.isPending) ? "Сохраняем..." : "Сохранить товар"}
+                    </button>
+                  </div>
+                </aside>
+              </div>
+            );
+          })() : null}
         </Card>
       ) : null}
 
       {activeTab === "orders" ? (
-        <Card className="border border-gray-200 bg-gradient-to-r from-orange-50 via-white to-amber-50 p-4">
-          <div className="mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Заказы магазина</h2>
-            <p className="mt-1 text-sm text-gray-600">Обработка заказов сотрудников</p>
+        <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold tracking-tight text-zinc-900">Заказы магазина</h2>
+            <p className="mt-1 text-sm text-zinc-500">Обработка заказов сотрудников</p>
           </div>
           <div className="space-y-4">
-            {data.shopOrders.map((order) => {
+            {[...data.shopOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((order) => {
               const buyer = data.users.find((item) => String(item.id) === String(order.buyerUserId));
               const office = order.officeId ? data.offices.find((item) => item.id === order.officeId) : null;
               const items = data.shopOrderItems.filter((item) => item.orderId === order.id);
               return (
-                <div key={order.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition">
-                  <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+                <div key={order.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm hover:shadow-md transition">
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-bold text-gray-900">Заказ #{order.id}</span>
-                        <Badge className="bg-gray-100 text-gray-700">{buyer?.name ?? order.buyerUserId}</Badge>
-                        <Badge className="bg-orange-100 text-orange-800 flex items-center shadow-sm"><Coins className="h-3 w-3 mr-1" /> {order.totalPoints}</Badge>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-sm font-bold text-zinc-900">Заказ #{order.id}</span>
+                        <Badge className="bg-zinc-100 text-zinc-700 hover:bg-zinc-200 font-semibold border-transparent shadow-none">{buyer?.name ?? order.buyerUserId}</Badge>
+                        <Badge className="bg-zinc-900 text-white flex items-center shadow-sm font-semibold hover:bg-zinc-800 border-transparent"><Coins className="h-3 w-3 mr-1" /> {order.totalPoints}</Badge>
                       </div>
-                      <p className="text-xs font-medium text-gray-500">
-                        {new Date(order.createdAt).toLocaleString()} · {office ? office.name : "Офис не указан"}
+                      <p className="text-xs font-medium text-zinc-500">
+                        {new Date(order.createdAt).toLocaleString()} <span className="mx-1">•</span> {office ? office.name : "Офис не указан"}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1267,7 +1226,12 @@ export function AdminPage() {
                             showToast("error", extractErrorMessage(error));
                           }
                         }}
-                        className="rounded-xl border border-gray-300 px-3 py-1.5 text-sm font-medium focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none shadow-sm cursor-pointer hover:border-gray-400 transition"
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-semibold outline-none shadow-sm cursor-pointer transition ${order.status === 'new' ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300' :
+                          order.status === 'processing' ? 'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300' :
+                            order.status === 'delivered' ? 'border-zinc-800 bg-zinc-900 text-white hover:bg-zinc-800 hover:border-zinc-900' :
+                              order.status === 'cancelled' ? 'border-red-200 bg-red-50 text-red-700 hover:border-red-300' :
+                                'border-zinc-200 bg-zinc-50 text-zinc-700 hover:border-zinc-300'
+                          }`}
                       >
                         {shopOrderStatusOptions.map((statusOption) => (
                           <option key={statusOption.value} value={statusOption.value}>
@@ -1278,32 +1242,32 @@ export function AdminPage() {
                     </div>
                   </div>
                   {order.deliveryInfo ? (
-                    <p className="mb-2 text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100"><span className="font-semibold text-gray-900 block mb-1">Доставка:</span> {order.deliveryInfo}</p>
+                    <p className="mb-3 text-sm text-zinc-700 bg-zinc-50 p-3 rounded-lg border border-zinc-100"><span className="font-semibold text-zinc-900 block mb-1">Доставка:</span> {order.deliveryInfo}</p>
                   ) : null}
                   {order.comment ? (
-                    <p className="mb-2 text-sm text-orange-800 bg-orange-50 p-3 rounded-xl border border-orange-100"><span className="font-semibold text-orange-900 block mb-1">Комментарий:</span> {order.comment}</p>
+                    <p className="mb-3 text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100 shadow-sm"><span className="font-semibold text-amber-900 block mb-1">Комментарий:</span> {order.comment}</p>
                   ) : null}
-                  <div className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-100 px-3 bg-gray-50">
+                  <div className="mt-4 divide-y divide-zinc-100 rounded-lg border border-zinc-100 px-4 bg-zinc-50/50">
                     {items.map((item) => (
                       <div key={item.id} className="flex justify-between py-3 items-center">
-                        <p className="text-sm text-gray-900 font-medium">
+                        <p className="text-sm text-zinc-900 font-medium">
                           {item.productName}
                         </p>
-                        <p className="text-sm text-gray-600 bg-white px-2 py-1 rounded-lg border border-gray-200">
-                          {item.quantity} шт. = <span className="font-bold text-gray-900">{item.subtotalPoints}</span>
+                        <p className="text-sm text-zinc-600 bg-white px-2.5 py-1 rounded-md border border-zinc-200 shadow-sm font-medium">
+                          {item.quantity} шт. <span className="mx-1 text-zinc-300">|</span> <span className="font-bold text-zinc-900">{item.subtotalPoints} б.</span>
                         </p>
                       </div>
                     ))}
                     {items.length === 0 ? (
-                      <p className="text-xs text-gray-500 py-3 text-center">Позиции заказа не найдены</p>
+                      <p className="text-xs text-zinc-500 py-3 text-center">Позиции заказа не найдены</p>
                     ) : null}
                   </div>
                 </div>
               );
             })}
             {data.shopOrders.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center bg-gray-50">
-                <p className="text-sm text-gray-500 font-medium">Заказов пока нет.</p>
+              <div className="rounded-2xl border border-dashed border-zinc-300 p-8 text-center bg-zinc-50">
+                <p className="text-sm text-zinc-500 font-medium">Заказов пока нет.</p>
               </div>
             ) : null}
           </div>
@@ -1312,9 +1276,9 @@ export function AdminPage() {
 
       {activeTab === "points" ? (
         <div className="space-y-4">
-          <Card className="border border-cyan-200 bg-gradient-to-r from-cyan-50 to-teal-50 p-4">
+          <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-gray-900">Настройка баллов и условий начисления</h2>
+              <h2 className="text-lg font-bold tracking-tight text-zinc-900">Настройка баллов и условий начисления</h2>
               <button
                 onClick={() => {
                   pointsActions.refetch();
@@ -1322,34 +1286,34 @@ export function AdminPage() {
                   pointsCampaigns.refetch();
                   pointsEvents.refetch();
                 }}
-                className="rounded-lg border border-cyan-300 bg-white px-3 py-1.5 text-sm text-cyan-700 hover:bg-cyan-50"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
               >
                 Обновить
               </button>
             </div>
-            <p className="text-sm text-gray-600">Руководитель может менять правила, запускать акции и вручную корректировать баллы сотрудников.</p>
+            <p className="text-sm text-zinc-500">Руководитель может менять правила, запускать акции и вручную корректировать баллы сотрудников.</p>
           </Card>
 
-          <Card className="p-4">
-            <h3 className="mb-3 font-semibold text-gray-900">Новое правило начисления</h3>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+          <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-base font-bold text-zinc-900 tracking-tight">Новое правило начисления</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <input
                 value={pointsRuleDraft.actionKey}
                 onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, actionKey: event.target.value }))}
                 placeholder="action_key (например task_completed)"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
               />
               <input
                 value={pointsRuleDraft.title}
                 onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, title: event.target.value }))}
                 placeholder="Название"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
               />
               <input
                 value={pointsRuleDraft.basePoints}
                 onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, basePoints: event.target.value }))}
                 placeholder="Баллы"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
               />
               <button
                 onClick={async () => {
@@ -1368,7 +1332,7 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
               >
                 Добавить правило
               </button>
@@ -1377,18 +1341,18 @@ export function AdminPage() {
               value={pointsRuleDraft.description}
               onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, description: event.target.value }))}
               placeholder="Описание правила"
-              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="mt-4 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 resize-none"
             />
           </Card>
 
-          <Card className="p-4">
-            <h3 className="mb-3 font-semibold text-gray-900">Правила начисления</h3>
-            <div className="space-y-2">
+          <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-base font-bold text-zinc-900 tracking-tight">Правила начисления</h3>
+            <div className="space-y-3">
               {(pointsRules.data ?? []).map((rule) => (
-                <div key={rule.id} className="grid grid-cols-1 gap-2 rounded-lg border border-gray-200 p-3 md:grid-cols-[1.3fr_1fr_auto_auto]">
+                <div key={rule.id} className="grid grid-cols-1 gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 p-4 md:grid-cols-[1.3fr_1fr_auto_auto] hover:border-zinc-200 transition">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{rule.title}</p>
-                    <p className="text-xs text-gray-500">{rule.actionKey} {rule.isAuto ? "• авто" : "• вручную"}</p>
+                    <p className="text-sm font-bold text-zinc-900">{rule.title}</p>
+                    <p className="text-xs font-semibold text-zinc-500 mt-0.5">{rule.actionKey} {rule.isAuto ? "• авто" : "• вручную"}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <input
@@ -1399,15 +1363,15 @@ export function AdminPage() {
                           patch: { basePoints: Number(event.target.value) },
                         });
                       }}
-                      className="w-28 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                      className="w-28 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                     />
-                    <span className="text-xs text-gray-500">баллов</span>
+                    <span className="text-xs font-semibold text-zinc-500">баллов</span>
                   </div>
                   <button
                     onClick={() => {
                       void updatePointsRule.mutateAsync({ id: rule.id, patch: { isActive: !rule.isActive } });
                     }}
-                    className={`rounded-lg px-3 py-1.5 text-sm ${rule.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wider ${rule.isActive ? "bg-zinc-100 text-zinc-700 hover:bg-zinc-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}
                   >
                     {rule.isActive ? "Вкл" : "Выкл"}
                   </button>
@@ -1415,7 +1379,7 @@ export function AdminPage() {
                     onClick={() => {
                       void updatePointsRule.mutateAsync({ id: rule.id, patch: { isAuto: !rule.isAuto } });
                     }}
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-zinc-700 hover:bg-zinc-50 shadow-sm transition"
                   >
                     {rule.isAuto ? "Авто" : "Ручн."}
                   </button>
@@ -1424,15 +1388,15 @@ export function AdminPage() {
             </div>
           </Card>
 
-          <Card className="p-4">
-            <h3 className="mb-3 font-semibold text-gray-900">Акции и бонусы</h3>
-            <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-4">
-              <input value={pointsCampaignDraft.name} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название акции" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input value={pointsCampaignDraft.actionKey} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, actionKey: event.target.value }))} placeholder="action_key или пусто=все" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input value={pointsCampaignDraft.bonusPoints} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, bonusPoints: event.target.value }))} placeholder="Бонус (+/-)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input value={pointsCampaignDraft.multiplier} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, multiplier: event.target.value }))} placeholder="Множитель (1.0)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input type="datetime-local" value={pointsCampaignDraft.startsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, startsAt: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input type="datetime-local" value={pointsCampaignDraft.endsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, endsAt: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-base font-bold text-zinc-900 tracking-tight">Акции и бонусы</h3>
+            <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+              <input value={pointsCampaignDraft.name} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название акции" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+              <input value={pointsCampaignDraft.actionKey} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, actionKey: event.target.value }))} placeholder="action_key или пусто=все" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+              <input value={pointsCampaignDraft.bonusPoints} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, bonusPoints: event.target.value }))} placeholder="Бонус (+/-)" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+              <input value={pointsCampaignDraft.multiplier} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, multiplier: event.target.value }))} placeholder="Множитель (1.0)" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+              <input type="datetime-local" value={pointsCampaignDraft.startsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, startsAt: event.target.value }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+              <input type="datetime-local" value={pointsCampaignDraft.endsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, endsAt: event.target.value }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
               <button
                 onClick={async () => {
                   try {
@@ -1460,26 +1424,26 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
               >
                 Добавить акцию
               </button>
             </div>
-            <textarea value={pointsCampaignDraft.description} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, description: event.target.value }))} placeholder="Описание акции" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <div className="mt-3 space-y-2">
+            <textarea value={pointsCampaignDraft.description} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, description: event.target.value }))} placeholder="Описание акции" className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 resize-none" />
+            <div className="mt-4 space-y-3">
               {(pointsCampaigns.data ?? []).map((campaign) => (
-                <div key={campaign.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 text-sm">
+                <div key={campaign.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 p-4 transition hover:border-zinc-200">
                   <div>
-                    <p className="font-medium text-gray-900">{campaign.name}</p>
-                    <p className="text-xs text-gray-500">{campaign.actionKey ?? "Все действия"} • {new Date(campaign.startsAt).toLocaleString()} - {new Date(campaign.endsAt).toLocaleString()}</p>
+                    <p className="font-bold text-zinc-900">{campaign.name}</p>
+                    <p className="text-xs font-semibold text-zinc-500 mt-0.5">{campaign.actionKey ?? "Все действия"} • {new Date(campaign.startsAt).toLocaleString()} - {new Date(campaign.endsAt).toLocaleString()}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-700">+{campaign.bonusPoints} / x{campaign.multiplier}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-lg bg-white border border-zinc-200 px-2 py-1 text-xs font-bold text-zinc-800 shadow-sm">+{campaign.bonusPoints} / x{campaign.multiplier}</span>
                     <button
                       onClick={() => {
                         void updatePointsCampaign.mutateAsync({ id: campaign.id, patch: { isActive: !campaign.isActive } });
                       }}
-                      className={`rounded-lg px-3 py-1.5 text-xs ${campaign.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wider ${campaign.isActive ? "bg-zinc-100 text-zinc-700 hover:bg-zinc-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}
                     >
                       {campaign.isActive ? "Активна" : "Отключена"}
                     </button>
@@ -1489,21 +1453,21 @@ export function AdminPage() {
             </div>
           </Card>
 
-          <Card className="p-4">
-            <h3 className="mb-3 font-semibold text-gray-900">Ручная корректировка баллов</h3>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-              <select value={pointsAwardDraft.userId} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, userId: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+          <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-base font-bold text-zinc-900 tracking-tight">Ручная корректировка баллов</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <select value={pointsAwardDraft.userId} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, userId: event.target.value }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400">
                 <option value="">Выберите сотрудника</option>
                 {data.users.map((item) => (
                   <option key={String(item.id)} value={String(item.id)}>{item.name}</option>
                 ))}
               </select>
-              <select value={pointsAwardDraft.actionKey} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, actionKey: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              <select value={pointsAwardDraft.actionKey} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, actionKey: event.target.value }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400">
                 {(pointsActions.data ?? []).map((item) => (
                   <option key={item.actionKey} value={item.actionKey}>{item.title}</option>
                 ))}
               </select>
-              <input value={pointsAwardDraft.basePoints} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, basePoints: event.target.value }))} placeholder="Баллы (+/-)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input value={pointsAwardDraft.basePoints} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, basePoints: event.target.value }))} placeholder="Баллы (+/-)" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
               <button
                 onClick={async () => {
                   try {
@@ -1519,33 +1483,33 @@ export function AdminPage() {
                     showToast("error", extractErrorMessage(error));
                   }
                 }}
-                className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
               >
                 Начислить
               </button>
             </div>
-            <textarea value={pointsAwardDraft.comment} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, comment: event.target.value }))} placeholder="Комментарий к начислению" className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <textarea value={pointsAwardDraft.comment} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, comment: event.target.value }))} placeholder="Комментарий к начислению" className="mt-4 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 resize-none" />
           </Card>
 
-          <Card className="p-4">
-            <h3 className="mb-3 font-semibold text-gray-900">События начисления (последние)</h3>
-            <div className="space-y-2">
+          <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-base font-bold text-zinc-900 tracking-tight">События начисления (последние)</h3>
+            <div className="space-y-3">
               {(pointsEvents.data?.items ?? []).map((event) => {
                 const employee = data.users.find((userItem) => String(userItem.id) === event.userId);
                 return (
-                  <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                  <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition hover:border-zinc-200">
                     <div>
-                      <p className="font-medium text-gray-900">{employee?.name ?? event.userId}</p>
-                      <p className="text-xs text-gray-500">{event.actionKey} • {new Date(event.createdAt).toLocaleString()}</p>
+                      <p className="font-bold text-zinc-900">{employee?.name ?? event.userId}</p>
+                      <p className="text-xs font-semibold text-zinc-500 mt-0.5">{event.actionKey} <span className="mx-1">•</span> {new Date(event.createdAt).toLocaleString()}</p>
                     </div>
-                    <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${event.totalPoints >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                    <span className={`rounded-lg px-2.5 py-1 text-sm font-bold shadow-sm border border-transparent ${event.totalPoints >= 0 ? "bg-zinc-900 text-white" : "bg-red-50 text-red-600 border-red-100"}`}>
                       {event.totalPoints >= 0 ? "+" : ""}{event.totalPoints}
                     </span>
                   </div>
                 );
               })}
               {(pointsEvents.data?.items ?? []).length === 0 ? (
-                <p className="text-sm text-gray-500">Событий пока нет.</p>
+                <p className="text-sm font-medium text-zinc-500 text-center py-4 rounded-xl border border-dashed border-zinc-200 bg-zinc-50">Событий пока нет.</p>
               ) : null}
             </div>
           </Card>
@@ -1553,25 +1517,30 @@ export function AdminPage() {
       ) : null}
 
       {activeTab === "other" ? (
-        <Card className="p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-semibold">Журнал действий</h2>
-            <button
-              onClick={() => audit.refetch()}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-            >
-              Обновить
-            </button>
-            <button
-              onClick={handleExportAudit}
-              disabled={isExportingAudit}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isExportingAudit ? "Экспорт..." : "Экспорт CSV"}
-            </button>
+        <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-900">Журнал действий</h2>
+              <p className="mt-1 text-sm text-zinc-500">История изменений в системе</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => audit.refetch()}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+              >
+                Обновить
+              </button>
+              <button
+                onClick={handleExportAudit}
+                disabled={isExportingAudit}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isExportingAudit ? "Экспорт..." : "Экспорт CSV"}
+              </button>
+            </div>
           </div>
 
-          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+          <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
             <input
               value={auditAction}
               onChange={(event) => {
@@ -1579,7 +1548,7 @@ export function AdminPage() {
                 setAuditPage(1);
               }}
               placeholder="Фильтр action, например tasks.update"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             />
             <select
               value={auditActorUserId}
@@ -1587,7 +1556,7 @@ export function AdminPage() {
                 setAuditActorUserId(event.target.value);
                 setAuditPage(1);
               }}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             >
               <option value="">Все пользователи</option>
               {data.users.map((item) => (
@@ -1602,7 +1571,7 @@ export function AdminPage() {
                 setAuditLimit(event.target.value);
                 setAuditPage(1);
               }}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             >
               <option value="25">25 записей</option>
               <option value="50">50 записей</option>
@@ -1616,7 +1585,7 @@ export function AdminPage() {
                 setAuditPage(1);
               }}
               placeholder="Сущность, например tasks"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             />
             <input
               type="date"
@@ -1625,7 +1594,7 @@ export function AdminPage() {
                 setAuditFromDate(event.target.value);
                 setAuditPage(1);
               }}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             />
             <input
               type="date"
@@ -1634,47 +1603,49 @@ export function AdminPage() {
                 setAuditToDate(event.target.value);
                 setAuditPage(1);
               }}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {audit.data?.items.map((row) => (
-              <div key={row.id} className="rounded-xl border border-gray-200 p-3 text-xs">
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <Badge className="bg-teal-100 text-teal-700">{row.action}</Badge>
-                  <Badge className="bg-gray-100 text-gray-700">{row.entityType}:{row.entityId}</Badge>
-                  <Badge className="bg-gray-100 text-gray-700">{RoleLabels[row.actorRole]}</Badge>
-                  <span className="text-gray-500">{new Date(row.createdAt).toLocaleString()}</span>
+              <div key={row.id} className="rounded-xl border border-zinc-100 bg-white p-4 text-xs shadow-sm hover:shadow-md transition">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <Badge className="bg-zinc-900 text-white font-semibold border-transparent shadow-none hover:bg-zinc-800">{row.action}</Badge>
+                  <Badge className="bg-zinc-100 text-zinc-700 font-medium border-transparent shadow-none">{row.entityType}:{row.entityId}</Badge>
+                  <Badge className="bg-zinc-100 text-zinc-700 font-medium border-transparent shadow-none">{RoleLabels[row.actorRole]}</Badge>
+                  <span className="text-zinc-500 font-medium">{new Date(row.createdAt).toLocaleString()}</span>
                 </div>
                 {row.payload ? (
-                  <pre className="overflow-x-auto rounded-lg bg-gray-50 p-2 text-[11px] text-gray-600">
+                  <pre className="overflow-x-auto rounded-lg bg-zinc-50 border border-zinc-100 p-3 text-[11px] text-zinc-600 font-mono">
                     {JSON.stringify(row.payload, null, 2)}
                   </pre>
                 ) : null}
               </div>
             ))}
             {!audit.isLoading && (audit.data?.items.length ?? 0) === 0 ? (
-              <p className="text-sm text-gray-500">Нет записей по текущему фильтру.</p>
+              <div className="rounded-xl border border-dashed border-zinc-300 p-8 text-center bg-zinc-50">
+                <p className="text-sm font-medium text-zinc-500">Нет записей по текущему фильтру.</p>
+              </div>
             ) : null}
           </div>
 
-          <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-sm font-medium text-zinc-600 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
             <span>
-              Всего: {audit.data?.total ?? 0}. Страница {auditPage} из {totalPages}
+              Всего: <span className="font-bold text-zinc-900">{audit.data?.total ?? 0}</span>. Страница {auditPage} из {totalPages}
             </span>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setAuditPage((prev) => Math.max(1, prev - 1))}
                 disabled={auditPage <= 1}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Назад
               </button>
               <button
                 onClick={() => setAuditPage((prev) => (audit.data?.hasMore ? prev + 1 : prev))}
                 disabled={!audit.data?.hasMore}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Вперёд
               </button>

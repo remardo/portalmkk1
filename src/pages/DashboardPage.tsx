@@ -58,14 +58,14 @@ export function DashboardPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 to="/tasks"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-teal-600 transition-colors hover:bg-teal-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-teal-600 shadow-sm transition-all hover:bg-teal-50 hover:shadow-md"
               >
                 Мои задачи
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 to="/lms"
-                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/25"
+                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-white/25 hover:shadow-md"
               >
                 Прогресс обучения
                 <GraduationCap className="h-4 w-4" />
@@ -147,12 +147,12 @@ export function DashboardPage() {
       {/* Main content grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Important announcements */}
-        <Card className="overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100">
+        <Card className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm transition hover:shadow-md">
+          <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-100 shadow-sm">
               <Pin className="h-4 w-4 text-red-600" />
             </div>
-            <h2 className="font-semibold text-gray-900">Важные объявления</h2>
+            <h2 className="font-bold text-gray-900">Важные объявления</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {pinnedNews.map((item) => (
@@ -174,26 +174,25 @@ export function DashboardPage() {
         </Card>
 
         {/* Top offices */}
-        <Card className="overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100">
+        <Card className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm transition hover:shadow-md">
+          <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 shadow-sm">
               <Trophy className="h-4 w-4 text-amber-600" />
             </div>
-            <h2 className="font-semibold text-gray-900">Топ-5 офисов</h2>
+            <h2 className="font-bold text-gray-900">Топ-5 офисов</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {topOffices.map((office, index) => (
               <div key={office.id} className="flex items-center gap-4 p-4 transition-colors hover:bg-gray-50">
                 <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold ${
-                    index === 0
-                      ? "bg-amber-100 text-amber-600"
-                      : index === 1
-                        ? "bg-gray-200 text-gray-600"
-                        : index === 2
-                          ? "bg-orange-100 text-orange-600"
-                          : "bg-gray-100 text-gray-500"
-                  }`}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-sm ${index === 0
+                    ? "bg-amber-100 text-amber-600 border border-amber-200"
+                    : index === 1
+                      ? "bg-gray-200 text-gray-600 border border-gray-300"
+                      : index === 2
+                        ? "bg-orange-100 text-orange-600 border border-orange-200"
+                        : "bg-gray-100 text-gray-500 border border-gray-200"
+                    }`}
                 >
                   {index + 1}
                 </div>
@@ -210,91 +209,52 @@ export function DashboardPage() {
           </div>
         </Card>
 
-        {/* Recent attestations */}
-        <Card className="overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100">
-              <GraduationCap className="h-4 w-4 text-teal-600" />
-            </div>
-            <h2 className="font-semibold text-gray-900">Последние аттестации</h2>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {recentAtts.map((attestation) => {
-              const user = data.users.find((item) => item.id === attestation.userId);
-              const course = data.courses.find((item) => item.id === attestation.courseId);
-              return (
-                <div key={attestation.id} className="flex items-center justify-between p-4 transition-colors hover:bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-sm text-white">
-                      {user?.avatar}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-gray-900">{user?.name}</p>
-                      <p className="truncate text-xs text-gray-400">{course?.title}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-medium text-gray-600">{attestation.score}%</span>
-                    <Badge variant={attestation.passed ? "success" : "danger"}>
-                      {attestation.passed ? "Сдал" : "Не сдал"}
-                    </Badge>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* Overdue tasks */}
-        <Card className="overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100">
-              <Clock className="h-4 w-4 text-red-600" />
-            </div>
-            <h2 className="font-semibold text-gray-900">Просроченные задачи</h2>
-            {overdueTasks > 0 && (
-              <Badge variant="danger" className="ml-auto">
-                {overdueTasks}
-              </Badge>
-            )}
-          </div>
-          <div className="divide-y divide-gray-50">
-            {data.tasks
-              .filter((task) => task.status === "overdue")
-              .slice(0, 5)
-              .map((task) => {
-                const assignee = data.users.find((item) => item.id === task.assigneeId);
-                const office = data.offices.find((item) => item.id === task.officeId);
-                return (
-                  <div key={task.id} className="flex items-center gap-3 p-4 transition-colors hover:bg-gray-50">
-                    <div className="h-2 w-2 flex-shrink-0 rounded-full bg-red-400" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-gray-900">{task.title}</p>
-                      <p className="text-xs text-gray-400">
-                        {assignee?.name} • {office?.name}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            {overdueTasks === 0 && (
-              <div className="p-5 text-center">
-                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
-                  <TrendingUp className="h-6 w-6 text-emerald-600" />
-                </div>
-                <p className="text-sm text-gray-500">Просроченных задач нет!</p>
+        <div className="divide-y divide-gray-50">
+          <Card className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm transition hover:shadow-md">
+            <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-100 shadow-sm">
+                <ListTodo className="h-4 w-4 text-red-600" />
               </div>
-            )}
-          </div>
-        </Card>
+              <h2 className="font-bold text-gray-900">Просроченные задачи</h2>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {data.tasks
+                .filter((task) => task.status === "overdue")
+                .slice(0, 5)
+                .map((task) => {
+                  const assignee = data.users.find((item) => item.id === task.assigneeId);
+                  const office = data.offices.find((item) => item.id === task.officeId);
+                  return (
+                    <div key={task.id} className="flex items-center gap-3 p-4 transition-colors hover:bg-gray-50">
+                      <div className="h-2 w-2 flex-shrink-0 rounded-full bg-red-400" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-gray-900">{task.title}</p>
+                        <p className="text-xs text-gray-400">
+                          {assignee?.name} • {office?.name}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              {overdueTasks === 0 && (
+                <div className="p-5 text-center">
+                  <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+                    <TrendingUp className="h-6 w-6 text-emerald-600" />
+                  </div>
+                  <p className="text-sm text-gray-500">Просроченных задач нет!</p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
 
         {/* Learning focus */}
-        <Card className="overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100">
+        <Card className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm transition hover:shadow-md">
+          <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-100 shadow-sm">
               <GraduationCap className="h-4 w-4 text-teal-600" />
             </div>
-            <h2 className="font-semibold text-gray-900">Фокус по обучению</h2>
+            <h2 className="font-bold text-gray-900">Фокус по обучению</h2>
           </div>
           <div className="space-y-3 p-4">
             <p className="text-sm text-gray-600">
@@ -319,4 +279,3 @@ export function DashboardPage() {
     </div>
   );
 }
-

@@ -170,9 +170,9 @@ export function TasksPage() {
           Назад к списку
         </Link>
 
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm transition hover:shadow-md">
           {/* Header */}
-          <div className="border-b border-gray-100 bg-gray-50 px-6 py-5">
+          <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-5">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
                 variant={
@@ -290,11 +290,10 @@ export function TasksPage() {
                   <button
                     key={status}
                     onClick={() => updateTaskStatus.mutate({ id: task.id, status })}
-                    className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-                      task.status === status
-                        ? "bg-teal-600 text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                    className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${task.status === status
+                      ? "bg-teal-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
                   >
                     <Icon className="h-4 w-4" />
                     {conf.label}
@@ -392,8 +391,8 @@ export function TasksPage() {
 
       {/* Create form */}
       {canCreate && showCreateForm && (
-        <Card className="overflow-hidden">
-          <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
+        <Card className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+          <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
             <h2 className="font-semibold text-gray-900">Создать задачу</h2>
           </div>
           <div className="space-y-4 p-5">
@@ -494,7 +493,7 @@ export function TasksPage() {
 
           return (
             <Link key={task.id} to={`/tasks/${task.id}`}>
-              <Card hover className="p-4">
+              <Card hover className="rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <div className="flex items-start gap-4">
                   <div
                     className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${statusConf.bg}`}
@@ -505,13 +504,12 @@ export function TasksPage() {
                     <div className="flex items-center gap-2">
                       <h3 className="font-medium text-gray-900">{task.title}</h3>
                       <span
-                        className={`h-2 w-2 rounded-full ${
-                          task.priority === "high"
-                            ? "bg-red-400"
-                            : task.priority === "medium"
-                              ? "bg-amber-400"
-                              : "bg-gray-300"
-                        }`}
+                        className={`h-2 w-2 rounded-full ${task.priority === "high"
+                          ? "bg-red-400"
+                          : task.priority === "medium"
+                            ? "bg-amber-400"
+                            : "bg-gray-300"
+                          }`}
                       />
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
@@ -545,9 +543,9 @@ export function TasksPage() {
         })}
 
         {tasks.length === 0 && (
-          <Card className="p-8 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-              <ListTodo className="h-6 w-6 text-gray-400" />
+          <Card className="rounded-2xl p-8 text-center shadow-sm">
+            <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-50">
+              <ListTodo className="h-8 w-8 text-gray-400" />
             </div>
             <p className="text-gray-500">Задач не найдено</p>
           </Card>
@@ -556,4 +554,3 @@ export function TasksPage() {
     </div>
   );
 }
-
