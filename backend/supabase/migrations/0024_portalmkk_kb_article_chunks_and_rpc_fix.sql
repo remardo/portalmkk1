@@ -39,7 +39,10 @@ create policy "read admin portalmkk kb chunks" on public.portalmkk_kb_article_ch
 for select to authenticated
 using (public.is_admin_or_director());
 
-create or replace function public.portalmkk_match_kb_article_chunks(
+drop function if exists public.portalmkk_match_kb_article_chunks(text, integer, double precision);
+drop function if exists public.portalmkk_match_kb_article_chunks(text, int, float);
+
+create function public.portalmkk_match_kb_article_chunks(
   query_embedding_text text,
   match_count int default 6,
   min_similarity float default 0.55

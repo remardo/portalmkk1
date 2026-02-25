@@ -6310,6 +6310,14 @@ function normalizeOpenRouterBaseUrl() {
   return env.OPENROUTER_BASE_URL.replace(/\/$/, "");
 }
 
+function getEmbeddingModelCandidates() {
+  const models = env.OPENROUTER_EMBEDDING_MODEL
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return Array.from(new Set(models));
+}
+
 function splitTextToKbChunks(text: string, maxChars = 900, overlapChars = 180) {
   const normalized = text.replace(/\r\n/g, "\n").trim();
   if (!normalized) return [];
@@ -6427,43 +6435,60 @@ function extractEmbeddingVector(payload: unknown): number[] | null {
   return null;
 }
 
-async function createEmbeddingWithOpenRouter(input: string) {
-  const response = await fetch(`${normalizeOpenRouterBaseUrl()}/embeddings`, {
-    method: "POST",
-    headers: getOpenRouterHeaders(),
-    body: JSON.stringify({
-      model: env.OPENROUTER_EMBEDDING_MODEL,
-      input,
-    }),
-  });
-  if (!response.ok) {
-    const details = await response.text();
-    throw new Error(`OpenRouter embeddings request failed (${response.status}): ${details}`);
-  }
-  const payload = (await response.json()) as unknown;
-  const vector = extractEmbeddingVector(payload);
-  if (!Array.isArray(vector) || vector.length === 0) {
-    console.error("OpenRouter embeddings response payload:", JSON.stringify(payload, null, 2));
-    const providerError = payload && typeof payload === "object" && "error" in payload
-      ? (payload as { error?: unknown }).error
-      : null;
-    if (typeof providerError === "string" && providerError.trim()) {
-      throw new Error(`OpenRouter embeddings error: ${providerError}`);
-    }
-    if (providerError && typeof providerError === "object") {
-      const providerMessage = "message" in providerError ? (providerError as { message?: unknown }).message : null;
-      if (typeof providerMessage === "string" && providerMessage.trim()) {
-        throw new Error(`OpenRouter embeddings error: ${providerMessage}`);
+type OpenRouterEmbeddingResult = {
+  vector: number[];
+  model: string;
+};
+
+async function createEmbeddingWithOpenRouter(input: string): Promise<OpenRouterEmbeddingResult> {
+  const models = getEmbeddingModelCandidates();
+  let lastError: string | null = null;
+
+  for (const model of models) {
+    try {
+      const response = await fetch(`${normalizeOpenRouterBaseUrl()}/embeddings`, {
+        method: "POST",
+        headers: getOpenRouterHeaders(),
+        body: JSON.stringify({
+          model,
+          input,
+        }),
+      });
+      if (!response.ok) {
+        const details = await response.text();
+        throw new Error(`OpenRouter embeddings request failed (${response.status}): ${details}`);
       }
+      const payload = (await response.json()) as unknown;
+      const vector = extractEmbeddingVector(payload);
+      if (!Array.isArray(vector) || vector.length === 0) {
+        console.error("OpenRouter embeddings response payload:", JSON.stringify(payload, null, 2));
+        const providerError = payload && typeof payload === "object" && "error" in payload
+          ? (payload as { error?: unknown }).error
+          : null;
+        if (typeof providerError === "string" && providerError.trim()) {
+          throw new Error(`OpenRouter embeddings error: ${providerError}`);
+        }
+        if (providerError && typeof providerError === "object") {
+          const providerMessage = "message" in providerError ? (providerError as { message?: unknown }).message : null;
+          if (typeof providerMessage === "string" && providerMessage.trim()) {
+            throw new Error(`OpenRouter embeddings error: ${providerMessage}`);
+          }
+        }
+        throw new Error("OpenRouter embeddings response is missing embedding vector");
+      }
+      if (vector.length !== env.KB_EMBEDDING_DIMENSIONS) {
+        throw new Error(`Embedding dimensions mismatch: got ${vector.length}, expected ${env.KB_EMBEDDING_DIMENSIONS}`);
+      }
+      return { vector, model };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      console.warn(`OpenRouter embeddings failed for model "${model}": ${lastError}`);
     }
-    throw new Error("OpenRouter embeddings response is missing embedding vector");
   }
-  if (vector.length !== env.KB_EMBEDDING_DIMENSIONS) {
-    throw new Error(
-      `Embedding dimensions mismatch: got ${vector.length}, expected ${env.KB_EMBEDDING_DIMENSIONS}`,
-    );
-  }
-  return vector;
+
+  throw new Error(
+    `OpenRouter embeddings failed for models [${models.join(", ")}]${lastError ? `: ${lastError}` : ""}`,
+  );
 }
 
 async function indexKbArticleEmbeddings(articleId: number) {
@@ -6494,13 +6519,13 @@ async function indexKbArticleEmbeddings(articleId: number) {
 
   for (let i = 0; i < chunks.length; i += 1) {
     const chunk = chunks[i]!;
-    const embedding = await createEmbeddingWithOpenRouter(chunk);
+    const { vector: embedding, model: embeddingModel } = await createEmbeddingWithOpenRouter(chunk);
     rows.push({
       article_id: articleId,
       chunk_no: i + 1,
       content_chunk: chunk,
       embedding: toPgVectorLiteral(embedding),
-      embedding_model: env.OPENROUTER_EMBEDDING_MODEL,
+      embedding_model: embeddingModel,
     });
   }
 
@@ -6569,7 +6594,7 @@ async function completeKbConsultation(input: { question: string; matches: KbVect
 }
 
 async function findKbMatchesForQuestion(input: { question: string; topK: number; minSimilarity: number }) {
-  const vector = await createEmbeddingWithOpenRouter(input.question);
+  const { vector } = await createEmbeddingWithOpenRouter(input.question);
   const queryEmbeddingText = toPgVectorLiteral(vector);
   const { data, error } = await supabaseAdmin.rpc("portalmkk_match_kb_article_chunks", {
     query_embedding_text: queryEmbeddingText,
