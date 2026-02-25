@@ -6380,6 +6380,53 @@ function extractChatMessageContent(content: unknown): string {
   return "";
 }
 
+function normalizeEmbeddingVector(value: unknown): number[] | null {
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+  const numbers = value.map((item) => (typeof item === "number" ? item : Number(item)));
+  if (numbers.some((item) => !Number.isFinite(item))) {
+    return null;
+  }
+  return numbers;
+}
+
+function extractEmbeddingVector(payload: unknown): number[] | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const firstDataItem = Array.isArray(record.data) && record.data.length > 0 && record.data[0] && typeof record.data[0] === "object"
+    ? (record.data[0] as Record<string, unknown>)
+    : null;
+
+  const candidates: unknown[] = [
+    firstDataItem?.embedding,
+    firstDataItem?.embeddings,
+    firstDataItem?.vector,
+    firstDataItem?.values,
+    record.embedding,
+    record.embeddings,
+    record.vector,
+    record.values,
+  ];
+
+  for (const candidate of candidates) {
+    const vector = normalizeEmbeddingVector(candidate);
+    if (vector) {
+      return vector;
+    }
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      const nested = normalizeEmbeddingVector(candidate[0]);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
+}
+
 async function createEmbeddingWithOpenRouter(input: string) {
   const response = await fetch(`${normalizeOpenRouterBaseUrl()}/embeddings`, {
     method: "POST",
@@ -6393,9 +6440,22 @@ async function createEmbeddingWithOpenRouter(input: string) {
     const details = await response.text();
     throw new Error(`OpenRouter embeddings request failed (${response.status}): ${details}`);
   }
-  const payload = (await response.json()) as { data?: Array<{ embedding?: number[] }> };
-  const vector = payload.data?.[0]?.embedding;
+  const payload = (await response.json()) as unknown;
+  const vector = extractEmbeddingVector(payload);
   if (!Array.isArray(vector) || vector.length === 0) {
+    console.error("OpenRouter embeddings response payload:", JSON.stringify(payload, null, 2));
+    const providerError = payload && typeof payload === "object" && "error" in payload
+      ? (payload as { error?: unknown }).error
+      : null;
+    if (typeof providerError === "string" && providerError.trim()) {
+      throw new Error(`OpenRouter embeddings error: ${providerError}`);
+    }
+    if (providerError && typeof providerError === "object") {
+      const providerMessage = "message" in providerError ? (providerError as { message?: unknown }).message : null;
+      if (typeof providerMessage === "string" && providerMessage.trim()) {
+        throw new Error(`OpenRouter embeddings error: ${providerMessage}`);
+      }
+    }
     throw new Error("OpenRouter embeddings response is missing embedding vector");
   }
   if (vector.length !== env.KB_EMBEDDING_DIMENSIONS) {
