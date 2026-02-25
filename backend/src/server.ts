@@ -2777,12 +2777,12 @@ app.get("/api/search/unified", requireAuth(), async (req, res) => {
 
   let lmsSubsectionsQuery = supabaseAdmin
     .from("portalmkk_lms_subsections")
-    .select("id,title,markdown_content,updated_at,section:lms_sections!inner(id,title,course:lms_courses!inner(id,title,status))")
+    .select("id,title,markdown_content,updated_at,section:portalmkk_lms_sections!inner(id,title,course:portalmkk_lms_courses!inner(id,title,status))")
     .order("updated_at", { ascending: false })
     .limit(limit)
     .or(`title.ilike.${pattern},markdown_content.ilike.${pattern}`);
   if (!isAdmin) {
-    lmsSubsectionsQuery = lmsSubsectionsQuery.eq("lms_sections.lms_courses.status", "published");
+    lmsSubsectionsQuery = lmsSubsectionsQuery.eq("portalmkk_lms_sections.portalmkk_lms_courses.status", "published");
   }
 
   const [documentsRes, kbRes, lmsCoursesRes, lmsSubsectionsRes] = await Promise.all([
