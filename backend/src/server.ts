@@ -6593,18 +6593,86 @@ async function completeKbConsultation(input: { question: string; matches: KbVect
   return text;
 }
 
-async function findKbMatchesForQuestion(input: { question: string; topK: number; minSimilarity: number }) {
-  const { vector } = await createEmbeddingWithOpenRouter(input.question);
-  const queryEmbeddingText = toPgVectorLiteral(vector);
-  const { data, error } = await supabaseAdmin.rpc("portalmkk_match_kb_article_chunks", {
-    query_embedding_text: queryEmbeddingText,
-    match_count: input.topK,
-    min_similarity: input.minSimilarity,
-  });
-  if (error) {
-    throw new Error(error.message);
+function buildKeywordTerms(question: string) {
+  const terms = question
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3);
+  return Array.from(new Set(terms)).slice(0, 8);
+}
+
+async function findKbMatchesByKeyword(input: { question: string; topK: number }) {
+  const terms = buildKeywordTerms(input.question);
+  if (terms.length === 0) {
+    return [] as KbVectorMatchRow[];
   }
-  return (data ?? []) as KbVectorMatchRow[];
+
+  const { data, error } = await supabaseAdmin
+    .from("portalmkk_kb_articles")
+    .select("id,title,category,content,status,updated_at")
+    .eq("status", "published")
+    .order("updated_at", { ascending: false })
+    .limit(400);
+
+  if (error || !data) {
+    return [] as KbVectorMatchRow[];
+  }
+
+  const ranked = data
+    .map((article) => {
+      const title = String(article.title ?? "");
+      const category = String(article.category ?? "");
+      const content = String(article.content ?? "");
+      const haystack = `${title}\n${category}\n${content}`.toLowerCase();
+      let score = 0;
+      for (const term of terms) {
+        if (haystack.includes(term)) score += 1;
+      }
+      if (score === 0) return null;
+
+      const similarity = Math.min(0.89, 0.25 + (score / terms.length) * 0.64);
+      return {
+        article_id: Number(article.id),
+        chunk_id: Number(article.id),
+        title,
+        category,
+        content_chunk: content.slice(0, 900),
+        similarity,
+        _score: score,
+      };
+    })
+    .filter((item): item is KbVectorMatchRow & { _score: number } => item !== null)
+    .sort((a, b) => b._score - a._score || b.similarity - a.similarity)
+    .slice(0, input.topK);
+
+  return ranked.map(({ _score: _discard, ...row }) => row);
+}
+
+async function findKbMatchesForQuestion(input: { question: string; topK: number; minSimilarity: number }) {
+  try {
+    const { vector } = await createEmbeddingWithOpenRouter(input.question);
+    const queryEmbeddingText = toPgVectorLiteral(vector);
+    const { data, error } = await supabaseAdmin.rpc("portalmkk_match_kb_article_chunks", {
+      query_embedding_text: queryEmbeddingText,
+      match_count: input.topK,
+      min_similarity: input.minSimilarity,
+    });
+    if (error) {
+      throw new Error(error.message);
+    }
+    return (data ?? []) as KbVectorMatchRow[];
+  } catch (error) {
+    const fallback = await findKbMatchesByKeyword({ question: input.question, topK: input.topK });
+    if (fallback.length > 0) {
+      console.warn(
+        `[kb-vector] fallback to keyword search: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return fallback;
+    }
+    throw error;
+  }
 }
 
 async function completeAgentChat(input: {
