@@ -1,4 +1,4 @@
-import { Building2, ClipboardList, Coins, ScrollText, Users } from "lucide-react";
+import { Building2, ClipboardList, Coins, Package, ScrollText, Users } from "lucide-react";
 import { useState } from "react";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -31,7 +31,7 @@ import { useSearchParams } from "react-router-dom";
 
 const roleOptions: Role[] = ["operator", "office_head", "director", "admin"];
 type ToastItem = { id: number; kind: "success" | "error"; message: string };
-type AdminTab = "users" | "offices" | "points" | "orders" | "other";
+type AdminTab = "users" | "offices" | "points" | "orders" | "products" | "other";
 const shopOrderStatusOptions: Array<{ value: "new" | "processing" | "shipped" | "delivered" | "cancelled"; label: string }> = [
   { value: "new", label: "Новый" },
   { value: "processing", label: "В обработке" },
@@ -196,10 +196,11 @@ export function AdminPage() {
   });
   const initialTab = (() => {
     const raw = searchParams.get("tab");
-    if (raw === "users" || raw === "offices" || raw === "points" || raw === "orders" || raw === "other") return raw as AdminTab;
+    if (raw === "users" || raw === "offices" || raw === "points" || raw === "orders" || raw === "products" || raw === "other") return raw as AdminTab;
     return "users";
   })();
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const pageSize = Number(auditLimit) || 50;
   const canViewShopOrders = user?.role === "office_head" || user?.role === "director" || user?.role === "admin";
   const canCreateUsers = user?.role === "admin" || user?.role === "director" || user?.role === "office_head";
@@ -371,50 +372,55 @@ export function AdminPage() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => switchTab("users")}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
-              activeTab === "users" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
-            }`}
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "users" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+              }`}
           >
             <Users className="h-4 w-4" />
             Пользователи ({data.users.length})
           </button>
           <button
             onClick={() => switchTab("offices")}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
-              activeTab === "offices" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
-            }`}
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "offices" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+              }`}
           >
             <Building2 className="h-4 w-4" />
             Офисы ({data.offices.length})
           </button>
           <button
             onClick={() => switchTab("points")}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
-              activeTab === "points" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
-            }`}
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "points" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+              }`}
           >
             <Coins className="h-4 w-4" />
             Баллы
           </button>
           <button
             onClick={() => switchTab("other")}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
-              activeTab === "other" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
-            }`}
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "other" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+              }`}
           >
             <ScrollText className="h-4 w-4" />
             Другое (журнал)
           </button>
           {canViewShopOrders ? (
-            <button
-              onClick={() => switchTab("orders")}
-              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
-                activeTab === "orders" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
-              }`}
-            >
-              <ClipboardList className="h-4 w-4" />
-              Заказы магазина ({data.shopOrders.length})
-            </button>
+            <>
+              <button
+                onClick={() => switchTab("products")}
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "products" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+                  }`}
+              >
+                <Package className="h-4 w-4" />
+                Товары магазина
+              </button>
+              <button
+                onClick={() => switchTab("orders")}
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === "orders" ? "bg-cyan-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
+                  }`}
+              >
+                <ClipboardList className="h-4 w-4" />
+                Заказы ({data.shopOrders.length})
+              </button>
+            </>
           ) : null}
         </div>
       </Card>
@@ -422,9 +428,8 @@ export function AdminPage() {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`max-w-sm rounded-lg px-3 py-2 text-sm text-white shadow-lg ${
-              toast.kind === "success" ? "bg-emerald-600" : "bg-rose-600"
-            }`}
+            className={`max-w-sm rounded-lg px-3 py-2 text-sm text-white shadow-lg ${toast.kind === "success" ? "bg-emerald-600" : "bg-rose-600"
+              }`}
           >
             {toast.message}
           </div>
@@ -432,1184 +437,1250 @@ export function AdminPage() {
       </div>
 
       {activeTab === "users" && canCreateUsers ? (
-      <Card className="border border-gray-200 bg-gradient-to-r from-cyan-50 via-white to-teal-50 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Создать пользователя</h2>
-          <Badge className="bg-white text-gray-700">Шаг 1: регистрация</Badge>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <input
-            value={fullName}
-            onChange={(event) => setFullName(event.target.value)}
-            placeholder="ФИО"
-            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
-          />
-          <input
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="Email"
-            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Пароль (мин. 8)"
-            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
-          />
-          <select
-            value={role}
-            onChange={(event) => setRole(event.target.value as Role)}
-            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
-          >
-            {createUserRoleOptions.map((item) => (
-              <option key={item} value={item}>
-                {RoleLabels[item]}
-              </option>
-            ))}
-          </select>
-          <select
-            value={user.role === "office_head" ? String(user.officeId) : officeId}
-            onChange={(event) => setOfficeId(event.target.value)}
-            disabled={user.role === "office_head"}
-            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 disabled:bg-gray-100"
-          >
-            {user.role === "office_head" ? null : <option value="">Без офиса</option>}
-            {data.offices
-              .filter((office) => (user.role === "office_head" ? office.id === user.officeId : true))
-              .map((office) => (
-              <option key={office.id} value={office.id}>
-                {office.name}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={async () => {
-              if (!email.trim() || !password.trim() || !fullName.trim()) {
-                showToast("error", "Заполните ФИО, email и пароль");
-                return;
-              }
-              if (password.trim().length < 8) {
-                showToast("error", "Пароль должен быть не короче 8 символов");
-                return;
-              }
-              try {
-                await createUser.mutateAsync({
-                  email: email.trim(),
-                  password: password.trim(),
-                  fullName: fullName.trim(),
-                  role,
-                  officeId: user.role === "office_head" ? user.officeId : (officeId ? Number(officeId) : null),
-                });
-                setEmail("");
-                setPassword("");
-                setFullName("");
-                setOfficeId("");
-                setRole("operator");
-                showToast("success", "Сотрудник создан");
-              } catch (error) {
-                showToast("error", extractErrorMessage(error));
-              }
-            }}
-            className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700 disabled:opacity-60"
-            disabled={createUser.isPending}
-          >
-            {createUser.isPending ? "Создание..." : "Создать пользователя"}
-          </button>
-        </div>
-      </Card>
-      ) : null}
-
-      {activeTab === "users" ? (
-      <div className="space-y-3">
-        <Card className="border border-gray-200 p-3">
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+        <Card className="border border-gray-200 bg-gradient-to-r from-cyan-50 via-white to-teal-50 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-gray-900">Создать пользователя</h2>
+            <Badge className="bg-white text-gray-700">Шаг 1: регистрация</Badge>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             <input
-              value={userSearch}
-              onChange={(event) => setUserSearch(event.target.value)}
-              placeholder="Поиск: ФИО, email, должность"
-              className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 md:col-span-2"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="ФИО"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+            />
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Email"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Пароль (мин. 8)"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
             />
             <select
-              value={userRoleFilter}
-              onChange={(event) => setUserRoleFilter(event.target.value as Role | "all")}
-              className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+              value={role}
+              onChange={(event) => setRole(event.target.value as Role)}
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
             >
-              <option value="all">Все роли</option>
-              {roleOptions.map((option) => (
-                <option key={option} value={option}>
-                  {RoleLabels[option]}
+              {createUserRoleOptions.map((item) => (
+                <option key={item} value={item}>
+                  {RoleLabels[item]}
                 </option>
               ))}
             </select>
+            <select
+              value={user.role === "office_head" ? String(user.officeId) : officeId}
+              onChange={(event) => setOfficeId(event.target.value)}
+              disabled={user.role === "office_head"}
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 disabled:bg-gray-100"
+            >
+              {user.role === "office_head" ? null : <option value="">Без офиса</option>}
+              {data.offices
+                .filter((office) => (user.role === "office_head" ? office.id === user.officeId : true))
+                .map((office) => (
+                  <option key={office.id} value={office.id}>
+                    {office.name}
+                  </option>
+                ))}
+            </select>
+            <button
+              onClick={async () => {
+                if (!email.trim() || !password.trim() || !fullName.trim()) {
+                  showToast("error", "Заполните ФИО, email и пароль");
+                  return;
+                }
+                if (password.trim().length < 8) {
+                  showToast("error", "Пароль должен быть не короче 8 символов");
+                  return;
+                }
+                try {
+                  await createUser.mutateAsync({
+                    email: email.trim(),
+                    password: password.trim(),
+                    fullName: fullName.trim(),
+                    role,
+                    officeId: user.role === "office_head" ? user.officeId : (officeId ? Number(officeId) : null),
+                  });
+                  setEmail("");
+                  setPassword("");
+                  setFullName("");
+                  setOfficeId("");
+                  setRole("operator");
+                  showToast("success", "Сотрудник создан");
+                } catch (error) {
+                  showToast("error", extractErrorMessage(error));
+                }
+              }}
+              className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700 disabled:opacity-60"
+              disabled={createUser.isPending}
+            >
+              {createUser.isPending ? "Создание..." : "Создать пользователя"}
+            </button>
           </div>
         </Card>
-        {filteredUsers.map((item) => (
-          <Card key={String(item.id)} className="rounded-2xl border border-gray-200 p-4 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-gray-900">{item.name}</span>
-              <Badge className="bg-gray-100 text-gray-700">{item.email || "без email"}</Badge>
-              <Badge className="bg-cyan-100 text-cyan-700">{RoleLabels[item.role]}</Badge>
-              {userHasUnsavedChanges(item) ? (
-                <Badge className="bg-amber-100 text-amber-700">Есть изменения</Badge>
-              ) : null}
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+      ) : null}
+
+      {activeTab === "users" ? (
+        <div className="space-y-3">
+          <Card className="border border-gray-200 p-3">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
               <input
-                value={getUserDraft(item).fullName}
-                onChange={(event) =>
-                  setUserDrafts((prev) => ({
-                    ...prev,
-                    [String(item.id)]: { ...getUserDraft(item), fullName: event.target.value },
-                  }))
-                }
-                placeholder="ФИО"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
-              />
-              <input
-                value={getUserDraft(item).email}
-                onChange={(event) =>
-                  setUserDrafts((prev) => ({
-                    ...prev,
-                    [String(item.id)]: { ...getUserDraft(item), email: event.target.value },
-                  }))
-                }
-                placeholder="Логин (email)"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
-              />
-              <input
-                value={getUserDraft(item).phone}
-                onChange={(event) =>
-                  setUserDrafts((prev) => ({
-                    ...prev,
-                    [String(item.id)]: { ...getUserDraft(item), phone: event.target.value },
-                  }))
-                }
-                placeholder="Телефон"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
-              />
-              <input
-                value={getUserDraft(item).position}
-                onChange={(event) =>
-                  setUserDrafts((prev) => ({
-                    ...prev,
-                    [String(item.id)]: { ...getUserDraft(item), position: event.target.value },
-                  }))
-                }
-                placeholder="Должность"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                value={userSearch}
+                onChange={(event) => setUserSearch(event.target.value)}
+                placeholder="Поиск: ФИО, email, должность"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 md:col-span-2"
               />
               <select
-                value={getUserDraft(item).role}
-                onChange={(event) =>
-                  setUserDrafts((prev) => ({
-                    ...prev,
-                    [String(item.id)]: { ...getUserDraft(item), role: event.target.value as Role },
-                  }))
-                }
+                value={userRoleFilter}
+                onChange={(event) => setUserRoleFilter(event.target.value as Role | "all")}
                 className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
               >
+                <option value="all">Все роли</option>
                 {roleOptions.map((option) => (
                   <option key={option} value={option}>
                     {RoleLabels[option]}
                   </option>
                 ))}
               </select>
-              <select
-                value={getUserDraft(item).officeId}
-                onChange={(event) =>
-                  setUserDrafts((prev) => ({
-                    ...prev,
-                    [String(item.id)]: { ...getUserDraft(item), officeId: event.target.value },
-                  }))
-                }
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
-              >
-                <option value="">Без офиса</option>
-                {data.offices.map((office) => (
-                  <option key={office.id} value={office.id}>
-                    {office.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                onClick={async () => {
-                  try {
-                    await updateUser.mutateAsync({
-                      id: String(item.id),
-                      fullName: getUserDraft(item).fullName.trim(),
-                      email: getUserDraft(item).email.trim(),
-                      phone: getUserDraft(item).phone.trim(),
-                      position: getUserDraft(item).position.trim(),
-                      role: getUserDraft(item).role,
-                      officeId: getUserDraft(item).officeId ? Number(getUserDraft(item).officeId) : null,
-                    });
-                    showToast("success", `Данные сотрудника ${item.name} сохранены`);
-                  } catch (error) {
-                    showToast("error", extractErrorMessage(error));
-                  }
-                }}
-                className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-60"
-                disabled={updateUser.isPending}
-              >
-                Сохранить сотрудника
-              </button>
-              <button
-                onClick={async () => {
-                  const nextLogin = generateResetLogin(item.id);
-                  try {
-                    await updateUser.mutateAsync({
-                      id: String(item.id),
-                      email: nextLogin,
-                    });
-                    setUserDrafts((prev) => ({
-                      ...prev,
-                      [String(item.id)]: { ...getUserDraft(item), email: nextLogin },
-                    }));
-                    showToast("success", `Логин сброшен: ${nextLogin}`);
-                  } catch (error) {
-                    showToast("error", extractErrorMessage(error));
-                  }
-                }}
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-              >
-                Сбросить логин
-              </button>
-              <input
-                type="password"
-                value={userPasswordDrafts[String(item.id)] ?? ""}
-                onChange={(event) =>
-                  setUserPasswordDrafts((prev) => ({ ...prev, [String(item.id)]: event.target.value }))
-                }
-                placeholder="Новый пароль (мин. 8)"
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm"
-              />
-              <button
-                onClick={async () => {
-                  const nextPassword = (userPasswordDrafts[String(item.id)] ?? "").trim();
-                  if (nextPassword.length < 8) {
-                    showToast("error", "Пароль должен быть не короче 8 символов");
-                    return;
-                  }
-                  try {
-                    await updateUser.mutateAsync({
-                      id: String(item.id),
-                      password: nextPassword,
-                    });
-                    setUserPasswordDrafts((prev) => ({ ...prev, [String(item.id)]: "" }));
-                    showToast("success", `Пароль для ${item.name} обновлен`);
-                  } catch (error) {
-                    showToast("error", extractErrorMessage(error));
-                  }
-                }}
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-              >
-                Сбросить пароль
-              </button>
-              <button
-                onClick={async () => {
-                  const generated = generateTempPassword();
-                  try {
-                    await updateUser.mutateAsync({
-                      id: String(item.id),
-                      password: generated,
-                    });
-                    showToast("success", `Временный пароль: ${generated}`);
-                  } catch (error) {
-                    showToast("error", extractErrorMessage(error));
-                  }
-                }}
-                className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-              >
-                Сгенерировать пароль
-              </button>
             </div>
           </Card>
-        ))}
-        {filteredUsers.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-gray-500">По текущим фильтрам сотрудники не найдены.</Card>
-        ) : null}
-      </div>
+          {filteredUsers.map((item) => (
+            <Card key={String(item.id)} className="rounded-2xl border border-gray-200 p-4 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-gray-900">{item.name}</span>
+                <Badge className="bg-gray-100 text-gray-700">{item.email || "без email"}</Badge>
+                <Badge className="bg-cyan-100 text-cyan-700">{RoleLabels[item.role]}</Badge>
+                {userHasUnsavedChanges(item) ? (
+                  <Badge className="bg-amber-100 text-amber-700">Есть изменения</Badge>
+                ) : null}
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                <input
+                  value={getUserDraft(item).fullName}
+                  onChange={(event) =>
+                    setUserDrafts((prev) => ({
+                      ...prev,
+                      [String(item.id)]: { ...getUserDraft(item), fullName: event.target.value },
+                    }))
+                  }
+                  placeholder="ФИО"
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                />
+                <input
+                  value={getUserDraft(item).email}
+                  onChange={(event) =>
+                    setUserDrafts((prev) => ({
+                      ...prev,
+                      [String(item.id)]: { ...getUserDraft(item), email: event.target.value },
+                    }))
+                  }
+                  placeholder="Логин (email)"
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                />
+                <input
+                  value={getUserDraft(item).phone}
+                  onChange={(event) =>
+                    setUserDrafts((prev) => ({
+                      ...prev,
+                      [String(item.id)]: { ...getUserDraft(item), phone: event.target.value },
+                    }))
+                  }
+                  placeholder="Телефон"
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                />
+                <input
+                  value={getUserDraft(item).position}
+                  onChange={(event) =>
+                    setUserDrafts((prev) => ({
+                      ...prev,
+                      [String(item.id)]: { ...getUserDraft(item), position: event.target.value },
+                    }))
+                  }
+                  placeholder="Должность"
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                />
+                <select
+                  value={getUserDraft(item).role}
+                  onChange={(event) =>
+                    setUserDrafts((prev) => ({
+                      ...prev,
+                      [String(item.id)]: { ...getUserDraft(item), role: event.target.value as Role },
+                    }))
+                  }
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                >
+                  {roleOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {RoleLabels[option]}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={getUserDraft(item).officeId}
+                  onChange={(event) =>
+                    setUserDrafts((prev) => ({
+                      ...prev,
+                      [String(item.id)]: { ...getUserDraft(item), officeId: event.target.value },
+                    }))
+                  }
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                >
+                  <option value="">Без офиса</option>
+                  {data.offices.map((office) => (
+                    <option key={office.id} value={office.id}>
+                      {office.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      await updateUser.mutateAsync({
+                        id: String(item.id),
+                        fullName: getUserDraft(item).fullName.trim(),
+                        email: getUserDraft(item).email.trim(),
+                        phone: getUserDraft(item).phone.trim(),
+                        position: getUserDraft(item).position.trim(),
+                        role: getUserDraft(item).role,
+                        officeId: getUserDraft(item).officeId ? Number(getUserDraft(item).officeId) : null,
+                      });
+                      showToast("success", `Данные сотрудника ${item.name} сохранены`);
+                    } catch (error) {
+                      showToast("error", extractErrorMessage(error));
+                    }
+                  }}
+                  className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-60"
+                  disabled={updateUser.isPending}
+                >
+                  Сохранить сотрудника
+                </button>
+                <button
+                  onClick={async () => {
+                    const nextLogin = generateResetLogin(item.id);
+                    try {
+                      await updateUser.mutateAsync({
+                        id: String(item.id),
+                        email: nextLogin,
+                      });
+                      setUserDrafts((prev) => ({
+                        ...prev,
+                        [String(item.id)]: { ...getUserDraft(item), email: nextLogin },
+                      }));
+                      showToast("success", `Логин сброшен: ${nextLogin}`);
+                    } catch (error) {
+                      showToast("error", extractErrorMessage(error));
+                    }
+                  }}
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+                >
+                  Сбросить логин
+                </button>
+                <input
+                  type="password"
+                  value={userPasswordDrafts[String(item.id)] ?? ""}
+                  onChange={(event) =>
+                    setUserPasswordDrafts((prev) => ({ ...prev, [String(item.id)]: event.target.value }))
+                  }
+                  placeholder="Новый пароль (мин. 8)"
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={async () => {
+                    const nextPassword = (userPasswordDrafts[String(item.id)] ?? "").trim();
+                    if (nextPassword.length < 8) {
+                      showToast("error", "Пароль должен быть не короче 8 символов");
+                      return;
+                    }
+                    try {
+                      await updateUser.mutateAsync({
+                        id: String(item.id),
+                        password: nextPassword,
+                      });
+                      setUserPasswordDrafts((prev) => ({ ...prev, [String(item.id)]: "" }));
+                      showToast("success", `Пароль для ${item.name} обновлен`);
+                    } catch (error) {
+                      showToast("error", extractErrorMessage(error));
+                    }
+                  }}
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+                >
+                  Сбросить пароль
+                </button>
+                <button
+                  onClick={async () => {
+                    const generated = generateTempPassword();
+                    try {
+                      await updateUser.mutateAsync({
+                        id: String(item.id),
+                        password: generated,
+                      });
+                      showToast("success", `Временный пароль: ${generated}`);
+                    } catch (error) {
+                      showToast("error", extractErrorMessage(error));
+                    }
+                  }}
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+                >
+                  Сгенерировать пароль
+                </button>
+              </div>
+            </Card>
+          ))}
+          {filteredUsers.length === 0 ? (
+            <Card className="p-6 text-center text-sm text-gray-500">По текущим фильтрам сотрудники не найдены.</Card>
+          ) : null}
+        </div>
       ) : null}
 
       {activeTab === "offices" ? (
-      <div className="space-y-4">
-        <Card className="border border-gray-200 bg-gradient-to-r from-teal-50 via-white to-sky-50 p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-gray-900">Офисы</h2>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm">
-              {data.offices.length} офисов
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
-            <input
-              value={newOffice.name}
-              onChange={(event) => setNewOffice((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder="Название офиса"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
-            />
-            <input
-              value={newOffice.city}
-              onChange={(event) => setNewOffice((prev) => ({ ...prev, city: event.target.value }))}
-              placeholder="Город"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
-            />
-            <input
-              value={newOffice.address}
-              onChange={(event) => setNewOffice((prev) => ({ ...prev, address: event.target.value }))}
-              placeholder="Адрес"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
-            />
-            <input
-              type="number"
-              min={0}
-              value={newOffice.rating}
-              onChange={(event) => setNewOffice((prev) => ({ ...prev, rating: event.target.value }))}
-              placeholder="Рейтинг"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
-            />
-            <select
-              value={newOffice.headId}
-              onChange={(event) => setNewOffice((prev) => ({ ...prev, headId: event.target.value }))}
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-3"
-            >
-              <option value="">Без руководителя</option>
-              {officeHeadCandidates.map((employee) => (
-                <option key={String(employee.id)} value={String(employee.id)}>
-                  {employee.name}
-                </option>
-              ))}
-            </select>
-            <input
-              value={officeSearch}
-              onChange={(event) => setOfficeSearch(event.target.value)}
-              placeholder="Поиск: название, город, адрес"
-              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
-            />
-            <div className="md:col-span-1">
-              <button
-                onClick={async () => {
-                  if (newOffice.name.trim().length < 2 || newOffice.city.trim().length < 2 || newOffice.address.trim().length < 3) {
-                    showToast("error", "Заполните название, город и адрес офиса");
-                    return;
-                  }
-                  const rating = Number(newOffice.rating || 0);
-                  if (!Number.isFinite(rating) || rating < 0) {
-                    showToast("error", "Рейтинг должен быть числом 0 или больше");
-                    return;
-                  }
-                  try {
-                    await createOffice.mutateAsync({
-                      name: newOffice.name.trim(),
-                      city: newOffice.city.trim(),
-                      address: newOffice.address.trim(),
-                      rating,
-                      headId: newOffice.headId || null,
-                    });
-                    showToast("success", `Офис «${newOffice.name.trim()}» создан`);
-                    setNewOffice({ name: "", city: "", address: "", rating: "0", headId: "" });
-                  } catch (error) {
-                    showToast("error", extractErrorMessage(error));
-                  }
-                }}
-                className="w-full rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-60"
-                disabled={createOffice.isPending}
-              >
-                {createOffice.isPending ? "Создание..." : "Создать офис"}
-              </button>
+        <div className="space-y-4">
+          <Card className="border border-gray-200 bg-gradient-to-r from-teal-50 via-white to-sky-50 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Офисы</h2>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm">
+                {data.offices.length} офисов
+              </span>
             </div>
-          </div>
-        </Card>
-
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {filteredOffices.map((office) => {
-            const draft = getOfficeDraft(office);
-            return (
-              <Card key={office.id} className="rounded-2xl border border-gray-200 p-4 shadow-sm">
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm text-gray-500">Офис #{office.id}</p>
-                    <h3 className="text-base font-semibold text-gray-900">{office.name}</h3>
-                  </div>
-                  {officeHasUnsavedChanges(office) ? (
-                    <Badge className="bg-amber-100 text-amber-700">Есть изменения</Badge>
-                  ) : (
-                    <Badge className="bg-emerald-100 text-emerald-700">Синхронизировано</Badge>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <input
-                    value={draft.name}
-                    onChange={(event) =>
-                      setOfficeDrafts((prev) => ({
-                        ...prev,
-                        [office.id]: { ...draft, name: event.target.value },
-                      }))
-                    }
-                    placeholder="Название офиса"
-                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
-                  />
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <input
-                      value={draft.city}
-                      onChange={(event) =>
-                        setOfficeDrafts((prev) => ({
-                          ...prev,
-                          [office.id]: { ...draft, city: event.target.value },
-                        }))
-                      }
-                      placeholder="Город"
-                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      value={draft.rating}
-                      onChange={(event) =>
-                        setOfficeDrafts((prev) => ({
-                          ...prev,
-                          [office.id]: { ...draft, rating: event.target.value },
-                        }))
-                      }
-                      placeholder="Рейтинг"
-                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
-                    />
-                  </div>
-                  <input
-                    value={draft.address}
-                    onChange={(event) =>
-                      setOfficeDrafts((prev) => ({
-                        ...prev,
-                        [office.id]: { ...draft, address: event.target.value },
-                      }))
-                    }
-                    placeholder="Адрес"
-                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
-                  />
-                  <select
-                    value={draft.headId}
-                    onChange={(event) =>
-                      setOfficeDrafts((prev) => ({
-                        ...prev,
-                        [office.id]: { ...draft, headId: event.target.value },
-                      }))
-                    }
-                    className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
-                  >
-                    <option value="">Без руководителя</option>
-                    {officeHeadCandidates.map((employee) => (
-                      <option key={String(employee.id)} value={String(employee.id)}>
-                        {employee.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <button
-                    onClick={async () => {
-                      try {
-                        await updateOffice.mutateAsync({
-                          id: office.id,
-                          name: draft.name.trim(),
-                          city: draft.city.trim(),
-                          address: draft.address.trim(),
-                          rating: Number(draft.rating || 0),
-                          headId: draft.headId ? draft.headId : null,
-                        });
-                        showToast("success", `Офис ${office.name} сохранен`);
-                      } catch (error) {
-                        showToast("error", extractErrorMessage(error));
-                      }
-                    }}
-                    className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-60"
-                    disabled={updateOffice.isPending}
-                  >
-                    Сохранить
-                  </button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
-      ) : null}
-
-      {activeTab === "orders" ? (
-      <Card className="p-4">
-        <h2 className="mb-3 font-semibold">Товары и заказы внутреннего магазина</h2>
-        <div className="mb-4 rounded-xl border border-gray-200 p-3">
-          <h3 className="mb-2 text-sm font-semibold text-gray-900">Редактор товаров</h3>
-          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-5">
-            <input
-              value={newShopProduct.name}
-              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder="Название"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={newShopProduct.category}
-              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, category: event.target.value }))}
-              placeholder="Категория"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={newShopProduct.pricePoints}
-              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, pricePoints: event.target.value }))}
-              placeholder="Цена в баллах"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={newShopProduct.imageUrl}
-              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, imageUrl: event.target.value }))}
-              placeholder="URL картинки"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <label className="flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
               <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                onChange={(event) => setNewShopProductImageFile(event.target.files?.[0] ?? null)}
-                className="text-sm"
+                value={newOffice.name}
+                onChange={(event) => setNewOffice((prev) => ({ ...prev, name: event.target.value }))}
+                placeholder="Название офиса"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
               />
-            </label>
-            <button
-              onClick={async () => {
-                if (!newShopProduct.name.trim() || !newShopProduct.category.trim()) {
-                  showToast("error", "Заполните название и категорию товара");
-                  return;
-                }
-                const pricePoints = Number(newShopProduct.pricePoints);
-                if (!Number.isFinite(pricePoints) || pricePoints < 1) {
-                  showToast("error", "Цена должна быть больше 0");
-                  return;
-                }
-                try {
-                  let imageDataBase64: string | undefined;
-                  let imageMimeType: string | undefined;
-                  if (newShopProductImageFile) {
-                    const compressed = await compressShopImage(newShopProductImageFile);
-                    imageDataBase64 = compressed.base64;
-                    imageMimeType = compressed.mimeType;
-                  }
-                  await createShopProduct.mutateAsync({
-                    name: newShopProduct.name.trim(),
-                    description: newShopProduct.description.trim() || undefined,
-                    category: newShopProduct.category.trim(),
-                    pricePoints,
-                    isMaterial: true,
-                    isActive: true,
-                    imageUrl: newShopProduct.imageUrl.trim() || undefined,
-                    imageDataBase64,
-                    imageMimeType,
-                  });
-                  setNewShopProduct({ name: "", description: "", category: "", pricePoints: "", imageUrl: "" });
-                  setNewShopProductImageFile(null);
-                  showToast("success", "Товар создан");
-                } catch (error) {
-                  showToast("error", extractErrorMessage(error));
-                }
-              }}
-              className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700"
-            >
-              Добавить товар
-            </button>
-            <input
-              value={newShopProduct.description}
-              onChange={(event) => setNewShopProduct((prev) => ({ ...prev, description: event.target.value }))}
-              placeholder="Описание"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm md:col-span-5"
-            />
-          </div>
-          <div className="space-y-2">
-            {(adminShopProducts.data ?? data.shopProducts).map((product) => (
-              <div key={product.id} className="rounded-xl border border-gray-200 p-3">
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
-                  <input
-                    value={getShopProductDraft(product).name}
-                    onChange={(event) =>
-                      setShopProductDrafts((prev) => ({
-                        ...prev,
-                        [product.id]: { ...getShopProductDraft(product), name: event.target.value },
-                      }))
+              <input
+                value={newOffice.city}
+                onChange={(event) => setNewOffice((prev) => ({ ...prev, city: event.target.value }))}
+                placeholder="Город"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+              />
+              <input
+                value={newOffice.address}
+                onChange={(event) => setNewOffice((prev) => ({ ...prev, address: event.target.value }))}
+                placeholder="Адрес"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
+              />
+              <input
+                type="number"
+                min={0}
+                value={newOffice.rating}
+                onChange={(event) => setNewOffice((prev) => ({ ...prev, rating: event.target.value }))}
+                placeholder="Рейтинг"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+              />
+              <select
+                value={newOffice.headId}
+                onChange={(event) => setNewOffice((prev) => ({ ...prev, headId: event.target.value }))}
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-3"
+              >
+                <option value="">Без руководителя</option>
+                {officeHeadCandidates.map((employee) => (
+                  <option key={String(employee.id)} value={String(employee.id)}>
+                    {employee.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={officeSearch}
+                onChange={(event) => setOfficeSearch(event.target.value)}
+                placeholder="Поиск: название, город, адрес"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100 md:col-span-2"
+              />
+              <div className="md:col-span-1">
+                <button
+                  onClick={async () => {
+                    if (newOffice.name.trim().length < 2 || newOffice.city.trim().length < 2 || newOffice.address.trim().length < 3) {
+                      showToast("error", "Заполните название, город и адрес офиса");
+                      return;
                     }
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                  />
-                  <input
-                    value={getShopProductDraft(product).category}
-                    onChange={(event) =>
-                      setShopProductDrafts((prev) => ({
-                        ...prev,
-                        [product.id]: { ...getShopProductDraft(product), category: event.target.value },
-                      }))
+                    const rating = Number(newOffice.rating || 0);
+                    if (!Number.isFinite(rating) || rating < 0) {
+                      showToast("error", "Рейтинг должен быть числом 0 или больше");
+                      return;
                     }
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                  />
-                  <input
-                    value={getShopProductDraft(product).pricePoints}
-                    onChange={(event) =>
-                      setShopProductDrafts((prev) => ({
-                        ...prev,
-                        [product.id]: { ...getShopProductDraft(product), pricePoints: event.target.value },
-                      }))
+                    try {
+                      await createOffice.mutateAsync({
+                        name: newOffice.name.trim(),
+                        city: newOffice.city.trim(),
+                        address: newOffice.address.trim(),
+                        rating,
+                        headId: newOffice.headId || null,
+                      });
+                      showToast("success", `Офис «${newOffice.name.trim()}» создан`);
+                      setNewOffice({ name: "", city: "", address: "", rating: "0", headId: "" });
+                    } catch (error) {
+                      showToast("error", extractErrorMessage(error));
                     }
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                  />
-                  <input
-                    value={getShopProductDraft(product).imageUrl}
-                    onChange={(event) =>
-                      setShopProductDrafts((prev) => ({
-                        ...prev,
-                        [product.id]: { ...getShopProductDraft(product), imageUrl: event.target.value },
-                      }))
-                    }
-                    placeholder="URL картинки"
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                  />
-                  <label className="flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm">
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      onChange={(event) =>
-                        setShopProductImageFiles((prev) => ({
-                          ...prev,
-                          [product.id]: event.target.files?.[0] ?? null,
-                        }))
-                      }
-                      className="text-sm"
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={getShopProductDraft(product).isActive}
-                      onChange={(event) =>
-                        setShopProductDrafts((prev) => ({
-                          ...prev,
-                          [product.id]: { ...getShopProductDraft(product), isActive: event.target.checked },
-                        }))
-                      }
-                    />
-                    Активен
-                  </label>
-                  <input
-                    value={getShopProductDraft(product).description}
-                    onChange={(event) =>
-                      setShopProductDrafts((prev) => ({
-                        ...prev,
-                        [product.id]: { ...getShopProductDraft(product), description: event.target.value },
-                      }))
-                    }
-                    placeholder="Описание"
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm md:col-span-4"
-                  />
-                  {(product.imageDataBase64 || getShopProductDraft(product).imageUrl) ? (
-                    <div className="md:col-span-4">
-                      <div
-                        className="flex w-24 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white p-1"
-                        style={{ aspectRatio: "1 / 1" }}
-                      >
-                        <img
-                          src={
-                            product.imageDataBase64
-                              ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
-                              : (getShopProductDraft(product).imageUrl || "")
-                          }
-                          alt={product.name}
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="md:col-span-4 text-xs text-gray-400">Картинка не задана</div>
-                  )}
-                  <button
-                    onClick={async () => {
-                      const draft = getShopProductDraft(product);
-                      const pricePoints = Number(draft.pricePoints);
-                      if (!draft.name.trim() || !draft.category.trim()) {
-                        showToast("error", "Название и категория обязательны");
-                        return;
-                      }
-                      if (!Number.isFinite(pricePoints) || pricePoints < 1) {
-                        showToast("error", "Цена должна быть больше 0");
-                        return;
-                      }
-                      try {
-                        const nextFile = shopProductImageFiles[product.id];
-                        let imageDataBase64: string | null | undefined;
-                        let imageMimeType: string | null | undefined;
-                        if (nextFile) {
-                          const compressed = await compressShopImage(nextFile);
-                          imageDataBase64 = compressed.base64;
-                          imageMimeType = compressed.mimeType;
-                        }
-                        await updateShopProduct.mutateAsync({
-                          id: product.id,
-                          name: draft.name.trim(),
-                          description: draft.description.trim() || null,
-                          category: draft.category.trim(),
-                          pricePoints,
-                          imageUrl: draft.imageUrl.trim() || null,
-                          imageDataBase64,
-                          imageMimeType,
-                          isActive: draft.isActive,
-                        });
-                        setShopProductImageFiles((prev) => ({ ...prev, [product.id]: null }));
-                        showToast("success", `Товар "${draft.name}" сохранен`);
-                      } catch (error) {
-                        showToast("error", extractErrorMessage(error));
-                      }
-                    }}
-                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black"
-                  >
-                    Сохранить
-                  </button>
-                </div>
+                  }}
+                  className="w-full rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-60"
+                  disabled={createOffice.isPending}
+                >
+                  {createOffice.isPending ? "Создание..." : "Создать офис"}
+                </button>
               </div>
-            ))}
-            {adminShopProducts.isLoading ? <p className="text-xs text-gray-500">Загрузка товаров...</p> : null}
-          </div>
-        </div>
-        <h3 className="mb-3 text-sm font-semibold text-gray-900">Отслеживание заказов</h3>
-        <div className="space-y-3">
-          {data.shopOrders.map((order) => {
-            const buyer = data.users.find((item) => String(item.id) === String(order.buyerUserId));
-            const office = order.officeId ? data.offices.find((item) => item.id === order.officeId) : null;
-            const items = data.shopOrderItems.filter((item) => item.orderId === order.id);
-            return (
-              <div key={order.id} className="rounded-xl border border-gray-200 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      Заказ #{order.id} · {buyer?.name ?? order.buyerUserId}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(order.createdAt).toLocaleString()} · {office ? office.name : "Офис не указан"} · {order.totalPoints} баллов
-                    </p>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {filteredOffices.map((office) => {
+              const draft = getOfficeDraft(office);
+              return (
+                <Card key={office.id} className="rounded-2xl border border-gray-200 p-4 shadow-sm">
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm text-gray-500">Офис #{office.id}</p>
+                      <h3 className="text-base font-semibold text-gray-900">{office.name}</h3>
+                    </div>
+                    {officeHasUnsavedChanges(office) ? (
+                      <Badge className="bg-amber-100 text-amber-700">Есть изменения</Badge>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-700">Синхронизировано</Badge>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={order.status}
-                      onChange={async (event) => {
-                        try {
-                          await updateShopOrderStatus.mutateAsync({
-                            id: order.id,
-                            status: event.target.value as "new" | "processing" | "shipped" | "delivered" | "cancelled",
-                          });
-                          showToast("success", `Статус заказа #${order.id} обновлен`);
-                        } catch (error) {
-                          showToast("error", extractErrorMessage(error));
+                  <div className="grid grid-cols-1 gap-2">
+                    <input
+                      value={draft.name}
+                      onChange={(event) =>
+                        setOfficeDrafts((prev) => ({
+                          ...prev,
+                          [office.id]: { ...draft, name: event.target.value },
+                        }))
+                      }
+                      placeholder="Название офиса"
+                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                    />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <input
+                        value={draft.city}
+                        onChange={(event) =>
+                          setOfficeDrafts((prev) => ({
+                            ...prev,
+                            [office.id]: { ...draft, city: event.target.value },
+                          }))
                         }
-                      }}
-                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                        placeholder="Город"
+                        className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={draft.rating}
+                        onChange={(event) =>
+                          setOfficeDrafts((prev) => ({
+                            ...prev,
+                            [office.id]: { ...draft, rating: event.target.value },
+                          }))
+                        }
+                        placeholder="Рейтинг"
+                        className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      />
+                    </div>
+                    <input
+                      value={draft.address}
+                      onChange={(event) =>
+                        setOfficeDrafts((prev) => ({
+                          ...prev,
+                          [office.id]: { ...draft, address: event.target.value },
+                        }))
+                      }
+                      placeholder="Адрес"
+                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                    />
+                    <select
+                      value={draft.headId}
+                      onChange={(event) =>
+                        setOfficeDrafts((prev) => ({
+                          ...prev,
+                          [office.id]: { ...draft, headId: event.target.value },
+                        }))
+                      }
+                      className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     >
-                      {shopOrderStatusOptions.map((statusOption) => (
-                        <option key={statusOption.value} value={statusOption.value}>
-                          {statusOption.label}
+                      <option value="">Без руководителя</option>
+                      {officeHeadCandidates.map((employee) => (
+                        <option key={String(employee.id)} value={String(employee.id)}>
+                          {employee.name}
                         </option>
                       ))}
                     </select>
                   </div>
-                </div>
-                {order.deliveryInfo ? (
-                  <p className="mt-2 text-xs text-gray-600">Доставка: {order.deliveryInfo}</p>
-                ) : null}
-                {order.comment ? (
-                  <p className="mt-1 text-xs text-gray-600">Комментарий: {order.comment}</p>
-                ) : null}
-                <div className="mt-2 rounded-lg bg-gray-50 p-2">
-                  {items.map((item) => (
-                    <p key={item.id} className="text-xs text-gray-700">
-                      {item.productName} × {item.quantity} = {item.subtotalPoints} баллов
-                    </p>
-                  ))}
-                  {items.length === 0 ? (
-                    <p className="text-xs text-gray-500">Позиции заказа не найдены</p>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-          {data.shopOrders.length === 0 ? (
-            <p className="text-sm text-gray-500">Заказов пока нет.</p>
-          ) : null}
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await updateOffice.mutateAsync({
+                            id: office.id,
+                            name: draft.name.trim(),
+                            city: draft.city.trim(),
+                            address: draft.address.trim(),
+                            rating: Number(draft.rating || 0),
+                            headId: draft.headId ? draft.headId : null,
+                          });
+                          showToast("success", `Офис ${office.name} сохранен`);
+                        } catch (error) {
+                          showToast("error", extractErrorMessage(error));
+                        }
+                      }}
+                      className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-60"
+                      disabled={updateOffice.isPending}
+                    >
+                      Сохранить
+                    </button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         </div>
-      </Card>
       ) : null}
 
-      {activeTab === "points" ? (
-      <div className="space-y-4">
-        <Card className="border border-cyan-200 bg-gradient-to-r from-cyan-50 to-teal-50 p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-gray-900">Настройка баллов и условий начисления</h2>
-            <button
-              onClick={() => {
-                pointsActions.refetch();
-                pointsRules.refetch();
-                pointsCampaigns.refetch();
-                pointsEvents.refetch();
-              }}
-              className="rounded-lg border border-cyan-300 bg-white px-3 py-1.5 text-sm text-cyan-700 hover:bg-cyan-50"
-            >
-              Обновить
-            </button>
+      {activeTab === "products" ? (
+        <Card className="border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-purple-50 p-4">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Товары магазина</h2>
+            <p className="mt-1 text-sm text-gray-600">Добавление и редактирование доступных товаров</p>
           </div>
-          <p className="text-sm text-gray-600">Руководитель может менять правила, запускать акции и вручную корректировать баллы сотрудников.</p>
-        </Card>
+          <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900">Добавить новый товар</h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+              <input
+                value={newShopProduct.name}
+                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, name: event.target.value }))}
+                placeholder="Название"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+              <input
+                value={newShopProduct.category}
+                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, category: event.target.value }))}
+                placeholder="Категория"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+              <input
+                value={newShopProduct.pricePoints}
+                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, pricePoints: event.target.value }))}
+                placeholder="Цена в баллах"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+              <input
+                value={newShopProduct.imageUrl}
+                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, imageUrl: event.target.value }))}
+                placeholder="URL картинки"
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+              <button
+                onClick={async () => {
+                  if (!newShopProduct.name.trim() || !newShopProduct.category.trim()) {
+                    showToast("error", "Заполните название и категорию товара");
+                    return;
+                  }
+                  const pricePoints = Number(newShopProduct.pricePoints);
+                  if (!Number.isFinite(pricePoints) || pricePoints < 1) {
+                    showToast("error", "Цена должна быть больше 0");
+                    return;
+                  }
+                  try {
+                    let imageDataBase64: string | undefined;
+                    let imageMimeType: string | undefined;
+                    if (newShopProductImageFile) {
+                      const compressed = await compressShopImage(newShopProductImageFile);
+                      imageDataBase64 = compressed.base64;
+                      imageMimeType = compressed.mimeType;
+                    }
+                    await createShopProduct.mutateAsync({
+                      name: newShopProduct.name.trim(),
+                      description: newShopProduct.description.trim() || undefined,
+                      category: newShopProduct.category.trim(),
+                      pricePoints,
+                      isMaterial: true,
+                      isActive: true,
+                      imageUrl: newShopProduct.imageUrl.trim() || undefined,
+                      imageDataBase64,
+                      imageMimeType,
+                    });
+                    setNewShopProduct({ name: "", description: "", category: "", pricePoints: "", imageUrl: "" });
+                    setNewShopProductImageFile(null);
+                    showToast("success", "Товар создан");
+                  } catch (error) {
+                    showToast("error", extractErrorMessage(error));
+                  }
+                }}
+                className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+              >
+                Добавить товар
+              </button>
+              <textarea
+                value={newShopProduct.description}
+                onChange={(event) => setNewShopProduct((prev) => ({ ...prev, description: event.target.value }))}
+                placeholder="Описание товара"
+                rows={2}
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 md:col-span-4 resize-none"
+              />
+              <label className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer transition md:col-span-1">
+                <span className="truncate max-w-full text-center">
+                  {newShopProductImageFile ? newShopProductImageFile.name : "Загрузить фото"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={(event) => setNewShopProductImageFile(event.target.files?.[0] ?? null)}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
 
-        <Card className="p-4">
-          <h3 className="mb-3 font-semibold text-gray-900">Новое правило начисления</h3>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-            <input
-              value={pointsRuleDraft.actionKey}
-              onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, actionKey: event.target.value }))}
-              placeholder="action_key (например task_completed)"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={pointsRuleDraft.title}
-              onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, title: event.target.value }))}
-              placeholder="Название"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={pointsRuleDraft.basePoints}
-              onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, basePoints: event.target.value }))}
-              placeholder="Баллы"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <button
-              onClick={async () => {
-                try {
-                  await createPointsRule.mutateAsync({
-                    actionKey: pointsRuleDraft.actionKey.trim(),
-                    title: pointsRuleDraft.title.trim(),
-                    description: pointsRuleDraft.description.trim() || undefined,
-                    basePoints: Number(pointsRuleDraft.basePoints),
-                    isActive: true,
-                    isAuto: false,
-                  });
-                  setPointsRuleDraft({ actionKey: "", title: "", description: "", basePoints: "5" });
-                  showToast("success", "Правило добавлено");
-                } catch (error) {
-                  showToast("error", extractErrorMessage(error));
-                }
-              }}
-              className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
-            >
-              Добавить правило
-            </button>
-          </div>
-          <textarea
-            value={pointsRuleDraft.description}
-            onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, description: event.target.value }))}
-            placeholder="Описание правила"
-            className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="mb-3 font-semibold text-gray-900">Правила начисления</h3>
-          <div className="space-y-2">
-            {(pointsRules.data ?? []).map((rule) => (
-              <div key={rule.id} className="grid grid-cols-1 gap-2 rounded-lg border border-gray-200 p-3 md:grid-cols-[1.3fr_1fr_auto_auto]">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{rule.title}</p>
-                  <p className="text-xs text-gray-500">{rule.actionKey} {rule.isAuto ? "• авто" : "• вручную"}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    defaultValue={String(rule.basePoints)}
-                    onBlur={(event) => {
-                      void updatePointsRule.mutateAsync({
-                        id: rule.id,
-                        patch: { basePoints: Number(event.target.value) },
-                      });
-                    }}
-                    className="w-28 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-                  />
-                  <span className="text-xs text-gray-500">баллов</span>
-                </div>
-                <button
-                  onClick={() => {
-                    void updatePointsRule.mutateAsync({ id: rule.id, patch: { isActive: !rule.isActive } });
-                  }}
-                  className={`rounded-lg px-3 py-1.5 text-sm ${rule.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}
-                >
-                  {rule.isActive ? "Вкл" : "Выкл"}
-                </button>
-                <button
-                  onClick={() => {
-                    void updatePointsRule.mutateAsync({ id: rule.id, patch: { isAuto: !rule.isAuto } });
-                  }}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  {rule.isAuto ? "Авто" : "Ручн."}
-                </button>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="mb-3 font-semibold text-gray-900">Акции и бонусы</h3>
-          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-4">
-            <input value={pointsCampaignDraft.name} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название акции" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <input value={pointsCampaignDraft.actionKey} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, actionKey: event.target.value }))} placeholder="action_key или пусто=все" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <input value={pointsCampaignDraft.bonusPoints} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, bonusPoints: event.target.value }))} placeholder="Бонус (+/-)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <input value={pointsCampaignDraft.multiplier} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, multiplier: event.target.value }))} placeholder="Множитель (1.0)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <input type="datetime-local" value={pointsCampaignDraft.startsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, startsAt: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <input type="datetime-local" value={pointsCampaignDraft.endsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, endsAt: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <button
-              onClick={async () => {
-                try {
-                  await createPointsCampaign.mutateAsync({
-                    name: pointsCampaignDraft.name.trim(),
-                    description: pointsCampaignDraft.description.trim() || undefined,
-                    actionKey: pointsCampaignDraft.actionKey.trim() || null,
-                    bonusPoints: Number(pointsCampaignDraft.bonusPoints),
-                    multiplier: Number(pointsCampaignDraft.multiplier || "1"),
-                    startsAt: new Date(pointsCampaignDraft.startsAt).toISOString(),
-                    endsAt: new Date(pointsCampaignDraft.endsAt).toISOString(),
-                    isActive: true,
-                  });
-                  setPointsCampaignDraft({
-                    name: "",
-                    description: "",
-                    actionKey: "",
-                    bonusPoints: "0",
-                    multiplier: "1",
-                    startsAt: "",
-                    endsAt: "",
-                  });
-                  showToast("success", "Акция добавлена");
-                } catch (error) {
-                  showToast("error", extractErrorMessage(error));
-                }
-              }}
-              className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
-            >
-              Добавить акцию
-            </button>
-          </div>
-          <textarea value={pointsCampaignDraft.description} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, description: event.target.value }))} placeholder="Описание акции" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          <div className="mt-3 space-y-2">
-            {(pointsCampaigns.data ?? []).map((campaign) => (
-              <div key={campaign.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 text-sm">
-                <div>
-                  <p className="font-medium text-gray-900">{campaign.name}</p>
-                  <p className="text-xs text-gray-500">{campaign.actionKey ?? "Все действия"} • {new Date(campaign.startsAt).toLocaleString()} - {new Date(campaign.endsAt).toLocaleString()}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-700">+{campaign.bonusPoints} / x{campaign.multiplier}</span>
-                  <button
-                    onClick={() => {
-                      void updatePointsCampaign.mutateAsync({ id: campaign.id, patch: { isActive: !campaign.isActive } });
-                    }}
-                    className={`rounded-lg px-3 py-1.5 text-xs ${campaign.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}
-                  >
-                    {campaign.isActive ? "Активна" : "Отключена"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="mb-3 font-semibold text-gray-900">Ручная корректировка баллов</h3>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-            <select value={pointsAwardDraft.userId} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, userId: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-              <option value="">Выберите сотрудника</option>
-              {data.users.map((item) => (
-                <option key={String(item.id)} value={String(item.id)}>{item.name}</option>
-              ))}
-            </select>
-            <select value={pointsAwardDraft.actionKey} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, actionKey: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-              {(pointsActions.data ?? []).map((item) => (
-                <option key={item.actionKey} value={item.actionKey}>{item.title}</option>
-              ))}
-            </select>
-            <input value={pointsAwardDraft.basePoints} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, basePoints: event.target.value }))} placeholder="Баллы (+/-)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <button
-              onClick={async () => {
-                try {
-                  await awardPoints.mutateAsync({
-                    userId: pointsAwardDraft.userId,
-                    actionKey: pointsAwardDraft.actionKey,
-                    basePoints: Number(pointsAwardDraft.basePoints),
-                    comment: pointsAwardDraft.comment.trim() || undefined,
-                  });
-                  setPointsAwardDraft((prev) => ({ ...prev, basePoints: "0", comment: "" }));
-                  showToast("success", "Баллы начислены");
-                } catch (error) {
-                  showToast("error", extractErrorMessage(error));
-                }
-              }}
-              className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
-            >
-              Начислить
-            </button>
-          </div>
-          <textarea value={pointsAwardDraft.comment} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, comment: event.target.value }))} placeholder="Комментарий к начислению" className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="mb-3 font-semibold text-gray-900">События начисления (последние)</h3>
-          <div className="space-y-2">
-            {(pointsEvents.data?.items ?? []).map((event) => {
-              const employee = data.users.find((userItem) => String(userItem.id) === event.userId);
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {(adminShopProducts.data ?? data.shopProducts).map((product) => {
+              const isEditing = editingProductId === product.id;
               return (
-                <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                  <div>
-                    <p className="font-medium text-gray-900">{employee?.name ?? event.userId}</p>
-                    <p className="text-xs text-gray-500">{event.actionKey} • {new Date(event.createdAt).toLocaleString()}</p>
-                  </div>
-                  <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${event.totalPoints >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
-                    {event.totalPoints >= 0 ? "+" : ""}{event.totalPoints}
-                  </span>
+                <div key={product.id} className="relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-lg">
+                  {isEditing ? (
+                    <div className="flex flex-col gap-3 p-4">
+                      <input
+                        value={getShopProductDraft(product).name}
+                        onChange={(event) =>
+                          setShopProductDrafts((prev) => ({
+                            ...prev,
+                            [product.id]: { ...getShopProductDraft(product), name: event.target.value },
+                          }))
+                        }
+                        placeholder="Название"
+                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      />
+                      <input
+                        value={getShopProductDraft(product).category}
+                        onChange={(event) =>
+                          setShopProductDrafts((prev) => ({
+                            ...prev,
+                            [product.id]: { ...getShopProductDraft(product), category: event.target.value },
+                          }))
+                        }
+                        placeholder="Категория"
+                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      />
+                      <div className="flex gap-2">
+                        <input
+                          value={getShopProductDraft(product).pricePoints}
+                          onChange={(event) =>
+                            setShopProductDrafts((prev) => ({
+                              ...prev,
+                              [product.id]: { ...getShopProductDraft(product), pricePoints: event.target.value },
+                            }))
+                          }
+                          placeholder="Баллы"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        />
+                        <label className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 bg-white">
+                          <input
+                            type="checkbox"
+                            checked={getShopProductDraft(product).isActive}
+                            onChange={(event) =>
+                              setShopProductDrafts((prev) => ({
+                                ...prev,
+                                [product.id]: { ...getShopProductDraft(product), isActive: event.target.checked },
+                              }))
+                            }
+                            className="accent-indigo-600 w-4 h-4 cursor-pointer"
+                          />
+                          Активен
+                        </label>
+                      </div>
+                      <textarea
+                        value={getShopProductDraft(product).description}
+                        onChange={(event) =>
+                          setShopProductDrafts((prev) => ({
+                            ...prev,
+                            [product.id]: { ...getShopProductDraft(product), description: event.target.value },
+                          }))
+                        }
+                        placeholder="Описание"
+                        rows={2}
+                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm resize-none focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      />
+                      <input
+                        value={getShopProductDraft(product).imageUrl}
+                        onChange={(event) =>
+                          setShopProductDrafts((prev) => ({
+                            ...prev,
+                            [product.id]: { ...getShopProductDraft(product), imageUrl: event.target.value },
+                          }))
+                        }
+                        placeholder="URL картинки"
+                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      />
+                      <label className="flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 bg-gray-50 hover:bg-gray-100 cursor-pointer overflow-hidden">
+                        <span className="truncate max-w-full w-full text-center">
+                          {shopProductImageFiles[product.id] ? shopProductImageFiles[product.id]?.name : "Загрузить новое фото..."}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          onChange={(event) =>
+                            setShopProductImageFiles((prev) => ({
+                              ...prev,
+                              [product.id]: event.target.files?.[0] ?? null,
+                            }))
+                          }
+                          className="hidden"
+                        />
+                      </label>
+
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => setEditingProductId(null)}
+                          className="w-full rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const draft = getShopProductDraft(product);
+                            const pricePoints = Number(draft.pricePoints);
+                            if (!draft.name.trim() || !draft.category.trim()) {
+                              showToast("error", "Название и категория обязательны");
+                              return;
+                            }
+                            if (!Number.isFinite(pricePoints) || pricePoints < 1) {
+                              showToast("error", "Цена должна быть больше 0");
+                              return;
+                            }
+                            try {
+                              const nextFile = shopProductImageFiles[product.id];
+                              let imageDataBase64: string | null | undefined;
+                              let imageMimeType: string | null | undefined;
+                              if (nextFile) {
+                                const compressed = await compressShopImage(nextFile);
+                                imageDataBase64 = compressed.base64;
+                                imageMimeType = compressed.mimeType;
+                              }
+                              await updateShopProduct.mutateAsync({
+                                id: product.id,
+                                name: draft.name.trim(),
+                                description: draft.description.trim() || null,
+                                category: draft.category.trim(),
+                                pricePoints,
+                                imageUrl: draft.imageUrl.trim() || null,
+                                imageDataBase64,
+                                imageMimeType,
+                                isActive: draft.isActive,
+                              });
+                              setShopProductImageFiles((prev) => ({ ...prev, [product.id]: null }));
+                              showToast("success", `Товар "${draft.name}" сохранен`);
+                              setEditingProductId(null);
+                            } catch (error) {
+                              showToast("error", extractErrorMessage(error));
+                            }
+                          }}
+                          className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition"
+                        >
+                          Сохранить
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="aspect-[4/3] w-full overflow-hidden bg-white border-b border-gray-100 flex items-center justify-center p-4">
+                        <img
+                          src={
+                            product.imageDataBase64
+                              ? `data:${product.imageMimeType ?? "image/png"};base64,${product.imageDataBase64}`
+                              : (product.imageUrl || "")
+                          }
+                          alt={product.name}
+                          className="max-h-full max-w-full object-contain mix-blend-multiply"
+                        />
+                      </div>
+                      <div className="flex flex-col p-4 flex-1">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h4 className="font-bold text-gray-900 leading-tight">{product.name}</h4>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${product.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {product.isActive ? 'Активен' : 'Скрыт'}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-indigo-600 mb-2">{product.category}</p>
+                        <p className="text-xs text-gray-500 flex-1 line-clamp-2 mb-4">{product.description || "Нет описания"}</p>
+
+                        <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-3">
+                          <div className="flex items-center gap-1.5 font-bold text-gray-900 bg-amber-50 rounded-lg px-2 py-1 border border-amber-100 shadow-sm">
+                            <Coins className="h-4 w-4 text-amber-500" />
+                            {product.pricePoints}
+                          </div>
+                          <button
+                            onClick={() => setEditingProductId(product.id)}
+                            className="rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-200 border border-gray-200 shadow-sm"
+                          >
+                            Редактировать
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
-            {(pointsEvents.data?.items ?? []).length === 0 ? (
-              <p className="text-sm text-gray-500">Событий пока нет.</p>
+          </div>
+        </Card>
+      ) : null}
+
+      {activeTab === "orders" ? (
+        <Card className="border border-gray-200 bg-gradient-to-r from-orange-50 via-white to-amber-50 p-4">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Заказы магазина</h2>
+            <p className="mt-1 text-sm text-gray-600">Обработка заказов сотрудников</p>
+          </div>
+          <div className="space-y-4">
+            {data.shopOrders.map((order) => {
+              const buyer = data.users.find((item) => String(item.id) === String(order.buyerUserId));
+              const office = order.officeId ? data.offices.find((item) => item.id === order.officeId) : null;
+              const items = data.shopOrderItems.filter((item) => item.orderId === order.id);
+              return (
+                <div key={order.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition">
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-bold text-gray-900">Заказ #{order.id}</span>
+                        <Badge className="bg-gray-100 text-gray-700">{buyer?.name ?? order.buyerUserId}</Badge>
+                        <Badge className="bg-orange-100 text-orange-800 flex items-center shadow-sm"><Coins className="h-3 w-3 mr-1" /> {order.totalPoints}</Badge>
+                      </div>
+                      <p className="text-xs font-medium text-gray-500">
+                        {new Date(order.createdAt).toLocaleString()} · {office ? office.name : "Офис не указан"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={order.status}
+                        onChange={async (event) => {
+                          try {
+                            await updateShopOrderStatus.mutateAsync({
+                              id: order.id,
+                              status: event.target.value as "new" | "processing" | "shipped" | "delivered" | "cancelled",
+                            });
+                            showToast("success", `Статус заказа #${order.id} обновлен`);
+                          } catch (error) {
+                            showToast("error", extractErrorMessage(error));
+                          }
+                        }}
+                        className="rounded-xl border border-gray-300 px-3 py-1.5 text-sm font-medium focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none shadow-sm cursor-pointer hover:border-gray-400 transition"
+                      >
+                        {shopOrderStatusOptions.map((statusOption) => (
+                          <option key={statusOption.value} value={statusOption.value}>
+                            {statusOption.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {order.deliveryInfo ? (
+                    <p className="mb-2 text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100"><span className="font-semibold text-gray-900 block mb-1">Доставка:</span> {order.deliveryInfo}</p>
+                  ) : null}
+                  {order.comment ? (
+                    <p className="mb-2 text-sm text-orange-800 bg-orange-50 p-3 rounded-xl border border-orange-100"><span className="font-semibold text-orange-900 block mb-1">Комментарий:</span> {order.comment}</p>
+                  ) : null}
+                  <div className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-100 px-3 bg-gray-50">
+                    {items.map((item) => (
+                      <div key={item.id} className="flex justify-between py-3 items-center">
+                        <p className="text-sm text-gray-900 font-medium">
+                          {item.productName}
+                        </p>
+                        <p className="text-sm text-gray-600 bg-white px-2 py-1 rounded-lg border border-gray-200">
+                          {item.quantity} шт. = <span className="font-bold text-gray-900">{item.subtotalPoints}</span>
+                        </p>
+                      </div>
+                    ))}
+                    {items.length === 0 ? (
+                      <p className="text-xs text-gray-500 py-3 text-center">Позиции заказа не найдены</p>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+            {data.shopOrders.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center bg-gray-50">
+                <p className="text-sm text-gray-500 font-medium">Заказов пока нет.</p>
+              </div>
             ) : null}
           </div>
         </Card>
-      </div>
+      ) : null}
+
+      {activeTab === "points" ? (
+        <div className="space-y-4">
+          <Card className="border border-cyan-200 bg-gradient-to-r from-cyan-50 to-teal-50 p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Настройка баллов и условий начисления</h2>
+              <button
+                onClick={() => {
+                  pointsActions.refetch();
+                  pointsRules.refetch();
+                  pointsCampaigns.refetch();
+                  pointsEvents.refetch();
+                }}
+                className="rounded-lg border border-cyan-300 bg-white px-3 py-1.5 text-sm text-cyan-700 hover:bg-cyan-50"
+              >
+                Обновить
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">Руководитель может менять правила, запускать акции и вручную корректировать баллы сотрудников.</p>
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="mb-3 font-semibold text-gray-900">Новое правило начисления</h3>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+              <input
+                value={pointsRuleDraft.actionKey}
+                onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, actionKey: event.target.value }))}
+                placeholder="action_key (например task_completed)"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={pointsRuleDraft.title}
+                onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, title: event.target.value }))}
+                placeholder="Название"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={pointsRuleDraft.basePoints}
+                onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, basePoints: event.target.value }))}
+                placeholder="Баллы"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <button
+                onClick={async () => {
+                  try {
+                    await createPointsRule.mutateAsync({
+                      actionKey: pointsRuleDraft.actionKey.trim(),
+                      title: pointsRuleDraft.title.trim(),
+                      description: pointsRuleDraft.description.trim() || undefined,
+                      basePoints: Number(pointsRuleDraft.basePoints),
+                      isActive: true,
+                      isAuto: false,
+                    });
+                    setPointsRuleDraft({ actionKey: "", title: "", description: "", basePoints: "5" });
+                    showToast("success", "Правило добавлено");
+                  } catch (error) {
+                    showToast("error", extractErrorMessage(error));
+                  }
+                }}
+                className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+              >
+                Добавить правило
+              </button>
+            </div>
+            <textarea
+              value={pointsRuleDraft.description}
+              onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, description: event.target.value }))}
+              placeholder="Описание правила"
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="mb-3 font-semibold text-gray-900">Правила начисления</h3>
+            <div className="space-y-2">
+              {(pointsRules.data ?? []).map((rule) => (
+                <div key={rule.id} className="grid grid-cols-1 gap-2 rounded-lg border border-gray-200 p-3 md:grid-cols-[1.3fr_1fr_auto_auto]">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{rule.title}</p>
+                    <p className="text-xs text-gray-500">{rule.actionKey} {rule.isAuto ? "• авто" : "• вручную"}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      defaultValue={String(rule.basePoints)}
+                      onBlur={(event) => {
+                        void updatePointsRule.mutateAsync({
+                          id: rule.id,
+                          patch: { basePoints: Number(event.target.value) },
+                        });
+                      }}
+                      className="w-28 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                    />
+                    <span className="text-xs text-gray-500">баллов</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      void updatePointsRule.mutateAsync({ id: rule.id, patch: { isActive: !rule.isActive } });
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-sm ${rule.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}
+                  >
+                    {rule.isActive ? "Вкл" : "Выкл"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      void updatePointsRule.mutateAsync({ id: rule.id, patch: { isAuto: !rule.isAuto } });
+                    }}
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    {rule.isAuto ? "Авто" : "Ручн."}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="mb-3 font-semibold text-gray-900">Акции и бонусы</h3>
+            <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-4">
+              <input value={pointsCampaignDraft.name} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название акции" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input value={pointsCampaignDraft.actionKey} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, actionKey: event.target.value }))} placeholder="action_key или пусто=все" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input value={pointsCampaignDraft.bonusPoints} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, bonusPoints: event.target.value }))} placeholder="Бонус (+/-)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input value={pointsCampaignDraft.multiplier} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, multiplier: event.target.value }))} placeholder="Множитель (1.0)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input type="datetime-local" value={pointsCampaignDraft.startsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, startsAt: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input type="datetime-local" value={pointsCampaignDraft.endsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, endsAt: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <button
+                onClick={async () => {
+                  try {
+                    await createPointsCampaign.mutateAsync({
+                      name: pointsCampaignDraft.name.trim(),
+                      description: pointsCampaignDraft.description.trim() || undefined,
+                      actionKey: pointsCampaignDraft.actionKey.trim() || null,
+                      bonusPoints: Number(pointsCampaignDraft.bonusPoints),
+                      multiplier: Number(pointsCampaignDraft.multiplier || "1"),
+                      startsAt: new Date(pointsCampaignDraft.startsAt).toISOString(),
+                      endsAt: new Date(pointsCampaignDraft.endsAt).toISOString(),
+                      isActive: true,
+                    });
+                    setPointsCampaignDraft({
+                      name: "",
+                      description: "",
+                      actionKey: "",
+                      bonusPoints: "0",
+                      multiplier: "1",
+                      startsAt: "",
+                      endsAt: "",
+                    });
+                    showToast("success", "Акция добавлена");
+                  } catch (error) {
+                    showToast("error", extractErrorMessage(error));
+                  }
+                }}
+                className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+              >
+                Добавить акцию
+              </button>
+            </div>
+            <textarea value={pointsCampaignDraft.description} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, description: event.target.value }))} placeholder="Описание акции" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <div className="mt-3 space-y-2">
+              {(pointsCampaigns.data ?? []).map((campaign) => (
+                <div key={campaign.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 text-sm">
+                  <div>
+                    <p className="font-medium text-gray-900">{campaign.name}</p>
+                    <p className="text-xs text-gray-500">{campaign.actionKey ?? "Все действия"} • {new Date(campaign.startsAt).toLocaleString()} - {new Date(campaign.endsAt).toLocaleString()}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-700">+{campaign.bonusPoints} / x{campaign.multiplier}</span>
+                    <button
+                      onClick={() => {
+                        void updatePointsCampaign.mutateAsync({ id: campaign.id, patch: { isActive: !campaign.isActive } });
+                      }}
+                      className={`rounded-lg px-3 py-1.5 text-xs ${campaign.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}
+                    >
+                      {campaign.isActive ? "Активна" : "Отключена"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="mb-3 font-semibold text-gray-900">Ручная корректировка баллов</h3>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+              <select value={pointsAwardDraft.userId} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, userId: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <option value="">Выберите сотрудника</option>
+                {data.users.map((item) => (
+                  <option key={String(item.id)} value={String(item.id)}>{item.name}</option>
+                ))}
+              </select>
+              <select value={pointsAwardDraft.actionKey} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, actionKey: event.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                {(pointsActions.data ?? []).map((item) => (
+                  <option key={item.actionKey} value={item.actionKey}>{item.title}</option>
+                ))}
+              </select>
+              <input value={pointsAwardDraft.basePoints} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, basePoints: event.target.value }))} placeholder="Баллы (+/-)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <button
+                onClick={async () => {
+                  try {
+                    await awardPoints.mutateAsync({
+                      userId: pointsAwardDraft.userId,
+                      actionKey: pointsAwardDraft.actionKey,
+                      basePoints: Number(pointsAwardDraft.basePoints),
+                      comment: pointsAwardDraft.comment.trim() || undefined,
+                    });
+                    setPointsAwardDraft((prev) => ({ ...prev, basePoints: "0", comment: "" }));
+                    showToast("success", "Баллы начислены");
+                  } catch (error) {
+                    showToast("error", extractErrorMessage(error));
+                  }
+                }}
+                className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+              >
+                Начислить
+              </button>
+            </div>
+            <textarea value={pointsAwardDraft.comment} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, comment: event.target.value }))} placeholder="Комментарий к начислению" className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="mb-3 font-semibold text-gray-900">События начисления (последние)</h3>
+            <div className="space-y-2">
+              {(pointsEvents.data?.items ?? []).map((event) => {
+                const employee = data.users.find((userItem) => String(userItem.id) === event.userId);
+                return (
+                  <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-medium text-gray-900">{employee?.name ?? event.userId}</p>
+                      <p className="text-xs text-gray-500">{event.actionKey} • {new Date(event.createdAt).toLocaleString()}</p>
+                    </div>
+                    <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${event.totalPoints >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                      {event.totalPoints >= 0 ? "+" : ""}{event.totalPoints}
+                    </span>
+                  </div>
+                );
+              })}
+              {(pointsEvents.data?.items ?? []).length === 0 ? (
+                <p className="text-sm text-gray-500">Событий пока нет.</p>
+              ) : null}
+            </div>
+          </Card>
+        </div>
       ) : null}
 
       {activeTab === "other" ? (
-      <Card className="p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold">Журнал действий</h2>
-          <button
-            onClick={() => audit.refetch()}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-          >
-            Обновить
-          </button>
-          <button
-            onClick={handleExportAudit}
-            disabled={isExportingAudit}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isExportingAudit ? "Экспорт..." : "Экспорт CSV"}
-          </button>
-        </div>
-
-        <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-          <input
-            value={auditAction}
-            onChange={(event) => {
-              setAuditAction(event.target.value);
-              setAuditPage(1);
-            }}
-            placeholder="Фильтр action, например tasks.update"
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-          <select
-            value={auditActorUserId}
-            onChange={(event) => {
-              setAuditActorUserId(event.target.value);
-              setAuditPage(1);
-            }}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="">Все пользователи</option>
-            {data.users.map((item) => (
-              <option key={String(item.id)} value={String(item.id)}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={auditLimit}
-            onChange={(event) => {
-              setAuditLimit(event.target.value);
-              setAuditPage(1);
-            }}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="25">25 записей</option>
-            <option value="50">50 записей</option>
-            <option value="100">100 записей</option>
-            <option value="200">200 записей</option>
-          </select>
-          <input
-            value={auditEntityType}
-            onChange={(event) => {
-              setAuditEntityType(event.target.value);
-              setAuditPage(1);
-            }}
-            placeholder="Сущность, например tasks"
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-          <input
-            type="date"
-            value={auditFromDate}
-            onChange={(event) => {
-              setAuditFromDate(event.target.value);
-              setAuditPage(1);
-            }}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-          <input
-            type="date"
-            value={auditToDate}
-            onChange={(event) => {
-              setAuditToDate(event.target.value);
-              setAuditPage(1);
-            }}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-2">
-          {audit.data?.items.map((row) => (
-            <div key={row.id} className="rounded-xl border border-gray-200 p-3 text-xs">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <Badge className="bg-teal-100 text-teal-700">{row.action}</Badge>
-                <Badge className="bg-gray-100 text-gray-700">{row.entityType}:{row.entityId}</Badge>
-                <Badge className="bg-gray-100 text-gray-700">{RoleLabels[row.actorRole]}</Badge>
-                <span className="text-gray-500">{new Date(row.createdAt).toLocaleString()}</span>
-              </div>
-              {row.payload ? (
-                <pre className="overflow-x-auto rounded-lg bg-gray-50 p-2 text-[11px] text-gray-600">
-                  {JSON.stringify(row.payload, null, 2)}
-                </pre>
-              ) : null}
-            </div>
-          ))}
-          {!audit.isLoading && (audit.data?.items.length ?? 0) === 0 ? (
-            <p className="text-sm text-gray-500">Нет записей по текущему фильтру.</p>
-          ) : null}
-        </div>
-
-        <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
-          <span>
-            Всего: {audit.data?.total ?? 0}. Страница {auditPage} из {totalPages}
-          </span>
-          <div className="flex items-center gap-2">
+        <Card className="p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">Журнал действий</h2>
             <button
-              onClick={() => setAuditPage((prev) => Math.max(1, prev - 1))}
-              disabled={auditPage <= 1}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => audit.refetch()}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
             >
-              Назад
+              Обновить
             </button>
             <button
-              onClick={() => setAuditPage((prev) => (audit.data?.hasMore ? prev + 1 : prev))}
-              disabled={!audit.data?.hasMore}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleExportAudit}
+              disabled={isExportingAudit}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Вперёд
+              {isExportingAudit ? "Экспорт..." : "Экспорт CSV"}
             </button>
           </div>
-        </div>
-      </Card>
+
+          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <input
+              value={auditAction}
+              onChange={(event) => {
+                setAuditAction(event.target.value);
+                setAuditPage(1);
+              }}
+              placeholder="Фильтр action, например tasks.update"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <select
+              value={auditActorUserId}
+              onChange={(event) => {
+                setAuditActorUserId(event.target.value);
+                setAuditPage(1);
+              }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Все пользователи</option>
+              {data.users.map((item) => (
+                <option key={String(item.id)} value={String(item.id)}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={auditLimit}
+              onChange={(event) => {
+                setAuditLimit(event.target.value);
+                setAuditPage(1);
+              }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="25">25 записей</option>
+              <option value="50">50 записей</option>
+              <option value="100">100 записей</option>
+              <option value="200">200 записей</option>
+            </select>
+            <input
+              value={auditEntityType}
+              onChange={(event) => {
+                setAuditEntityType(event.target.value);
+                setAuditPage(1);
+              }}
+              placeholder="Сущность, например tasks"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="date"
+              value={auditFromDate}
+              onChange={(event) => {
+                setAuditFromDate(event.target.value);
+                setAuditPage(1);
+              }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="date"
+              value={auditToDate}
+              onChange={(event) => {
+                setAuditToDate(event.target.value);
+                setAuditPage(1);
+              }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            {audit.data?.items.map((row) => (
+              <div key={row.id} className="rounded-xl border border-gray-200 p-3 text-xs">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <Badge className="bg-teal-100 text-teal-700">{row.action}</Badge>
+                  <Badge className="bg-gray-100 text-gray-700">{row.entityType}:{row.entityId}</Badge>
+                  <Badge className="bg-gray-100 text-gray-700">{RoleLabels[row.actorRole]}</Badge>
+                  <span className="text-gray-500">{new Date(row.createdAt).toLocaleString()}</span>
+                </div>
+                {row.payload ? (
+                  <pre className="overflow-x-auto rounded-lg bg-gray-50 p-2 text-[11px] text-gray-600">
+                    {JSON.stringify(row.payload, null, 2)}
+                  </pre>
+                ) : null}
+              </div>
+            ))}
+            {!audit.isLoading && (audit.data?.items.length ?? 0) === 0 ? (
+              <p className="text-sm text-gray-500">Нет записей по текущему фильтру.</p>
+            ) : null}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
+            <span>
+              Всего: {audit.data?.total ?? 0}. Страница {auditPage} из {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAuditPage((prev) => Math.max(1, prev - 1))}
+                disabled={auditPage <= 1}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Назад
+              </button>
+              <button
+                onClick={() => setAuditPage((prev) => (audit.data?.hasMore ? prev + 1 : prev))}
+                disabled={!audit.data?.hasMore}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Вперёд
+              </button>
+            </div>
+          </div>
+        </Card>
       ) : null}
     </div>
   );
