@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
+import net from "node:net";
 import cors from "cors";
 import express from "express";
 import morgan from "morgan";
@@ -32,6 +33,30 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value === "1" || value?.toLowerCase() === "true")
     .default(false),
+  ASTERISK_AMI_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "1" || value?.toLowerCase() === "true")
+    .default(false),
+  ASTERISK_AMI_HOST: z.string().default("127.0.0.1"),
+  ASTERISK_AMI_PORT: z.coerce.number().int().min(1).max(65535).default(5038),
+  ASTERISK_AMI_USERNAME: z.string().optional(),
+  ASTERISK_AMI_SECRET: z.string().optional(),
+  ASTERISK_AMI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(15_000),
+  ASTERISK_ORIGINATE_CONTEXT: z.string().default("from-internal"),
+  ASTERISK_ORIGINATE_PRIORITY: z.coerce.number().int().min(1).max(100).default(1),
+  ASTERISK_ORIGINATE_CHANNEL_TEMPLATE: z.string().default("PJSIP/{agent}"),
+  ASTERISK_OUTBOUND_PREFIX: z.string().default(""),
+  CRM_CALL_POINTS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "1" || value?.toLowerCase() === "true")
+    .default(true),
+  CRM_CALL_POINTS_ACTION_KEY: z.string().default("manual_bonus"),
+  CRM_CALL_POINTS_MIN_SCORE: z.coerce.number().int().min(0).max(100).default(60),
+  CRM_CALL_POINTS_MAX_PER_CALL: z.coerce.number().int().min(0).max(10_000).default(25),
+  CRM_TRANSCRIBE_WEBHOOK_URL: z.string().url().optional(),
+  CRM_TRANSCRIBE_WEBHOOK_SECRET: z.string().optional(),
   AUTO_ESCALATION_ENABLED: z
     .string()
     .optional()
@@ -4205,6 +4230,14 @@ const crmCreateCallSchema = z.object({
   officeId: z.number().int().positive().optional(),
 });
 
+const crmDialCallSchema = z.object({
+  clientId: z.number().int().positive(),
+  provider: z.literal("asterisk").default("asterisk"),
+  employeeUserId: z.string().uuid().optional(),
+  employeeExtension: z.string().trim().min(2).max(40).optional(),
+  targetPhone: z.string().trim().min(5).max(40).optional(),
+});
+
 const crmAnalyzeCallSchema = z.object({
   transcriptRaw: z.string().trim().min(10).max(120_000).optional(),
   scriptContext: z.string().trim().max(20_000).optional(),
@@ -4358,6 +4391,272 @@ function normalizePhoneDigits(phone: string) {
     return `7${digits.slice(1)}`;
   }
   return digits;
+}
+
+function extractAsteriskExtension(raw: string | null | undefined) {
+  if (!raw) {
+    return null;
+  }
+  const digits = raw.replace(/\D+/g, "");
+  if (digits.length < 2 || digits.length > 8) {
+    return null;
+  }
+  return digits;
+}
+
+type AsteriskAmiMessage = Record<string, string>;
+
+function parseAsteriskAmiMessage(raw: string): AsteriskAmiMessage {
+  const message: AsteriskAmiMessage = {};
+  for (const line of raw.split("\r\n")) {
+    const idx = line.indexOf(":");
+    if (idx <= 0) {
+      continue;
+    }
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    if (!key) {
+      continue;
+    }
+    message[key] = value;
+  }
+  return message;
+}
+
+async function originateViaAsteriskAmi(input: {
+  channel: string;
+  destination: string;
+  callerId?: string;
+  variables?: Record<string, string>;
+}) {
+  if (!env.ASTERISK_AMI_ENABLED) {
+    throw new Error("Asterisk AMI is disabled");
+  }
+  if (!env.ASTERISK_AMI_USERNAME || !env.ASTERISK_AMI_SECRET) {
+    throw new Error("Asterisk AMI credentials are missing");
+  }
+
+  const actionId = `crm-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+  const timeoutMs = env.ASTERISK_AMI_TIMEOUT_MS;
+
+  return await new Promise<{ actionId: string; message: string }>((resolve, reject) => {
+    const socket = net.createConnection({
+      host: env.ASTERISK_AMI_HOST,
+      port: env.ASTERISK_AMI_PORT,
+    });
+    socket.setEncoding("utf8");
+
+    let stage: "login" | "originate" | "logoff" = "login";
+    let buffer = "";
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      socket.destroy();
+      reject(new Error(`Asterisk AMI timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+
+    const sendAction = (lines: string[]) => {
+      socket.write(`${lines.join("\r\n")}\r\n\r\n`);
+    };
+
+    socket.on("connect", () => {
+      sendAction([
+        "Action: Login",
+        `Username: ${env.ASTERISK_AMI_USERNAME}`,
+        `Secret: ${env.ASTERISK_AMI_SECRET}`,
+        "Events: off",
+      ]);
+    });
+
+    socket.on("data", (chunk) => {
+      buffer += chunk;
+      while (true) {
+        const boundary = buffer.indexOf("\r\n\r\n");
+        if (boundary < 0) {
+          break;
+        }
+        const rawMessage = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 4);
+        if (!rawMessage.trim()) {
+          continue;
+        }
+        const message = parseAsteriskAmiMessage(rawMessage);
+        const responseType = message.Response;
+        if (!responseType) {
+          continue;
+        }
+
+        if (stage === "login") {
+          if (responseType !== "Success") {
+            finish(() => {
+              socket.destroy();
+              reject(new Error(`Asterisk AMI login failed: ${message.Message ?? "unknown error"}`));
+            });
+            return;
+          }
+          const originateLines = [
+            "Action: Originate",
+            `ActionID: ${actionId}`,
+            `Channel: ${input.channel}`,
+            `Context: ${env.ASTERISK_ORIGINATE_CONTEXT}`,
+            `Exten: ${input.destination}`,
+            `Priority: ${env.ASTERISK_ORIGINATE_PRIORITY}`,
+            "Async: true",
+          ];
+          if (input.callerId?.trim()) {
+            originateLines.push(`CallerID: ${input.callerId.trim()}`);
+          }
+          if (input.variables) {
+            for (const [key, value] of Object.entries(input.variables)) {
+              originateLines.push(`Variable: ${key}=${value}`);
+            }
+          }
+          sendAction(originateLines);
+          stage = "originate";
+          continue;
+        }
+
+        if (stage === "originate") {
+          if (message.ActionID !== actionId) {
+            continue;
+          }
+          if (responseType !== "Success") {
+            finish(() => {
+              socket.destroy();
+              reject(new Error(`Asterisk originate failed: ${message.Message ?? "unknown error"}`));
+            });
+            return;
+          }
+          sendAction(["Action: Logoff"]);
+          stage = "logoff";
+          continue;
+        }
+
+        if (stage === "logoff") {
+          finish(() => {
+            socket.end();
+            resolve({
+              actionId,
+              message: message.Message ?? "Originate queued",
+            });
+          });
+          return;
+        }
+      }
+    });
+
+    socket.on("error", (error) => {
+      finish(() => {
+        socket.destroy();
+        reject(error);
+      });
+    });
+
+    socket.on("close", () => {
+      if (settled) {
+        return;
+      }
+      finish(() => {
+        reject(new Error("Asterisk AMI connection closed unexpectedly"));
+      });
+    });
+  });
+}
+
+function buildAsteriskAgentChannel(extension: string) {
+  return env.ASTERISK_ORIGINATE_CHANNEL_TEMPLATE.replace("{agent}", extension);
+}
+
+function buildAsteriskDestinationPhone(phone: string) {
+  const normalized = normalizePhoneDigits(phone);
+  return `${env.ASTERISK_OUTBOUND_PREFIX}${normalized}`;
+}
+
+function calculateCrmCallQualityPoints(overallScore: number) {
+  if (!env.CRM_CALL_POINTS_ENABLED) {
+    return 0;
+  }
+  if (overallScore < env.CRM_CALL_POINTS_MIN_SCORE) {
+    return 0;
+  }
+  return Math.max(0, Math.round((overallScore / 100) * env.CRM_CALL_POINTS_MAX_PER_CALL));
+}
+
+async function awardCrmCallQualityPoints(input: {
+  callId: number;
+  employeeUserId: string | null;
+  overallScore: number;
+  actorUserId?: string;
+}) {
+  if (!input.employeeUserId) {
+    return null;
+  }
+  const points = calculateCrmCallQualityPoints(input.overallScore);
+  if (points <= 0) {
+    return { awarded: false as const, points: 0 };
+  }
+  try {
+    const result = await awardPointsByAction({
+      userId: input.employeeUserId,
+      actionKey: env.CRM_CALL_POINTS_ACTION_KEY,
+      actorUserId: input.actorUserId,
+      entityType: "crm_calls",
+      entityId: String(input.callId),
+      dedupeKey: `crm_call_qa:${input.callId}`,
+      basePointsOverride: points,
+      meta: { overallScore: input.overallScore, source: "crm.call.qa" },
+    });
+    return {
+      awarded: result.ok,
+      points: result.ok ? result.totalPoints : 0,
+    };
+  } catch (error) {
+    console.error(`[points] crm_call_qa failed for call=${input.callId}: ${error instanceof Error ? error.message : String(error)}`);
+    return { awarded: false as const, points: 0 };
+  }
+}
+
+async function transcribeCrmRecordingViaWebhook(input: {
+  recordingUrl: string;
+  provider: "asterisk" | "fmc" | "manual";
+  externalCallId?: string;
+  clientPhone?: string;
+}) {
+  if (!env.CRM_TRANSCRIBE_WEBHOOK_URL) {
+    return null;
+  }
+  const response = await fetch(env.CRM_TRANSCRIBE_WEBHOOK_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(env.CRM_TRANSCRIBE_WEBHOOK_SECRET ? { "x-transcribe-secret": env.CRM_TRANSCRIBE_WEBHOOK_SECRET } : {}),
+    },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    throw new Error(`Transcription webhook failed (${response.status})`);
+  }
+  const payload = (await response.json()) as { transcriptRaw?: unknown; transcript?: unknown };
+  const transcriptRaw = typeof payload.transcriptRaw === "string"
+    ? payload.transcriptRaw
+    : typeof payload.transcript === "string"
+      ? payload.transcript
+      : "";
+  const normalized = transcriptRaw.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function isCrmIntakeSecretValid(req: express.Request) {
@@ -4553,6 +4852,19 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
   }
 
   const nowIso = new Date().toISOString();
+  let transcriptRaw = intake.transcriptRaw?.trim() || null;
+  if (!transcriptRaw && intake.recordingUrl?.trim()) {
+    try {
+      transcriptRaw = await transcribeCrmRecordingViaWebhook({
+        recordingUrl: intake.recordingUrl.trim(),
+        provider: intake.provider,
+        externalCallId: intake.externalCallId,
+        clientPhone: intake.clientPhone,
+      });
+    } catch (error) {
+      console.error(`[crm-intake] transcription webhook failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   const callPayload = {
     client_id: Number(client.id),
     employee_user_id: employee.userId,
@@ -4563,8 +4875,8 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
     ended_at: intake.endedAt ?? null,
     duration_sec: intake.durationSec ?? null,
     recording_url: intake.recordingUrl?.trim() || null,
-    transcript_raw: intake.transcriptRaw?.trim() || null,
-    transcription_status: intake.transcriptRaw ? "ready" : "pending",
+    transcript_raw: transcriptRaw,
+    transcription_status: transcriptRaw ? "ready" : "pending",
     analysis_status: "pending",
     updated_at: nowIso,
   };
@@ -4596,12 +4908,13 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
   let analysisResult: null | {
     overallScore: number;
     createdTaskIds: number[];
+    awardedPoints: number;
   } = null;
   const shouldAutoAnalyze = intake.autoAnalyze ?? env.CRM_INTAKE_AUTO_ANALYZE_DEFAULT;
-  if (shouldAutoAnalyze && intake.transcriptRaw && intake.transcriptRaw.trim().length >= 10) {
+  if (shouldAutoAnalyze && transcriptRaw && transcriptRaw.length >= 10) {
     try {
       const analysis = await completeCrmCallAnalysis({
-        transcript: intake.transcriptRaw,
+        transcript: transcriptRaw,
         scriptContext: intake.scriptContext,
       });
       await supabaseAdmin
@@ -4638,7 +4951,17 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
           createdByUserId: env.AUTO_ESCALATION_SYSTEM_ACTOR_USER_ID ?? employee.userId,
         })
         : [];
-      analysisResult = { overallScore: analysis.overallScore, createdTaskIds };
+      const pointsResult = await awardCrmCallQualityPoints({
+        callId,
+        employeeUserId: employee.userId,
+        overallScore: analysis.overallScore,
+        actorUserId: env.AUTO_ESCALATION_SYSTEM_ACTOR_USER_ID ?? employee.userId ?? undefined,
+      });
+      analysisResult = {
+        overallScore: analysis.overallScore,
+        createdTaskIds,
+        awardedPoints: pointsResult?.points ?? 0,
+      };
     } catch {
       await supabaseAdmin
         .from("portalmkk_crm_calls")
@@ -4665,6 +4988,7 @@ app.post("/api/crm/intake/calls", createRateLimitMiddleware({
     analyzed: Boolean(analysisResult),
     overallScore: analysisResult?.overallScore ?? null,
     createdTaskIds: analysisResult?.createdTaskIds ?? [],
+    awardedPoints: analysisResult?.awardedPoints ?? 0,
   });
 });
 
@@ -4950,6 +5274,107 @@ app.patch("/api/crm/clients/:id", requireAuth(), requireRole(["operator", "offic
   return res.json(data);
 });
 
+app.post("/api/crm/calls/dial", requireAuth(), requireRole(["operator", "office_head", "director", "admin"]), async (req, res) => {
+  const parsed = crmDialCallSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(parsed.error.format());
+  }
+  if (!env.ASTERISK_AMI_ENABLED) {
+    return res.status(503).json({ error: "Asterisk integration is disabled" });
+  }
+
+  const session = (req as express.Request & { session: Session }).session;
+  const { data: client, error: clientError } = await supabaseAdmin
+    .from("portalmkk_crm_clients")
+    .select("id,full_name,phone,office_id,assigned_user_id")
+    .eq("id", parsed.data.clientId)
+    .single();
+  if (clientError || !client) {
+    return res.status(404).json({ error: "Client not found" });
+  }
+  const allowed = await canAccessCrmClient(session, client);
+  if (!allowed) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const employeeUserId = parsed.data.employeeUserId ?? session.profile.id;
+  const { data: employee, error: employeeError } = await supabaseAdmin
+    .from("portalmkk_profiles")
+    .select("id,full_name,phone")
+    .eq("id", employeeUserId)
+    .single();
+  if (employeeError || !employee) {
+    return res.status(404).json({ error: "Employee profile not found" });
+  }
+
+  const extension = parsed.data.employeeExtension?.trim() || extractAsteriskExtension(employee.phone);
+  if (!extension) {
+    return res.status(400).json({
+      error: "Asterisk extension is missing. Pass employeeExtension or set short extension in employee phone.",
+    });
+  }
+
+  const rawTarget = parsed.data.targetPhone?.trim() || (client.phone as string | null) || "";
+  const destination = buildAsteriskDestinationPhone(rawTarget);
+  if (!destination || destination.length < 5) {
+    return res.status(400).json({ error: "Invalid destination phone" });
+  }
+
+  const channel = buildAsteriskAgentChannel(extension);
+  try {
+    const originate = await originateViaAsteriskAmi({
+      channel,
+      destination,
+      callerId: employee.phone ?? undefined,
+      variables: {
+        CRM_CLIENT_ID: String(client.id),
+        CRM_CLIENT_PHONE: normalizePhoneDigits(rawTarget),
+        CRM_MANAGER_USER_ID: employee.id,
+      },
+    });
+
+    const nowIso = new Date().toISOString();
+    await supabaseAdmin
+      .from("portalmkk_crm_clients")
+      .update({
+        status: "in_progress",
+        last_contacted_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("id", client.id);
+
+    await writeAuditLog({
+      actorUserId: session.profile.id,
+      actorRole: session.profile.role,
+      action: "crm_calls.dial",
+      entityType: "crm_clients",
+      entityId: String(client.id),
+      payload: {
+        provider: "asterisk",
+        actionId: originate.actionId,
+        channel,
+        destination,
+        employeeUserId: employee.id,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      provider: "asterisk",
+      actionId: originate.actionId,
+      message: originate.message,
+      clientId: Number(client.id),
+      employeeUserId: employee.id,
+      channel,
+      destination,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to originate call via Asterisk",
+    });
+  }
+});
+
 app.post("/api/crm/calls", requireAuth(), requireRole(["operator", "office_head", "director", "admin"]), async (req, res) => {
   const parsed = crmCreateCallSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -5143,6 +5568,13 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
     })
     .eq("id", client.id);
 
+  const pointsResult = await awardCrmCallQualityPoints({
+    callId,
+    employeeUserId: call.employee_user_id ?? session.profile.id,
+    overallScore: analysis.overallScore,
+    actorUserId: session.profile.id,
+  });
+
   await writeAuditLog({
     actorUserId: session.profile.id,
     actorRole: session.profile.role,
@@ -5152,6 +5584,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
     payload: {
       overallScore: analysis.overallScore,
       createdTasks: createdTaskIds.length,
+      awardedPoints: pointsResult?.points ?? 0,
     },
   });
 
@@ -5163,6 +5596,7 @@ app.post("/api/crm/calls/:id/analyze", requireAuth(), requireRole(["operator", "
       full: analysis.fullSummary,
     },
     createdTaskIds,
+    awardedPoints: pointsResult?.points ?? 0,
   });
 });
 

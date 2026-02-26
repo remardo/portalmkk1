@@ -186,6 +186,14 @@ export interface AnalyzeCrmCallInput {
   createTasks?: boolean;
 }
 
+export interface DialCrmCallInput {
+  clientId: number;
+  provider?: "asterisk";
+  employeeUserId?: string;
+  employeeExtension?: string;
+  targetPhone?: string;
+}
+
 export interface UpdateTaskInput {
   id: number;
   title?: string;
@@ -945,6 +953,19 @@ export const portalRepository = {
   async createCrmCall(input: CreateCrmCallInput): Promise<{ id: number }> {
     const row = await backendApi.createCrmCall(input);
     return { id: Number((row as { id: number }).id) };
+  },
+
+  async dialCrmCall(input: DialCrmCallInput): Promise<{
+    ok: boolean;
+    provider: "asterisk";
+    actionId: string;
+    message: string;
+    clientId: number;
+    employeeUserId: string;
+    channel: string;
+    destination: string;
+  }> {
+    return backendApi.dialCrmCall(input);
   },
 
   async analyzeCrmCall(input: AnalyzeCrmCallInput): Promise<{

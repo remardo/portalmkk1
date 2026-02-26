@@ -569,6 +569,24 @@ export const backendApi = {
       id: number;
     }>("/api/crm/calls", { method: "POST", body: JSON.stringify(input) }),
 
+  dialCrmCall: (input: {
+    clientId: number;
+    provider?: "asterisk";
+    employeeUserId?: string;
+    employeeExtension?: string;
+    targetPhone?: string;
+  }) =>
+    apiRequest<{
+      ok: boolean;
+      provider: "asterisk";
+      actionId: string;
+      message: string;
+      clientId: number;
+      employeeUserId: string;
+      channel: string;
+      destination: string;
+    }>("/api/crm/calls/dial", { method: "POST", body: JSON.stringify(input) }),
+
   analyzeCrmCall: (
     id: number,
     input?: {

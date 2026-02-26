@@ -20,6 +20,7 @@ import {
   useAnalyzeCrmCallMutation,
   useCreateCrmCallMutation,
   useCreateCrmClientMutation,
+  useDialCrmCallMutation,
   useCrmClientQuery,
   useCrmClientsQuery,
   useImportCrmClientsMutation,
@@ -120,6 +121,7 @@ export function CRMPage() {
   const updateClient = useUpdateCrmClientMutation();
   const createCall = useCreateCrmCallMutation();
   const analyzeCall = useAnalyzeCrmCallMutation();
+  const dialCrmCall = useDialCrmCallMutation();
 
   const [newClient, setNewClient] = useState({
     fullName: "",
@@ -134,6 +136,8 @@ export function CRMPage() {
     provider: "manual" as "asterisk" | "fmc" | "manual",
     scriptContext: "",
   });
+  const [asteriskExtension, setAsteriskExtension] = useState("");
+  const [dialFeedback, setDialFeedback] = useState<string | null>(null);
 
   const officesById = useMemo(() => {
     const map = new Map<number, string>();
@@ -277,6 +281,23 @@ export function CRMPage() {
 
   function handleCall(phone: string) {
     window.open(`tel:${phone.replace(/\s+/g, "")}`, "_self");
+  }
+
+  async function handleAsteriskDial() {
+    if (!selectedClient) return;
+    setDialFeedback(null);
+    try {
+      const response = await dialCrmCall.mutateAsync({
+        clientId: selectedClient.id,
+        provider: "asterisk",
+        employeeExtension: asteriskExtension.trim() || undefined,
+      });
+      setDialFeedback(`Звонок поставлен в очередь (${response.actionId}).`);
+      await clientQuery.refetch();
+      await clientsQuery.refetch();
+    } catch (error) {
+      setDialFeedback(error instanceof Error ? error.message : "Не удалось отправить звонок в Asterisk");
+    }
   }
 
   return (
@@ -438,14 +459,24 @@ export function CRMPage() {
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => handleCall(selectedClient.phone)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800">
+                <button type="button" onClick={handleAsteriskDial} disabled={dialCrmCall.isPending} className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60">
                   <Phone className="h-4 w-4" />
-                  Позвонить
+                  {dialCrmCall.isPending ? "Звоним..." : "Позвонить через Asterisk"}
+                </button>
+                <button type="button" onClick={() => handleCall(selectedClient.phone)} className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50">
+                  <Phone className="h-4 w-4" />
+                  Через softphone (tel:)
                 </button>
                 <button type="button" onClick={() => { void clientQuery.refetch(); void clientsQuery.refetch(); }} className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:border-zinc-300">
                   <RefreshCcw className="h-4 w-4" />
                   Подтянуть из АТС
                 </button>
+                <input
+                  value={asteriskExtension}
+                  onChange={(event) => setAsteriskExtension(event.target.value)}
+                  placeholder="Внутренний номер (опц.)"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                />
                 <select
                   value={selectedClient.status}
                   onChange={(event) => {
@@ -458,6 +489,9 @@ export function CRMPage() {
                   ))}
                 </select>
               </div>
+              {dialFeedback ? (
+                <p className="mt-2 text-xs font-medium text-zinc-600">{dialFeedback}</p>
+              ) : null}
             </div>
 
             <div className="flex-1 overflow-auto px-5 py-5 space-y-4">

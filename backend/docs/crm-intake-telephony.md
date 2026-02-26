@@ -8,15 +8,49 @@ Set in `backend/.env` (or Coolify variables):
 CRM_INTAKE_ENABLED=true
 CRM_INTAKE_SHARED_SECRET=replace_with_long_secret
 CRM_INTAKE_AUTO_ANALYZE_DEFAULT=true
+ASTERISK_AMI_ENABLED=true
+ASTERISK_AMI_HOST=127.0.0.1
+ASTERISK_AMI_PORT=5038
+ASTERISK_AMI_USERNAME=crm_ami_user
+ASTERISK_AMI_SECRET=strong_ami_secret
+ASTERISK_ORIGINATE_CONTEXT=from-internal
+ASTERISK_ORIGINATE_PRIORITY=1
+ASTERISK_ORIGINATE_CHANNEL_TEMPLATE=PJSIP/{agent}
+ASTERISK_OUTBOUND_PREFIX=
+CRM_CALL_POINTS_ENABLED=true
+CRM_CALL_POINTS_ACTION_KEY=manual_bonus
+CRM_CALL_POINTS_MIN_SCORE=60
+CRM_CALL_POINTS_MAX_PER_CALL=25
+CRM_TRANSCRIBE_WEBHOOK_URL=https://stt.example.com/transcribe
+CRM_TRANSCRIBE_WEBHOOK_SECRET=replace_with_long_secret
 ```
 
 Endpoint:
 
 `POST /api/crm/intake/calls`
 
+Click-to-call endpoint:
+
+`POST /api/crm/calls/dial`
+
 Auth header:
 
 `x-crm-intake-secret: <CRM_INTAKE_SHARED_SECRET>`
+
+## 1.1) Click-to-call payload (Asterisk)
+
+```json
+{
+  "clientId": 123,
+  "provider": "asterisk",
+  "employeeExtension": "201"
+}
+```
+
+Notes:
+- `employeeExtension` is optional. If omitted, backend tries to use short extension from employee `phone` in `portalmkk_profiles`.
+- Backend sends AMI `Originate` and returns `actionId`.
+- Client is moved to `in_progress`, `last_contacted_at` is updated.
 
 ## 2) Payload contract
 
@@ -56,6 +90,7 @@ Notes:
 - Idempotency key: `provider + externalCallId`.
 - If client does not exist, backend creates it by `clientPhone`.
 - If `transcriptRaw` is sent and `autoAnalyze=true`, QA/evaluation and suggested tasks are created automatically.
+- If only `recordingUrl` is sent and `CRM_TRANSCRIBE_WEBHOOK_URL` is configured, backend requests transcript from webhook and then runs QA automatically.
 
 ## 3) Quick local test
 

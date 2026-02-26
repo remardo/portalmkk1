@@ -26,6 +26,7 @@ import {
   type CreateNewsInput,
   type CreateCourseInput,
   type CreateCrmCallInput,
+  type DialCrmCallInput,
   type CreateCrmClientInput,
   type DocumentDecisionInput,
   type CreateShopOrderInput,
@@ -145,6 +146,20 @@ export function useAnalyzeCrmCallMutation() {
       queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
       if (variables.callId) {
         queryClient.invalidateQueries({ queryKey: ["crm-call", variables.callId] });
+      }
+    },
+  });
+}
+
+export function useDialCrmCallMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DialCrmCallInput) => portalRepository.dialCrmCall(input),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["crm-clients"] });
+      queryClient.invalidateQueries({ queryKey: portalDataQueryKey });
+      if (variables.clientId) {
+        queryClient.invalidateQueries({ queryKey: ["crm-client", variables.clientId] });
       }
     },
   });
