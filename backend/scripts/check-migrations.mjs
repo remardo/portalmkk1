@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 const migrationsDir = join(process.cwd(), "supabase", "migrations");
 const migrationPattern = /^(\d{4})_(.+)\.sql$/;
+const SPECIAL_MIGRATION_FROM = 9000;
 
 const files = readdirSync(migrationsDir)
   .filter((name) => migrationPattern.test(name))
@@ -22,14 +23,20 @@ const versions = files.map((name) => {
     version: Number(match[1]),
   };
 });
+const regularVersions = versions.filter((item) => item.version < SPECIAL_MIGRATION_FROM);
+const regularVersionSet = new Set(regularVersions.map((item) => item.version));
 
 const versionSet = new Set(versions.map((item) => item.version));
 if (versionSet.size !== versions.length) {
   throw new Error("Duplicate migration version detected");
 }
 
-const minVersion = Math.min(...versions.map((item) => item.version));
-const maxVersion = Math.max(...versions.map((item) => item.version));
+if (regularVersions.length === 0) {
+  throw new Error("No regular migrations found (expected versions below 9000)");
+}
+
+const minVersion = Math.min(...regularVersions.map((item) => item.version));
+const maxVersion = Math.max(...regularVersions.map((item) => item.version));
 
 if (minVersion !== 1) {
   throw new Error(`Migrations must start from 0001, found ${String(minVersion).padStart(4, "0")}`);
@@ -37,7 +44,7 @@ if (minVersion !== 1) {
 
 const missing = [];
 for (let expected = minVersion; expected <= maxVersion; expected += 1) {
-  if (!versionSet.has(expected)) {
+  if (!regularVersionSet.has(expected)) {
     missing.push(expected);
   }
 }
@@ -47,4 +54,7 @@ if (missing.length > 0) {
   throw new Error(`Missing migration versions: ${formatted}`);
 }
 
-console.log(`Migration check OK: ${versions.length} files (${String(minVersion).padStart(4, "0")}..${String(maxVersion).padStart(4, "0")})`);
+const specialMigrations = versions.filter((item) => item.version >= SPECIAL_MIGRATION_FROM);
+console.log(
+  `Migration check OK: regular ${regularVersions.length} files (${String(minVersion).padStart(4, "0")}..${String(maxVersion).padStart(4, "0")}), special ${specialMigrations.length} files`,
+);

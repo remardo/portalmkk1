@@ -9,7 +9,6 @@ import {
   Users,
   ArrowRight,
   Sparkles,
-  Clock,
   TrendingUp,
   Target,
   CheckCircle2,
@@ -17,7 +16,6 @@ import {
 import { Link } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
-import { Badge } from "../components/ui/Badge";
 import { usePortalData } from "../hooks/usePortalData";
 import { useAuth } from "../contexts/useAuth";
 import { buildEmployeeAgentDigest } from "../lib/employeeAgent";
@@ -40,7 +38,6 @@ export function DashboardPage() {
   const pendingDocs = data.documents.filter((doc) => doc.status === "review").length;
   const pinnedNews = data.news.filter((item) => item.pinned).slice(0, 4);
   const topOffices = [...data.offices].sort((a, b) => b.rating - a.rating).slice(0, 5);
-  const recentAtts = [...data.attestations].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">

@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor
--- schema_snapshot_migration: 0019
+-- schema_snapshot_migration: 0024
 create extension if not exists pgcrypto;
 create extension if not exists pg_trgm;
 

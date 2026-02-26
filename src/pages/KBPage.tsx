@@ -13,6 +13,81 @@ import { canManageKB } from "../lib/permissions";
 import { useState } from "react";
 import { backendApi } from "../services/apiClient";
 
+function renderInlineMarkdown(text: string) {
+  const tokens = text.split(/(\*\*[^*]+\*\*)/g);
+  return tokens.map((token, index) => {
+    if (token.startsWith("**") && token.endsWith("**") && token.length > 4) {
+      return (
+        <strong key={`${token}-${index}`} className="font-semibold text-gray-800">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <span key={`${token}-${index}`}>{token}</span>;
+  });
+}
+
+function MarkdownAnswer({ markdown }: { markdown: string }) {
+  const lines = markdown.split(/\r?\n/);
+
+  return (
+    <div className="space-y-2 text-sm leading-relaxed text-gray-700">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="h-2" />;
+
+        if (/^-{3,}$/.test(trimmed)) {
+          return <hr key={idx} className="my-2 border-gray-200" />;
+        }
+
+        if (trimmed.startsWith("### ")) {
+          return (
+            <h4 key={idx} className="text-base font-semibold text-gray-900">
+              {renderInlineMarkdown(trimmed.slice(4))}
+            </h4>
+          );
+        }
+
+        if (trimmed.startsWith("## ")) {
+          return (
+            <h3 key={idx} className="text-lg font-semibold text-gray-900">
+              {renderInlineMarkdown(trimmed.slice(3))}
+            </h3>
+          );
+        }
+
+        if (trimmed.startsWith("# ")) {
+          return (
+            <h2 key={idx} className="text-xl font-bold text-gray-900">
+              {renderInlineMarkdown(trimmed.slice(2))}
+            </h2>
+          );
+        }
+
+        if (trimmed.startsWith("- ")) {
+          return (
+            <p key={idx} className="pl-4">
+              • {renderInlineMarkdown(trimmed.slice(2))}
+            </p>
+          );
+        }
+
+        const orderedMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+        if (orderedMatch) {
+          return (
+            <p key={idx}>
+              <span className="font-medium text-gray-800">{orderedMatch[1]}. </span>
+              {renderInlineMarkdown(orderedMatch[2])}
+            </p>
+          );
+        }
+
+        return <p key={idx}>{renderInlineMarkdown(trimmed)}</p>;
+      })}
+    </div>
+  );
+}
+
 export function KBPage() {
   const { data } = usePortalData();
   const { searchQuery } = useLayoutContext();
@@ -194,7 +269,7 @@ export function KBPage() {
               ) : null}
             </div>
             {consultError ? <p className="text-sm text-red-600">{consultError}</p> : null}
-            {consultAnswer ? <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">{consultAnswer}</p> : null}
+            {consultAnswer ? <MarkdownAnswer markdown={consultAnswer} /> : null}
             {consultSources.length > 0 ? (
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Источники</p>
