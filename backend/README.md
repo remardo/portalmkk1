@@ -118,7 +118,7 @@ npm run dev
    - `OPENROUTER_API_KEY=...`
    - `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`
    - `OPENROUTER_CHAT_MODEL=openai/gpt-4o-mini`
-   - `OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small,text-embedding-3-small` (можно список через запятую для fallback)
+   - `OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small,openai/text-embedding-ada-002` (можно список через запятую для fallback)
    - `OPENROUTER_SITE_URL=https://<frontend-domain>` (опционально)
    - `OPENROUTER_APP_NAME=Portal MKK` (опционально)
    - `KB_EMBEDDING_DIMENSIONS=1536`

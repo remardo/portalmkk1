@@ -15,7 +15,7 @@ const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_BASE_URL: z.string().url().default("https://openrouter.ai/api/v1"),
   OPENROUTER_CHAT_MODEL: z.string().default("openai/gpt-4o-mini"),
-  OPENROUTER_EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
+  OPENROUTER_EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small,openai/text-embedding-ada-002"),
   OPENROUTER_SITE_URL: z.string().url().optional(),
   OPENROUTER_APP_NAME: z.string().optional(),
   KB_EMBEDDING_DIMENSIONS: z.coerce.number().int().min(64).max(8192).default(1536),
@@ -6671,7 +6671,10 @@ async function findKbMatchesForQuestion(input: { question: string; topK: number;
       );
       return fallback;
     }
-    throw error;
+    console.warn(
+      `[kb-vector] embeddings unavailable and keyword fallback returned no matches: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return [];
   }
 }
 
