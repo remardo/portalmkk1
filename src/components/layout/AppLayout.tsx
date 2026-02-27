@@ -77,201 +77,202 @@ export function AppLayout() {
   const unreadNotifications = data?.notifications?.filter((item) => !item.isRead).length ?? 0;
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      {/* Mobile overlay */}
-      {sidebarOpen ? (
-        <div
-          className="fixed inset-0 z-30 bg-gray-900/50 backdrop-blur-sm lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      ) : null}
+    <div className="flex h-screen bg-transparent p-2 md:p-4 lg:p-6 overflow-hidden">
+      <div className="flex w-full overflow-hidden rounded-[2.5rem] bg-white shadow-xl ring-1 ring-zinc-200/50">
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 w-72 transform bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        {/* Logo */}
-        <div className="flex items-center justify-between h-16 px-5 border-b border-gray-100">
-          <button
-            className="flex items-center gap-3"
-            onClick={() => {
-              navigate("/");
-              setSidebarOpen(false);
-            }}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 text-sm font-bold text-white shadow-lg shadow-teal-200">
-              МФ
-            </div>
-            <div>
-              <span className="text-lg font-bold text-gray-900">МФО Портал</span>
-              <p className="text-xs text-gray-400">Корпоративная система</p>
-            </div>
-          </button>
-          <button
+        {/* Mobile overlay */}
+        {sidebarOpen ? (
+          <div
+            className="fixed inset-0 z-30 bg-zinc-900/40 backdrop-blur-sm lg:hidden rounded-[2.5rem]"
             onClick={() => setSidebarOpen(false)}
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+          />
+        ) : null}
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <div className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  onClick={() => setSidebarOpen(false)}
-                  className={({ isActive }) =>
-                    `group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-                      isActive
-                        ? "bg-teal-50 text-teal-600"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      <div
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                          isActive ? "bg-teal-100" : "bg-gray-100 group-hover:bg-gray-200"
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <span>{item.label}</span>
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
-          </div>
-        </nav>
-
-        {/* User section */}
-        <div className="border-t border-gray-100 p-4">
-          <div className="relative">
+        {/* Sidebar */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 w-[260px] transform bg-white border-r border-zinc-100 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+            } flex flex-col`}
+        >
+          {/* Logo */}
+          <div className="flex items-center justify-between h-[88px] px-8 border-b border-transparent">
             <button
-              onClick={() => setShowUserMenu((prev) => !prev)}
-              className="flex w-full items-center gap-3 rounded-xl bg-gray-50 px-3 py-3 transition-colors hover:bg-gray-100"
+              className="flex items-center gap-3 w-full"
+              onClick={() => {
+                navigate("/");
+                setSidebarOpen(false);
+              }}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-lg text-white">
-                {user.avatar}
+              <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-sm font-bold text-white shadow-md shadow-purple-200">
+                МФ
               </div>
-              <div className="min-w-0 flex-1 text-left">
-                <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
-                <p className="text-xs text-gray-500">{RoleLabels[user.role]}</p>
+              <div className="text-left overflow-hidden">
+                <span className="text-[17px] font-extrabold text-zinc-900 tracking-tight block">МФО Портал</span>
+                <span className="text-[11px] text-zinc-400 block font-medium">Корпоративная сеть</span>
               </div>
-              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
             </button>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 lg:hidden shrink-0"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
 
-            {showUserMenu && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg shadow-gray-200/50">
-                <div className="p-2">
-                  <button
-                    onClick={() => {
-                      navigate("/");
-                      setShowUserMenu(false);
-                      setSidebarOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    <Home className="h-4 w-4" />
-                    На главную
-                  </button>
-                </div>
-                <div className="border-t border-gray-100 p-2">
-                  <button
-                    onClick={() => {
-                      logout();
-                      setShowUserMenu(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Выйти
-                  </button>
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
+            <div className="space-y-1">
+              <div className="mb-4 pl-2 flex items-center justify-between opacity-80 mt-2">
+                <span className="text-[11px] font-bold tracking-widest text-zinc-400 uppercase">Меню</span>
+                <div className="h-4 w-4 rounded bg-zinc-50 flex items-center justify-center">
+                  <Home className="h-[10px] w-[10px] text-zinc-400" />
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-      </aside>
 
-      {/* Main content */}
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-gray-100 bg-white/90 px-4 backdrop-blur-sm lg:px-6">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-
-          {/* Search */}
-          <div className="flex flex-1 items-center gap-4">
-            <div className="relative max-w-xl flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Поиск по порталу..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    navigate("/search");
-                  }
-                }}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm transition-colors placeholder:text-gray-400 focus:border-teal-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-100"
-              />
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      `group relative flex w-full items-center gap-[18px] rounded-xl px-2 py-3 text-[15px] transition-all duration-300 ${isActive
+                        ? "text-zinc-900 font-bold"
+                        : "text-zinc-500 font-medium hover:text-zinc-900 hover:translate-x-1"
+                      }`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <Icon
+                          className={`h-[22px] w-[22px] shrink-0 transition-colors ${isActive ? "text-zinc-900" : "text-zinc-400 group-hover:text-zinc-600"}`}
+                          strokeWidth={isActive ? 2.5 : 2}
+                        />
+                        <span className="truncate">{item.label}</span>
+                        {isActive && (
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-5 w-5 rounded-full bg-zinc-50 ring-1 ring-zinc-200/50">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-900" />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
-          </div>
+          </nav>
 
-          {/* Right side */}
-          <div className="flex items-center gap-2">
-            {/* Notifications */}
-            <button
-              onClick={() => navigate("/notifications")}
-              className="relative rounded-xl p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-            >
-              <Bell className="h-5 w-5" />
-              {unreadNotifications > 0 && (
-                <span className="absolute right-1.5 top-1.5 flex h-2 w-2 items-center justify-center rounded-full bg-red-500">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-                </span>
+          {/* User section */}
+          <div className="p-6">
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu((prev) => !prev)}
+                className="flex w-full items-center justify-between gap-3 transition-colors hover:opacity-80"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-bold text-zinc-700 shadow-sm border border-zinc-200">
+                    {user.avatar}
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <p className="truncate text-[15px] font-bold text-zinc-900">{user.name}</p>
+                    <p className="text-[11px] text-zinc-400 font-medium truncate tracking-wide">{RoleLabels[user.role]}</p>
+                  </div>
+                </div>
+                <div className="h-8 w-8 rounded-full bg-zinc-50 flex items-center justify-center shadow-sm">
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
+                </div>
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute bottom-full left-0 right-0 mb-3 overflow-hidden rounded-[1.25rem] border border-zinc-200 bg-white shadow-xl shadow-zinc-200/50">
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={() => {
+                        navigate("/");
+                        setShowUserMenu(false);
+                        setSidebarOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[14px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-100"
+                    >
+                      <Home className="h-4 w-4" />
+                      На главную
+                    </button>
+                    <div className="my-1 border-t border-zinc-100" />
+                    <button
+                      onClick={() => {
+                        logout();
+                        setShowUserMenu(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[14px] font-semibold text-rose-600 transition-colors hover:bg-rose-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Выйти
+                    </button>
+                  </div>
+                </div>
               )}
-            </button>
-
-            {/* User avatar (desktop) */}
-            <div className="hidden items-center gap-3 border-l border-gray-100 pl-4 sm:flex">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-sm text-white">
-                {user.avatar}
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                <p className="text-xs text-gray-400">{RoleLabels[user.role]}</p>
-              </div>
             </div>
           </div>
-        </header>
+        </aside>
 
-        {/* Page content */}
-        <div className="relative flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.08),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(99,102,241,0.08),transparent_35%)]" />
-          <div className="relative mx-auto max-w-[1320px]">
-            <Outlet context={outletContext} />
+        {/* Main content area */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white lg:border-l lg:border-zinc-100">
+          {/* Header */}
+          <header className="flex h-[88px] shrink-0 items-center gap-4 px-6 lg:px-10 justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="rounded-full flex h-10 w-10 items-center justify-center text-zinc-500 hover:bg-zinc-100 lg:hidden transition-colors"
+              >
+                <Menu className="h-[22px] w-[22px]" />
+              </button>
+            </div>
+
+            {/* Right side controls */}
+            <div className="flex items-center gap-4">
+              <div className="relative max-w-sm hidden md:block w-72">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Поиск по порталу..."
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      navigate("/search");
+                    }
+                  }}
+                  className="w-full rounded-2xl bg-[#f7f9fa] py-2.5 pl-11 pr-5 text-[14px] font-medium text-zinc-800 transition-colors placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-zinc-200 border border-transparent hover:border-zinc-200 shadow-sm"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate("/notifications")}
+                  className="relative flex h-11 w-11 items-center justify-center rounded-2xl text-zinc-500 transition-all hover:bg-zinc-50 hover:text-zinc-900 border border-transparent hover:border-zinc-200 shadow-sm bg-white"
+                >
+                  <Bell className="h-5 w-5" strokeWidth={2} />
+                  {unreadNotifications > 0 && (
+                    <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+                  )}
+                </button>
+                <button className="flex h-11 w-11 items-center justify-center rounded-2xl text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-900 border border-transparent hover:border-zinc-200 shadow-sm bg-white">
+                  <Settings2 className="h-5 w-5" strokeWidth={2} />
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Page content */}
+          <div className="relative flex-1 overflow-auto px-4 pb-4 sm:px-6 sm:pb-6 lg:px-10 lg:pb-10 custom-scrollbar">
+            <div className="relative h-full animate-in fade-in duration-500">
+              <Outlet context={outletContext} />
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
       <AgentChatWidget />
     </div>
   );
 }
-

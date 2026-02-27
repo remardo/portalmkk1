@@ -364,67 +364,95 @@ export function AdminPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Админка</h1>
-          <p className="mt-1 text-sm text-zinc-500">Управление сотрудниками, офисами и служебными настройками</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => switchTab("users")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "users" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
-              }`}
-          >
-            <Users className="h-4 w-4" />
-            Пользователи ({data.users.length})
-          </button>
-          <button
-            onClick={() => switchTab("offices")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "offices" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
-              }`}
-          >
-            <Building2 className="h-4 w-4" />
-            Офисы ({data.offices.length})
-          </button>
-          <button
-            onClick={() => switchTab("points")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "points" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
-              }`}
-          >
-            <Coins className="h-4 w-4" />
-            Баллы
-          </button>
-          <button
-            onClick={() => switchTab("other")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "other" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
-              }`}
-          >
-            <ScrollText className="h-4 w-4" />
-            Другое (журнал)
-          </button>
+    <div className="space-y-6">
+      {/* Page Header & Stats Banner */}
+      <div className="mb-8">
+        <h1 className="text-[28px] font-extrabold tracking-tight text-zinc-900">Панель управления</h1>
+        <p className="mt-1 text-sm text-zinc-500 font-medium">Общая статистика и настройки портала</p>
+
+        {/* Pastel Stats Grid */}
+        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="rounded-[1.75rem] bg-[#dcfce7] p-5 flex flex-col justify-between h-32 hover:scale-[1.02] transition-transform shadow-sm">
+            <span className="text-sm font-bold text-emerald-900/60">Сотрудники</span>
+            <span className="text-3xl font-extrabold text-emerald-950">{data.users.length}</span>
+          </div>
+          <div className="rounded-[1.75rem] bg-[#e0f2fe] p-5 flex flex-col justify-between h-32 hover:scale-[1.02] transition-transform shadow-sm">
+            <span className="text-sm font-bold text-sky-900/60">Офисы</span>
+            <span className="text-3xl font-extrabold text-sky-950">{data.offices.length}</span>
+          </div>
           {canViewShopOrders ? (
-            <>
-              <button
-                onClick={() => switchTab("products")}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "products" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
-                  }`}
-              >
-                <Package className="h-4 w-4" />
-                Товары магазина
-              </button>
-              <button
-                onClick={() => switchTab("orders")}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === "orders" ? "bg-zinc-900 text-white shadow-sm hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
-                  }`}
-              >
-                <ClipboardList className="h-4 w-4" />
-                Заказы ({data.shopOrders.length})
-              </button>
-            </>
-          ) : null}
+            <div className="rounded-[1.75rem] bg-[#f3e8ff] p-5 flex flex-col justify-between h-32 hover:scale-[1.02] transition-transform shadow-sm">
+              <span className="text-sm font-bold text-purple-900/60">Заказы магазина</span>
+              <span className="text-3xl font-extrabold text-purple-950">{data.shopOrders.length}</span>
+            </div>
+          ) : (
+            <div className="rounded-[1.75rem] bg-[#f3e8ff] p-5 flex flex-col justify-between h-32 hover:scale-[1.02] transition-transform shadow-sm opacity-50">
+              <span className="text-sm font-bold text-purple-900/60">Баллы</span>
+              <span className="text-sm font-bold text-purple-950/80 mt-auto">Аналитика скрыта</span>
+            </div>
+          )}
+          <div className="rounded-[1.75rem] bg-[#ffedd5] p-5 flex flex-col justify-between h-32 hover:scale-[1.02] transition-transform shadow-sm">
+            <span className="text-sm font-bold text-orange-900/60">Журнал</span>
+            <span className="text-3xl font-extrabold text-orange-950">—</span>
+          </div>
         </div>
-      </Card>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap gap-2 bg-zinc-50/50 p-1.5 rounded-[1.5rem] w-max">
+        <button
+          onClick={() => switchTab("users")}
+          className={`inline-flex items-center gap-2 rounded-[1rem] px-5 py-2.5 text-[14px] font-bold transition-all ${activeTab === "users" ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200/50" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+            }`}
+        >
+          <Users className="h-[18px] w-[18px]" strokeWidth={activeTab === "users" ? 2.5 : 2} />
+          Пользователи
+        </button>
+        <button
+          onClick={() => switchTab("offices")}
+          className={`inline-flex items-center gap-2 rounded-[1rem] px-5 py-2.5 text-[14px] font-bold transition-all ${activeTab === "offices" ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200/50" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+            }`}
+        >
+          <Building2 className="h-[18px] w-[18px]" strokeWidth={activeTab === "offices" ? 2.5 : 2} />
+          Офисы
+        </button>
+        <button
+          onClick={() => switchTab("points")}
+          className={`inline-flex items-center gap-2 rounded-[1rem] px-5 py-2.5 text-[14px] font-bold transition-all ${activeTab === "points" ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200/50" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+            }`}
+        >
+          <Coins className="h-[18px] w-[18px]" strokeWidth={activeTab === "points" ? 2.5 : 2} />
+          Баллы
+        </button>
+        {canViewShopOrders ? (
+          <>
+            <button
+              onClick={() => switchTab("products")}
+              className={`inline-flex items-center gap-2 rounded-[1rem] px-5 py-2.5 text-[14px] font-bold transition-all ${activeTab === "products" ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200/50" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
+            >
+              <Package className="h-[18px] w-[18px]" strokeWidth={activeTab === "products" ? 2.5 : 2} />
+              Товары
+            </button>
+            <button
+              onClick={() => switchTab("orders")}
+              className={`inline-flex items-center gap-2 rounded-[1rem] px-5 py-2.5 text-[14px] font-bold transition-all ${activeTab === "orders" ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200/50" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
+            >
+              <ClipboardList className="h-[18px] w-[18px]" strokeWidth={activeTab === "orders" ? 2.5 : 2} />
+              Заказы
+            </button>
+          </>
+        ) : null}
+        <button
+          onClick={() => switchTab("other")}
+          className={`inline-flex items-center gap-2 rounded-[1rem] px-5 py-2.5 text-[14px] font-bold transition-all ${activeTab === "other" ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200/50" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+            }`}
+        >
+          <ScrollText className="h-[18px] w-[18px]" strokeWidth={activeTab === "other" ? 2.5 : 2} />
+          Журнал
+        </button>
+      </div>
       <div className="fixed right-4 top-4 z-50 space-y-2">
         {toasts.map((toast) => (
           <div
@@ -448,25 +476,25 @@ export function AdminPage() {
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               placeholder="ФИО"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             />
             <input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="Email"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             />
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Пароль (мин. 8)"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             />
             <select
               value={role}
               onChange={(event) => setRole(event.target.value as Role)}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             >
               {createUserRoleOptions.map((item) => (
                 <option key={item} value={item}>
@@ -478,7 +506,7 @@ export function AdminPage() {
               value={user.role === "office_head" ? String(user.officeId) : officeId}
               onChange={(event) => setOfficeId(event.target.value)}
               disabled={user.role === "office_head"}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 disabled:bg-zinc-50 disabled:text-zinc-500"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:opacity-70 disabled:pointer-events-none"
             >
               {user.role === "office_head" ? null : <option value="">Без офиса</option>}
               {data.offices
@@ -517,7 +545,7 @@ export function AdminPage() {
                   showToast("error", extractErrorMessage(error));
                 }
               }}
-              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60"
+              className="rounded-[1.25rem] bg-zinc-900 px-6 py-3 text-[14px] font-bold text-white shadow-md shadow-zinc-900/20 transition-all hover:bg-zinc-800 hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60"
               disabled={createUser.isPending}
             >
               {createUser.isPending ? "Создание..." : "Создать пользователя"}
@@ -534,12 +562,12 @@ export function AdminPage() {
                 value={userSearch}
                 onChange={(event) => setUserSearch(event.target.value)}
                 placeholder="Поиск: ФИО, email, должность"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-2"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50 md:col-span-2"
               />
               <select
                 value={userRoleFilter}
                 onChange={(event) => setUserRoleFilter(event.target.value as Role | "all")}
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
               >
                 <option value="all">Все роли</option>
                 {roleOptions.map((option) => (
@@ -570,7 +598,7 @@ export function AdminPage() {
                     }))
                   }
                   placeholder="ФИО"
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                  className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                 />
                 <input
                   value={getUserDraft(item).email}
@@ -581,7 +609,7 @@ export function AdminPage() {
                     }))
                   }
                   placeholder="Логин (email)"
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                  className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                 />
                 <input
                   value={getUserDraft(item).phone}
@@ -592,7 +620,7 @@ export function AdminPage() {
                     }))
                   }
                   placeholder="Телефон"
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                  className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                 />
                 <input
                   value={getUserDraft(item).position}
@@ -603,7 +631,7 @@ export function AdminPage() {
                     }))
                   }
                   placeholder="Должность"
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                  className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                 />
                 <select
                   value={getUserDraft(item).role}
@@ -613,7 +641,7 @@ export function AdminPage() {
                       [String(item.id)]: { ...getUserDraft(item), role: event.target.value as Role },
                     }))
                   }
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                  className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                 >
                   {roleOptions.map((option) => (
                     <option key={option} value={option}>
@@ -629,7 +657,7 @@ export function AdminPage() {
                       [String(item.id)]: { ...getUserDraft(item), officeId: event.target.value },
                     }))
                   }
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                  className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                 >
                   <option value="">Без офиса</option>
                   {data.offices.map((office) => (
@@ -679,7 +707,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+                  className="rounded-[1.25rem] border border-zinc-200 bg-white px-5 py-3 text-[14px] font-bold text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:-translate-y-0.5"
                 >
                   Сбросить логин
                 </button>
@@ -690,7 +718,7 @@ export function AdminPage() {
                     setUserPasswordDrafts((prev) => ({ ...prev, [String(item.id)]: event.target.value }))
                   }
                   placeholder="Новый пароль (мин. 8)"
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                  className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                 />
                 <button
                   onClick={async () => {
@@ -710,7 +738,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+                  className="rounded-[1.25rem] border border-zinc-200 bg-white px-5 py-3 text-[14px] font-bold text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:-translate-y-0.5"
                 >
                   Сбросить пароль
                 </button>
@@ -727,7 +755,7 @@ export function AdminPage() {
                       showToast("error", extractErrorMessage(error));
                     }
                   }}
-                  className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+                  className="rounded-[1.25rem] border border-zinc-200 bg-white px-5 py-3 text-[14px] font-bold text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:-translate-y-0.5"
                 >
                   Сгенерировать пароль
                 </button>
@@ -754,19 +782,19 @@ export function AdminPage() {
                 value={newOffice.name}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="Название офиса"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-2"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50 md:col-span-2"
               />
               <input
                 value={newOffice.city}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, city: event.target.value }))}
                 placeholder="Город"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
               />
               <input
                 value={newOffice.address}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, address: event.target.value }))}
                 placeholder="Адрес"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-2"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50 md:col-span-2"
               />
               <input
                 type="number"
@@ -774,7 +802,7 @@ export function AdminPage() {
                 value={newOffice.rating}
                 onChange={(event) => setNewOffice((prev) => ({ ...prev, rating: event.target.value }))}
                 placeholder="Рейтинг"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
               />
               <select
                 value={newOffice.headId}
@@ -792,7 +820,7 @@ export function AdminPage() {
                 value={officeSearch}
                 onChange={(event) => setOfficeSearch(event.target.value)}
                 placeholder="Поиск: название, город, адрес"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 md:col-span-2"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50 md:col-span-2"
               />
               <div className="md:col-span-1">
                 <button
@@ -855,7 +883,7 @@ export function AdminPage() {
                         }))
                       }
                       placeholder="Название офиса"
-                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                      className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                     />
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <input
@@ -867,7 +895,7 @@ export function AdminPage() {
                           }))
                         }
                         placeholder="Город"
-                        className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                        className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                       />
                       <input
                         type="number"
@@ -880,7 +908,7 @@ export function AdminPage() {
                           }))
                         }
                         placeholder="Рейтинг"
-                        className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                        className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                       />
                     </div>
                     <input
@@ -892,7 +920,7 @@ export function AdminPage() {
                         }))
                       }
                       placeholder="Адрес"
-                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                      className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                     />
                     <select
                       value={draft.headId}
@@ -902,7 +930,7 @@ export function AdminPage() {
                           [office.id]: { ...draft, headId: event.target.value },
                         }))
                       }
-                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                      className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
                     >
                       <option value="">Без руководителя</option>
                       {officeHeadCandidates.map((employee) => (
@@ -1301,19 +1329,19 @@ export function AdminPage() {
                 value={pointsRuleDraft.actionKey}
                 onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, actionKey: event.target.value }))}
                 placeholder="action_key (например task_completed)"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
               />
               <input
                 value={pointsRuleDraft.title}
                 onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, title: event.target.value }))}
                 placeholder="Название"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
               />
               <input
                 value={pointsRuleDraft.basePoints}
                 onChange={(event) => setPointsRuleDraft((prev) => ({ ...prev, basePoints: event.target.value }))}
                 placeholder="Баллы"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
               />
               <button
                 onClick={async () => {
@@ -1391,12 +1419,12 @@ export function AdminPage() {
           <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
             <h3 className="mb-4 text-base font-bold text-zinc-900 tracking-tight">Акции и бонусы</h3>
             <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-              <input value={pointsCampaignDraft.name} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название акции" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
-              <input value={pointsCampaignDraft.actionKey} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, actionKey: event.target.value }))} placeholder="action_key или пусто=все" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
-              <input value={pointsCampaignDraft.bonusPoints} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, bonusPoints: event.target.value }))} placeholder="Бонус (+/-)" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
-              <input value={pointsCampaignDraft.multiplier} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, multiplier: event.target.value }))} placeholder="Множитель (1.0)" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
-              <input type="datetime-local" value={pointsCampaignDraft.startsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, startsAt: event.target.value }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
-              <input type="datetime-local" value={pointsCampaignDraft.endsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, endsAt: event.target.value }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+              <input value={pointsCampaignDraft.name} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название акции" className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50" />
+              <input value={pointsCampaignDraft.actionKey} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, actionKey: event.target.value }))} placeholder="action_key или пусто=все" className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50" />
+              <input value={pointsCampaignDraft.bonusPoints} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, bonusPoints: event.target.value }))} placeholder="Бонус (+/-)" className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50" />
+              <input value={pointsCampaignDraft.multiplier} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, multiplier: event.target.value }))} placeholder="Множитель (1.0)" className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50" />
+              <input type="datetime-local" value={pointsCampaignDraft.startsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, startsAt: event.target.value }))} className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50" />
+              <input type="datetime-local" value={pointsCampaignDraft.endsAt} onChange={(event) => setPointsCampaignDraft((prev) => ({ ...prev, endsAt: event.target.value }))} className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50" />
               <button
                 onClick={async () => {
                   try {
@@ -1456,18 +1484,18 @@ export function AdminPage() {
           <Card className="border border-zinc-200 bg-white p-5 shadow-sm">
             <h3 className="mb-4 text-base font-bold text-zinc-900 tracking-tight">Ручная корректировка баллов</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <select value={pointsAwardDraft.userId} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, userId: event.target.value }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400">
+              <select value={pointsAwardDraft.userId} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, userId: event.target.value }))} className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50">
                 <option value="">Выберите сотрудника</option>
                 {data.users.map((item) => (
                   <option key={String(item.id)} value={String(item.id)}>{item.name}</option>
                 ))}
               </select>
-              <select value={pointsAwardDraft.actionKey} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, actionKey: event.target.value }))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400">
+              <select value={pointsAwardDraft.actionKey} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, actionKey: event.target.value }))} className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50">
                 {(pointsActions.data ?? []).map((item) => (
                   <option key={item.actionKey} value={item.actionKey}>{item.title}</option>
                 ))}
               </select>
-              <input value={pointsAwardDraft.basePoints} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, basePoints: event.target.value }))} placeholder="Баллы (+/-)" className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400" />
+              <input value={pointsAwardDraft.basePoints} onChange={(event) => setPointsAwardDraft((prev) => ({ ...prev, basePoints: event.target.value }))} placeholder="Баллы (+/-)" className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50" />
               <button
                 onClick={async () => {
                   try {
@@ -1548,7 +1576,7 @@ export function AdminPage() {
                 setAuditPage(1);
               }}
               placeholder="Фильтр action, например tasks.update"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             />
             <select
               value={auditActorUserId}
@@ -1556,7 +1584,7 @@ export function AdminPage() {
                 setAuditActorUserId(event.target.value);
                 setAuditPage(1);
               }}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             >
               <option value="">Все пользователи</option>
               {data.users.map((item) => (
@@ -1571,7 +1599,7 @@ export function AdminPage() {
                 setAuditLimit(event.target.value);
                 setAuditPage(1);
               }}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             >
               <option value="25">25 записей</option>
               <option value="50">50 записей</option>
@@ -1585,7 +1613,7 @@ export function AdminPage() {
                 setAuditPage(1);
               }}
               placeholder="Сущность, например tasks"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             />
             <input
               type="date"
@@ -1594,7 +1622,7 @@ export function AdminPage() {
                 setAuditFromDate(event.target.value);
                 setAuditPage(1);
               }}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             />
             <input
               type="date"
@@ -1603,7 +1631,7 @@ export function AdminPage() {
                 setAuditToDate(event.target.value);
                 setAuditPage(1);
               }}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              className="rounded-[1.25rem] bg-zinc-50 border border-transparent px-4 py-3 text-[14px] font-medium text-zinc-900 outline-none transition-all placeholder:text-zinc-400 focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-100/50 hover:bg-zinc-100/50"
             />
           </div>
 

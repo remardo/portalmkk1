@@ -14,11 +14,10 @@ export function Card({
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border border-gray-100 bg-white ${
-        onClick || hover
-          ? "cursor-pointer transition-all duration-200 hover:border-gray-200 hover:shadow-lg hover:shadow-gray-100/50"
-          : "shadow-sm"
-      } ${className}`}
+      className={`rounded-[1.75rem] border border-white/60 ring-1 ring-zinc-100/50 bg-white ${onClick || hover
+          ? "cursor-pointer transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:border-zinc-100 hover:-translate-y-0.5"
+          : "shadow-sm shadow-zinc-200/40"
+        } ${className}`}
     >
       {children}
     </div>
@@ -33,7 +32,7 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={`border-b border-gray-100 px-5 py-4 ${className}`}>
+    <div className={`border-b border-zinc-50 px-6 py-5 ${className}`}>
       {children}
     </div>
   );
@@ -46,7 +45,7 @@ export function CardContent({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={`p-5 ${className}`}>{children}</div>;
+  return <div className={`p-6 ${className}`}>{children}</div>;
 }
 
 export function CardFooter({
@@ -57,7 +56,7 @@ export function CardFooter({
   className?: string;
 }) {
   return (
-    <div className={`border-t border-gray-100 px-5 py-4 ${className}`}>
+    <div className={`border-t border-zinc-50 px-6 py-5 ${className}`}>
       {children}
     </div>
   );

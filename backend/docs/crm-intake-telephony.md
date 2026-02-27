@@ -1,5 +1,8 @@
 # CRM Intake: Asterisk/FMC webhook templates
 
+Detailed full setup guide:
+- `backend/docs/asterisk-crm-integration-guide.md`
+
 ## 1) Backend env
 
 Set in `backend/.env` (or Coolify variables):
